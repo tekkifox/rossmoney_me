@@ -67,6 +67,10 @@ ghcr.io/tekkifox/rossmoney_me-proxy:latest
 
 It is generated in CI from `nginx:1.27-alpine` and serves the web UI plus `/api/` routing.
 
+## Portainer webhook
+
+Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing the web or proxy image.
+
 ## Notes
 
 The environment used here does not include a Node.js or Go toolchain, so this version is intentionally dependency-free.

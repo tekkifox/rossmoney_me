@@ -16,6 +16,8 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    env:
+      PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -52,3 +54,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Trigger Portainer webhook
+        if: ${{ env.PORTAINER_WEBHOOK_URL != '' }}
+        run: curl -fsSL -X POST "$PORTAINER_WEBHOOK_URL"
