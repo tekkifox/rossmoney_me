@@ -30,7 +30,7 @@
       <nav class="topnav" aria-label="Primary">
         <a href="#work">Work</a>
         <a href="#architecture">Architecture</a>
-        <a href="#experience">Experience</a>
+        <a href="#commits">Commits</a>
         <a href="#contact">Contact</a>
       </nav>
     </header>
@@ -70,7 +70,7 @@
           <div class="panel-header">
             <div>
               <p class="panel-kicker">Current focus</p>
-              <h2>Reducing delivery friction</h2>
+              <h2>Building personal infrastructure</h2>
             </div>
             <span class="status-pill status-live">Live</span>
           </div>
@@ -78,19 +78,19 @@
           <div class="panel-grid">
             <div>
               <span class="panel-label">Role</span>
-              <p>Developer with DevOps focus</p>
+              <p>DevOps-focused developer working on personal projects</p>
             </div>
             <div>
               <span class="panel-label">Specialty</span>
-              <p>Platform design, observability, release automation</p>
+              <p>Storage servers, media servers, and reliable self-hosted services</p>
             </div>
             <div>
-              <span class="panel-label">Preferred stack</span>
-              <p>Cloud-native services, GitOps, typed frontends</p>
+              <span class="panel-label">Current build</span>
+              <p>Custom connectors and tooling for homelab and service automation</p>
             </div>
             <div>
               <span class="panel-label">Delivery model</span>
-              <p>Small iterations with measurable reliability gains</p>
+              <p>Small iterations, practical ops, and systems I can run myself</p>
             </div>
           </div>
         </aside>
@@ -150,7 +150,7 @@
       <section class="section architecture-section" id="architecture">
         <div class="section-heading architecture-heading">
           <div>
-            <p class="eyebrow">Live architecture</p>
+            <p class="eyebrow">Live architecture example</p>
             <h2>Data streamed from the host Go service.</h2>
           </div>
           <button class="button button-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
@@ -196,44 +196,32 @@
         </div>
       </section>
 
-      <section class="section" id="experience">
+      <section class="section" id="commits">
         <div class="section-heading">
-          <p class="eyebrow">Experience</p>
-          <h2>Hands-on across delivery, infrastructure, and reliability.</h2>
+          <p class="eyebrow">Recent commits</p>
+          <h2>Last few GitHub commits from my portfolio repo.</h2>
         </div>
 
-        <div class="timeline">
-          <article class="timeline-item">
-            <span class="timeline-year">Now</span>
+        <article class="glass-card commits-card">
+          <div class="panel-header">
             <div>
-              <h3>Senior DevOps / Platform Builder</h3>
-              <p>Designing the path from commit to confidence with smaller blast radius and clearer telemetry.</p>
+              <p class="panel-kicker">git log</p>
+              <h3>tekkifox / rossmoney_me</h3>
             </div>
-          </article>
-          <article class="timeline-item">
-            <span class="timeline-year">Recent</span>
-            <div>
-              <h3>Product engineering with systems thinking</h3>
-              <p>Partnered with teams to simplify infrastructure choices and remove operational bottlenecks.</p>
-            </div>
-          </article>
-          <article class="timeline-item">
-            <span class="timeline-year">Foundation</span>
-            <div>
-              <h3>Automation-first delivery habits</h3>
-              <p>Built repeatable, documented workflows that favor safe releases over heroic intervention.</p>
-            </div>
-          </article>
-        </div>
+            <span class="status-pill status-muted" id="github-commits-status">Loading</span>
+          </div>
+
+          <pre class="diagram-view" id="github-commits">$ git log --oneline -n 5\nLoading recent commits...</pre>
+        </article>
       </section>
 
       <section class="section contact-section" id="contact">
         <div class="glass-card contact-card">
           <div>
             <p class="eyebrow">Contact</p>
-            <h2>Open to platform, DevOps, and reliability work.</h2>
+            <h2>Open to platform, DevOps, and development work.</h2>
             <p>
-              Replace these placeholders with your own details, then wire the site to your host service endpoint.
+              I'm available for contract and full-time work, and I enjoy collaborating with teams to improve delivery and reliability.
             </p>
           </div>
 

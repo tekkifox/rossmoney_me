@@ -12,6 +12,17 @@ const architectureState = {
   refresh: document.getElementById('refresh-architecture')
 };
 
+const commitsState = {
+  output: document.getElementById('github-commits'),
+  status: document.getElementById('github-commits-status')
+};
+
+const githubRepo = {
+  owner: 'tekkifox',
+  repo: 'rossmoney_me',
+  branch: 'main'
+};
+
 let currentArchitecturePayload = null;
 
 const demoArchitecturePayload = {
@@ -44,6 +55,7 @@ architectureState.refresh.addEventListener('click', () => {
 });
 
 void loadArchitecture();
+void loadGitHubCommits();
 
 function formatValue(value) {
   if (value === null || value === undefined || value === '') {
@@ -264,6 +276,59 @@ function renderError(message) {
   architectureState.highlights.innerHTML = '';
   architectureState.diagram.textContent = 'No live topology was returned.';
   architectureState.raw.textContent = JSON.stringify({ error: message }, null, 2);
+}
+
+function renderCommitFallback(message) {
+  commitsState.status.textContent = 'Preview';
+  commitsState.output.textContent = [
+    '$ git log --oneline -n 5',
+    `# ${message}`,
+    'a1b2c3d Update portfolio and deployment docs',
+    'b2c3d4e Add GHCR web, proxy, and ArchView images',
+    'c3d4e5f Wire the portfolio to the live architecture feed',
+    'd4e5f6a Replace experience with CV-based work section',
+    'e5f6a7b Build the personal infrastructure focus panel'
+  ].join('\n');
+}
+
+function formatCommitLine(commit) {
+  const sha = commit.sha.slice(0, 7);
+  const message = commit.commit?.message?.split('\n')[0] || 'No commit message';
+  return `${sha} ${message}`;
+}
+
+async function loadGitHubCommits() {
+  if (window.location.protocol === 'file:') {
+    renderCommitFallback('Local preview mode');
+    return;
+  }
+
+  commitsState.status.textContent = 'Live';
+
+  try {
+    const response = await fetch(`https://api.github.com/repos/${githubRepo.owner}/${githubRepo.repo}/commits?per_page=5&sha=${githubRepo.branch}`, {
+      headers: {
+        Accept: 'application/vnd.github+json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub API returned ${response.status}`);
+    }
+
+    const commits = await response.json();
+    if (!Array.isArray(commits) || commits.length === 0) {
+      throw new Error('No commits returned');
+    }
+
+    commitsState.output.textContent = [
+      '$ git log --oneline -n 5',
+      ...commits.map(formatCommitLine)
+    ].join('\n');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load recent commits';
+    renderCommitFallback(message);
+  }
 }
 
 async function loadArchitecture(force = false) {
