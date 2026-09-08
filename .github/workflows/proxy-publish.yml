@@ -57,4 +57,9 @@ jobs:
 
       - name: Trigger Portainer webhook
         if: ${{ env.PORTAINER_WEBHOOK_URL != '' }}
-        run: curl -fsSL -X POST "$PORTAINER_WEBHOOK_URL"
+        run: |
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$PORTAINER_WEBHOOK_URL")
+          if [ "$status" != "200" ] && [ "$status" != "202" ] && [ "$status" != "204" ] && [ "$status" != "409" ]; then
+            echo "Portainer webhook failed with HTTP $status"
+            exit 1
+          fi
