@@ -45,6 +45,8 @@ docker compose up -d
 
 The stack is exposed on `http://localhost` through the reverse proxy. The browser uses same-origin `/api/architecture`, so it works cleanly in Portainer.
 
+The ArchView service reaches Docker through `lscr.io/linuxserver/socket-proxy:latest` using `DOCKER_HOST=tcp://socket-proxy:2375`.
+
 ## Web UI image
 
 The portfolio web UI is published separately as:

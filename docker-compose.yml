@@ -15,17 +15,35 @@ services:
     environment:
       PORT: "8080"
       DOCKER_API_VERSION: "v1.41"
-      DOCKER_SOCKET: "/var/run/docker.sock"
+      DOCKER_HOST: "tcp://socket-proxy:2375"
       HOST_PROC: "/host/proc"
       HOST_SYS: "/host/sys"
       HOST_ROOT: "/host/root"
     networks:
       - rossmoney-stack
+    depends_on:
+      - socket-proxy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/host/root:ro
+
+  socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    environment:
+      CONTAINERS: "1"
+      IMAGES: "1"
+      INFO: "1"
+      PING: "1"
+      POST: "0"
+      VERSION: "1"
+      LOG_LEVEL: info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    restart: unless-stopped
 
   proxy:
     image: ghcr.io/tekkifox/rossmoney_me-proxy:latest
@@ -35,7 +53,10 @@ services:
       - archview
     networks:
       - rossmoney-stack
+      - proxy
 
 networks:
+  proxy:
+    external: true
   rossmoney-stack:
     driver: bridge
