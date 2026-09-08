@@ -23,6 +23,13 @@ const githubRepo = {
   branch: 'main'
 };
 
+const localCommitSnapshot = [
+  'e51912d Update info on page and pull live github commits',
+  '9b37ee7 compose file updates, docker security',
+  '0ec63e5 Update README.md',
+  'c29898f initial commit'
+];
+
 let currentArchitecturePayload = null;
 
 const demoArchitecturePayload = {
@@ -279,15 +286,11 @@ function renderError(message) {
 }
 
 function renderCommitFallback(message) {
-  commitsState.status.textContent = 'Preview';
+  commitsState.status.textContent = 'Snapshot';
   commitsState.output.textContent = [
     '$ git log --oneline -n 5',
     `# ${message}`,
-    'a1b2c3d Update portfolio and deployment docs',
-    'b2c3d4e Add GHCR web, proxy, and ArchView images',
-    'c3d4e5f Wire the portfolio to the live architecture feed',
-    'd4e5f6a Replace experience with CV-based work section',
-    'e5f6a7b Build the personal infrastructure focus panel'
+    ...localCommitSnapshot
   ].join('\n');
 }
 
@@ -327,7 +330,7 @@ async function loadGitHubCommits() {
     ].join('\n');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load recent commits';
-    renderCommitFallback(message);
+    renderCommitFallback(`${message}. Showing local repo history snapshot.`);
   }
 }
 
