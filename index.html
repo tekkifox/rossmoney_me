@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="architecture-api" content="/api/architecture">
+  <title>Ross Money | Developer & DevOps Portfolio</title>
+  <meta
+    name="description"
+    content="Portfolio site for a developer with a DevOps focus, featuring live architecture data from a custom Go service."
+  >
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+  <body data-architecture-url="/api/architecture">
+  <div class="page-shell">
+    <div class="ambient ambient-left"></div>
+    <div class="ambient ambient-right"></div>
+
+    <header class="topbar">
+      <div class="brand-lockup">
+        <span class="brand-mark">YN</span>
+        <div>
+          <p class="eyebrow">DevOps Portfolio</p>
+          <p class="brand-subtitle">Infrastructure-minded product engineering</p>
+        </div>
+      </div>
+
+      <nav class="topnav" aria-label="Primary">
+        <a href="#work">Work</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#experience">Experience</a>
+        <a href="#contact">Contact</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Available for devops and developer roles</p>
+          <h1>Building dependable systems with product taste and operational discipline.</h1>
+          <p class="lead">
+            I design and ship resilient developer experiences, automation layers, and production-ready interfaces.
+            This portfolio surfaces the live topology behind the work through a custom Go-backed architecture feed.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#contact">Start a conversation</a>
+            <a class="button button-secondary" href="#architecture">Inspect live architecture</a>
+          </div>
+
+          <div class="hero-metrics" aria-label="Highlights">
+            <article>
+              <span class="metric-value">99.95%</span>
+              <span class="metric-label">availability target</span>
+            </article>
+            <article>
+              <span class="metric-value">24/7</span>
+              <span class="metric-label">operations mindset</span>
+            </article>
+            <article>
+              <span class="metric-value">DX</span>
+              <span class="metric-label">developer experience focus</span>
+            </article>
+          </div>
+        </div>
+
+        <aside class="hero-panel glass-card">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Current focus</p>
+              <h2>Reducing delivery friction</h2>
+            </div>
+            <span class="status-pill status-live">Live</span>
+          </div>
+
+          <div class="panel-grid">
+            <div>
+              <span class="panel-label">Role</span>
+              <p>Developer with DevOps focus</p>
+            </div>
+            <div>
+              <span class="panel-label">Specialty</span>
+              <p>Platform design, observability, release automation</p>
+            </div>
+            <div>
+              <span class="panel-label">Preferred stack</span>
+              <p>Cloud-native services, GitOps, typed frontends</p>
+            </div>
+            <div>
+              <span class="panel-label">Delivery model</span>
+              <p>Small iterations with measurable reliability gains</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="section" id="work">
+        <div class="section-heading">
+          <p class="eyebrow">Selected work</p>
+          <h2>Real roles and projects from my CV.</h2>
+        </div>
+
+        <div class="cards-grid">
+          <article class="glass-card feature-card">
+            <p class="card-kicker">Morphsites</p>
+            <h3>Backend developer across Laravel and legacy PHP</h3>
+            <p>
+              Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets
+              autonomously through Jira.
+            </p>
+            <ul class="tag-list">
+              <li>Laravel</li>
+              <li>Statamic</li>
+              <li>Jira support</li>
+            </ul>
+          </article>
+
+          <article class="glass-card feature-card">
+            <p class="card-kicker">Rawnet Ltd.</p>
+            <h3>PHP Developer with DevOps responsibility</h3>
+            <p>
+              Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF
+              blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.
+            </p>
+            <ul class="tag-list">
+              <li>AWS</li>
+              <li>Docker</li>
+              <li>Ubuntu</li>
+            </ul>
+          </article>
+
+          <article class="glass-card feature-card">
+            <p class="card-kicker">Project Better Energy</p>
+            <h3>Full stack PHP and Vue work for business tooling</h3>
+            <p>
+              Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a
+              stockist map feature for EV chargers.
+            </p>
+            <ul class="tag-list">
+              <li>Laravel</li>
+              <li>Vue.js</li>
+              <li>Tailwind / Bootstrap</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section architecture-section" id="architecture">
+        <div class="section-heading architecture-heading">
+          <div>
+            <p class="eyebrow">Live architecture</p>
+            <h2>Data streamed from the host Go service.</h2>
+          </div>
+          <button class="button button-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
+        </div>
+
+        <div class="architecture-layout">
+          <article class="glass-card architecture-summary">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Snapshot</p>
+                <h3 id="architecture-title">Waiting for data</h3>
+              </div>
+              <span class="status-pill" id="architecture-status">Loading</span>
+            </div>
+
+            <p class="architecture-description" id="architecture-description">
+              Fetching the current system shape from the host service.
+            </p>
+
+            <dl class="facts-grid" id="architecture-facts"></dl>
+
+            <div class="mini-grid" id="architecture-highlights"></div>
+          </article>
+
+          <article class="glass-card architecture-diagram">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Topology</p>
+                <h3>Structure view</h3>
+              </div>
+              <span class="status-pill status-muted" id="architecture-updated">Updating</span>
+            </div>
+
+            <pre class="diagram-view" id="architecture-diagram">Loading architecture diagram...</pre>
+
+            <div class="raw-json-wrap">
+              <details>
+                <summary>Raw payload</summary>
+                <pre class="raw-json" id="architecture-raw">{}</pre>
+              </details>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="experience">
+        <div class="section-heading">
+          <p class="eyebrow">Experience</p>
+          <h2>Hands-on across delivery, infrastructure, and reliability.</h2>
+        </div>
+
+        <div class="timeline">
+          <article class="timeline-item">
+            <span class="timeline-year">Now</span>
+            <div>
+              <h3>Senior DevOps / Platform Builder</h3>
+              <p>Designing the path from commit to confidence with smaller blast radius and clearer telemetry.</p>
+            </div>
+          </article>
+          <article class="timeline-item">
+            <span class="timeline-year">Recent</span>
+            <div>
+              <h3>Product engineering with systems thinking</h3>
+              <p>Partnered with teams to simplify infrastructure choices and remove operational bottlenecks.</p>
+            </div>
+          </article>
+          <article class="timeline-item">
+            <span class="timeline-year">Foundation</span>
+            <div>
+              <h3>Automation-first delivery habits</h3>
+              <p>Built repeatable, documented workflows that favor safe releases over heroic intervention.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section contact-section" id="contact">
+        <div class="glass-card contact-card">
+          <div>
+            <p class="eyebrow">Contact</p>
+            <h2>Open to platform, DevOps, and reliability work.</h2>
+            <p>
+              Replace these placeholders with your own details, then wire the site to your host service endpoint.
+            </p>
+          </div>
+
+          <div class="contact-links">
+            <a href="mailto:ross@rossmoney.me">ross@rossmoney.me</a>
+            <a href="https://github.com/tekkifox" rel="noreferrer">github.com/tekkifox</a>
+            <a href="https://www.linkedin.com/in/rossmoney" rel="noreferrer">linkedin.com/in/rossmoney</a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

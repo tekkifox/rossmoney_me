@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  web:
+    image: ghcr.io/tekkifox/rossmoney_me:latest
+    pull_policy: always
+    networks:
+      - rossmoney-stack
+    depends_on:
+      - archview
+
+  archview:
+    image: ghcr.io/tekkifox/archview:latest
+    pull_policy: always
+    environment:
+      PORT: "8080"
+      DOCKER_API_VERSION: "v1.41"
+      DOCKER_SOCKET: "/var/run/docker.sock"
+      HOST_PROC: "/host/proc"
+      HOST_SYS: "/host/sys"
+      HOST_ROOT: "/host/root"
+    networks:
+      - rossmoney-stack
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+
+  proxy:
+    image: ghcr.io/tekkifox/rossmoney_me-proxy:latest
+    pull_policy: always
+    depends_on:
+      - web
+      - archview
+    networks:
+      - rossmoney-stack
+
+networks:
+  rossmoney-stack:
+    driver: bridge
