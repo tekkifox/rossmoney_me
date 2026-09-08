@@ -27,12 +27,6 @@ This project is plain HTML, CSS, and JavaScript, so you can serve it from any st
 
 The Go API sends permissive CORS headers, so the site can fetch it across origins during local development.
 
-## Customizing it
-
-- Replace `Your Name` and the contact placeholders in `index.html`.
-- Update the text blocks in the hero and experience sections to match your background.
-- Wire `http://localhost:8080/api/architecture` to the actual Go service endpoint on your host, or change the meta tag in `index.html`.
-
 ## Go service
 
 The Dockerized service exposes:
