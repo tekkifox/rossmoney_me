@@ -27,69 +27,7 @@ const githubRepo = {
   branch: 'main'
 };
 
-const localCommitSnapshot = [
-  'e51912d Update info on page and pull live github commits',
-  '9b37ee7 compose file updates, docker security',
-  '0ec63e5 Update README.md',
-  'c29898f initial commit'
-];
-
 let currentArchitecturePayload = null;
-
-const demoArchitecturePayload = {
-  title: 'Preview architecture snapshot',
-  description: 'This local preview is shown because the page is opened from file://. Serve the site over HTTP to pull live data from the host Go service.',
-  status: 'preview',
-  environment: 'local',
-  region: 'preview-region-1',
-  cluster: 'portfolio-cluster',
-  updatedAt: 'Preview only',
-  services: [
-    { name: 'portfolio-web' },
-    { name: 'architecture-api' },
-    { name: 'observability-gateway' },
-    { name: 'deploy-controller' }
-  ],
-  docker: {
-    images: [
-      { repoTags: ['ghcr.io/tekkifox/rossmoney_me:latest'], sizeBytes: 148723456, created: 1757420000 },
-      { repoTags: ['ghcr.io/tekkifox/rossmoney_me-proxy:latest'], sizeBytes: 27188032, created: 1757420300 },
-      { repoTags: ['ghcr.io/tekkifox/archview:latest'], sizeBytes: 63200448, created: 1757420500 },
-      { repoTags: ['lscr.io/linuxserver/socket-proxy:latest'], sizeBytes: 19845120, created: 1757420600 }
-    ]
-  },
-  nodes: ['edge-node-a', 'edge-node-b', 'batch-worker-01'],
-  regions: ['preview-region-1', 'preview-region-2'],
-  pipelines: ['commit', 'scan', 'deploy', 'verify'],
-  system: {
-    hostname: 'preview-host',
-    os: 'Linux',
-    kernel: 'preview-kernel',
-    architecture: 'amd64',
-    uptimeSeconds: 86400,
-    cpuCount: 4,
-    loadAverage: [0.22, 0.31, 0.28],
-    memory: {
-      totalBytes: 17179869184,
-      availableBytes: 11811160064,
-      freeBytes: 8589934592,
-      usedBytes: 5368709120,
-      usedPercent: 31.25,
-      swapTotalBytes: 2147483648,
-      swapFreeBytes: 2147483648
-    },
-    network: [
-      { interface: 'eth0', receivedBytes: 2147483648, sentBytes: 1073741824 },
-      { interface: 'lo', receivedBytes: 102400, sentBytes: 102400 }
-    ]
-  },
-  diagram: [
-    'browser',
-    '  -> portfolio site',
-    '     -> /api/architecture',
-    '        -> host Go service'
-  ].join('\n')
-};
 
 architectureState.refresh.addEventListener('click', () => {
   void loadArchitecture(true);
@@ -453,17 +391,56 @@ function renderContactContent(contact) {
   }
 }
 
+function renderArchitectureSectionContent(arch) {
+  const eyebrow = document.getElementById('architecture-section-eyebrow');
+  const title = document.getElementById('architecture-section-title');
+  if (eyebrow) {
+    eyebrow.textContent = formatCmsText(arch?.eyebrow, eyebrow.textContent);
+  }
+  if (title) {
+    title.textContent = formatCmsText(arch?.title, title.textContent);
+  }
+}
+
+function renderCommitsSectionContent(com) {
+  const eyebrow = document.getElementById('commits-section-eyebrow');
+  const title = document.getElementById('commits-section-title');
+  if (eyebrow) {
+    eyebrow.textContent = formatCmsText(com?.eyebrow, eyebrow.textContent);
+  }
+  if (title) {
+    title.textContent = formatCmsText(com?.title, title.textContent);
+  }
+}
+
+function renderNavigationContent(nav) {
+  const topnav = document.querySelector('.topnav');
+  if (!topnav || !Array.isArray(nav?.links) || nav.links.length === 0) {
+    return;
+  }
+
+  topnav.innerHTML = '';
+  for (const link of nav.links.slice(0, 10)) {
+    const a = document.createElement('a');
+    a.href = formatCmsText(link.href, '#');
+    a.textContent = formatCmsText(link.label, 'Link');
+    topnav.append(a);
+  }
+}
+
 function renderCmsContent(payload) {
   renderHeroContent(payload?.home);
   renderProjectCards(payload?.projects);
   renderExperienceEntries(payload?.experience);
   renderContactContent(payload?.contact);
+  renderArchitectureSectionContent(payload?.architecture);
+  renderCommitsSectionContent(payload?.commits);
+  renderNavigationContent(payload?.navigation);
 }
 
 function buildHighlights(payload) {
   const serviceList = normalizeList(pickFirst(payload, ['services', 'components', 'apps']));
   const regionList = normalizeList(pickFirst(payload, ['regions', 'availabilityZones', 'zones']));
-  const pipelineList = normalizeList(pickFirst(payload, ['pipelines', 'deployments', 'routes']));
 
   return [
     {
@@ -473,10 +450,6 @@ function buildHighlights(payload) {
     {
       label: 'Regions',
       value: regionList.length ? regionList.slice(0, 6) : ['Unknown']
-    },
-    {
-      label: 'Delivery',
-      value: pipelineList.length ? pipelineList.slice(0, 6) : ['No pipeline data']
     }
   ];
 }
@@ -739,8 +712,7 @@ function renderCommitFallback(message) {
   commitsState.status.textContent = 'Snapshot';
   commitsState.output.textContent = [
     '$ git log --oneline -n 5',
-    `# ${message}`,
-    ...localCommitSnapshot
+    `# ${message}`
   ].join('\n');
 }
 
@@ -792,12 +764,6 @@ async function loadArchitecture(force = false) {
   }
 
   try {
-    if (window.location.protocol === 'file:') {
-      renderArchitecture(demoArchitecturePayload, 'Preview only');
-      architectureState.updated.textContent = 'Open over HTTP for live data';
-      return;
-    }
-
     architectureState.description.textContent = 'Fetching the current system shape from the host service.';
     const response = await fetch(`${architectureUrl}${architectureUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, {
       cache: 'no-store',
@@ -825,10 +791,6 @@ async function loadArchitecture(force = false) {
 }
 
 async function loadCmsContent() {
-  if (window.location.protocol === 'file:') {
-    return;
-  }
-
   try {
     const response = await fetch(`${cmsUrl}${cmsUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, {
       cache: 'no-store',

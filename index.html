@@ -33,7 +33,6 @@
         <a href="#architecture">Architecture</a>
         <a href="#commits">Commits</a>
         <a href="#contact">Contact</a>
-        <a href="/admin/">CMS</a>
       </nav>
     </header>
 
@@ -104,49 +103,7 @@
           <h2>Real roles and projects from my CV.</h2>
         </div>
 
-        <div class="cards-grid" id="cms-projects">
-          <article class="glass-card feature-card">
-            <p class="card-kicker">Morphsites</p>
-            <h3>Backend developer across Laravel and legacy PHP</h3>
-            <p>
-              Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets
-              autonomously through Jira.
-            </p>
-            <ul class="tag-list">
-              <li>Laravel</li>
-              <li>Statamic</li>
-              <li>Jira support</li>
-            </ul>
-          </article>
-
-          <article class="glass-card feature-card">
-            <p class="card-kicker">Rawnet Ltd.</p>
-            <h3>PHP Developer with DevOps responsibility</h3>
-            <p>
-              Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF
-              blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.
-            </p>
-            <ul class="tag-list">
-              <li>AWS</li>
-              <li>Docker</li>
-              <li>Ubuntu</li>
-            </ul>
-          </article>
-
-          <article class="glass-card feature-card">
-            <p class="card-kicker">Project Better Energy</p>
-            <h3>Full stack PHP and Vue work for business tooling</h3>
-            <p>
-              Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a
-              stockist map feature for EV chargers.
-            </p>
-            <ul class="tag-list">
-              <li>Laravel</li>
-              <li>Vue.js</li>
-              <li>Tailwind / Bootstrap</li>
-            </ul>
-          </article>
-        </div>
+        <div class="cards-grid" id="cms-projects"></div>
       </section>
 
       <section class="section" id="experience">
@@ -155,29 +112,14 @@
           <h2>Recent delivery history.</h2>
         </div>
 
-        <div class="timeline" id="cms-experience">
-          <article class="timeline-item">
-            <p class="timeline-year">2024 - Present</p>
-            <div>
-              <h3>Personal infrastructure</h3>
-              <p>Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.</p>
-            </div>
-          </article>
-          <article class="timeline-item">
-            <p class="timeline-year">2021 - 2024</p>
-            <div>
-              <h3>Platform support</h3>
-              <p>Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.</p>
-            </div>
-          </article>
-        </div>
+        <div class="timeline" id="cms-experience"></div>
       </section>
 
       <section class="section architecture-section" id="architecture">
         <div class="section-heading architecture-heading">
           <div>
-            <p class="eyebrow">Live architecture example</p>
-            <h2>Data streamed from the host Go service.</h2>
+            <p class="eyebrow" id="architecture-section-eyebrow">Live architecture example</p>
+            <h2 id="architecture-section-title">Data streamed from the host Go service.</h2>
           </div>
           <button class="button button-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
         </div>
@@ -199,11 +141,9 @@
             <dl class="facts-grid" id="architecture-facts"></dl>
 
             <div class="mini-grid" id="architecture-highlights"></div>
-          </article>
 
-          <div class="architecture-left-stack">
             <div class="system-panel" id="architecture-system-stats"></div>
-          </div>
+          </article>
 
           <article class="glass-card architecture-diagram">
             <div class="panel-header">
@@ -240,8 +180,8 @@
 
       <section class="section" id="commits">
         <div class="section-heading">
-          <p class="eyebrow">Recent commits</p>
-          <h2>Last few GitHub commits from my portfolio repo.</h2>
+          <p class="eyebrow" id="commits-section-eyebrow">Recent commits</p>
+          <h2 id="commits-section-title">Last few GitHub commits from my portfolio repo.</h2>
         </div>
 
         <article class="glass-card commits-card">

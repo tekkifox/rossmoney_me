@@ -431,13 +431,12 @@ h3 {
 
 .architecture-layout {
   grid-template-columns: minmax(0, 0.98fr) minmax(0, 1.02fr);
+  gap: 18px;
   align-items: start;
 }
 
-.architecture-left-stack {
-  display: grid;
-  gap: 18px;
-  align-content: start;
+.architecture-summary > .system-panel {
+  margin-top: 22px;
 }
 
 .facts-grid {
@@ -461,7 +460,7 @@ h3 {
 
 .mini-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 22px;
 }

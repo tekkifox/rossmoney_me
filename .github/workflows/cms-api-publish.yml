@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'cms-api/**'
+      - 'payload-cms/**'
       - '.github/workflows/cms-api-publish.yml'
   workflow_dispatch:
 
@@ -41,7 +41,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
-          context: ./cms-api
+          context: ./payload-cms
+          file: ./payload-cms/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
