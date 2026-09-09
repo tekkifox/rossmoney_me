@@ -210,27 +210,33 @@
               <span class="status-pill status-muted" id="architecture-updated">Updating</span>
             </div>
 
-            <pre class="diagram-view" id="architecture-diagram">Loading architecture diagram...</pre>
+            <div class="architecture-topology-body">
+              <aside class="architecture-topology-sidebar">
+                <div class="system-panel" id="architecture-system-stats"></div>
+              </aside>
 
-            <div class="system-panel" id="architecture-system-stats"></div>
+              <div class="architecture-topology-main">
+                <pre class="diagram-view" id="architecture-diagram">Loading architecture diagram...</pre>
 
-            <div class="image-panel">
-              <div class="panel-header image-panel-header">
-                <div>
-                  <p class="panel-kicker">Docker images</p>
-                  <h3>Project image inventory</h3>
+                <div class="image-panel">
+                  <div class="panel-header image-panel-header">
+                    <div>
+                      <p class="panel-kicker">Docker images</p>
+                      <h3>Project image inventory</h3>
+                    </div>
+                    <span class="status-pill status-muted" id="architecture-images-count">No project images</span>
+                  </div>
+
+                  <div class="image-grid" id="architecture-images"></div>
                 </div>
-                <span class="status-pill status-muted" id="architecture-images-count">No project images</span>
+
+                <div class="raw-json-wrap">
+                  <details>
+                    <summary>Raw payload</summary>
+                    <pre class="raw-json" id="architecture-raw">{}</pre>
+                  </details>
+                </div>
               </div>
-
-              <div class="image-grid" id="architecture-images"></div>
-            </div>
-
-            <div class="raw-json-wrap">
-              <details>
-                <summary>Raw payload</summary>
-                <pre class="raw-json" id="architecture-raw">{}</pre>
-              </details>
             </div>
           </article>
         </div>
