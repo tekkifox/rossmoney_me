@@ -506,6 +506,52 @@ h3 {
   min-height: 300px;
 }
 
+.image-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.image-panel-header {
+  align-items: center;
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.image-card {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.image-name {
+  font-size: 0.96rem;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.image-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.image-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  color: var(--muted);
+}
+
 .raw-json-wrap {
   margin-top: 16px;
 }
@@ -599,6 +645,7 @@ details summary {
 
   .hero-metrics,
   .mini-grid,
+  .image-grid,
   .facts-grid {
     grid-template-columns: 1fr;
   }

@@ -7,6 +7,8 @@ const architectureState = {
   facts: document.getElementById('architecture-facts'),
   highlights: document.getElementById('architecture-highlights'),
   diagram: document.getElementById('architecture-diagram'),
+  images: document.getElementById('architecture-images'),
+  imagesCount: document.getElementById('architecture-images-count'),
   raw: document.getElementById('architecture-raw'),
   updated: document.getElementById('architecture-updated'),
   refresh: document.getElementById('refresh-architecture')
@@ -46,6 +48,14 @@ const demoArchitecturePayload = {
     { name: 'observability-gateway' },
     { name: 'deploy-controller' }
   ],
+  docker: {
+    images: [
+      { repoTags: ['ghcr.io/tekkifox/rossmoney_me:latest'], sizeBytes: 148723456, created: 1757420000 },
+      { repoTags: ['ghcr.io/tekkifox/rossmoney_me-proxy:latest'], sizeBytes: 27188032, created: 1757420300 },
+      { repoTags: ['ghcr.io/tekkifox/archview:latest'], sizeBytes: 63200448, created: 1757420500 },
+      { repoTags: ['lscr.io/linuxserver/socket-proxy:latest'], sizeBytes: 19845120, created: 1757420600 }
+    ]
+  },
   nodes: ['edge-node-a', 'edge-node-b', 'batch-worker-01'],
   regions: ['preview-region-1', 'preview-region-2'],
   pipelines: ['commit', 'scan', 'deploy', 'verify'],
@@ -119,13 +129,16 @@ function normalizeList(items) {
 }
 
 function buildFacts(payload) {
+  const dockerImages = extractDockerImages(payload);
+
   return [
     ['Environment', pickFirst(payload, ['environment', 'env', 'stage'])],
     ['Region', pickFirst(payload, ['region', 'primaryRegion', 'zone'])],
     ['Cluster', pickFirst(payload, ['cluster', 'clusterName', 'namespace'])],
     ['Updated', pickFirst(payload, ['updatedAt', 'lastUpdated', 'syncedAt', 'timestamp'])],
     ['Services', normalizeList(pickFirst(payload, ['services', 'components', 'apps'])).length || pickFirst(payload, ['servicesCount'])],
-    ['Nodes', normalizeList(pickFirst(payload, ['nodes', 'hosts', 'instances'])).length || pickFirst(payload, ['nodeCount'])]
+    ['Nodes', normalizeList(pickFirst(payload, ['nodes', 'hosts', 'instances'])).length || pickFirst(payload, ['nodeCount'])],
+    ['Images', dockerImages.length || pickFirst(payload, ['imagesCount'])]
   ];
 }
 
@@ -248,6 +261,129 @@ function renderDiagram(payload) {
   architectureState.diagram.textContent = lines.join('\n');
 }
 
+const projectImagePrefixes = [
+  'ghcr.io/tekkifox/rossmoney_me',
+  'ghcr.io/tekkifox/rossmoney_me-proxy',
+  'ghcr.io/tekkifox/archview',
+  'lscr.io/linuxserver/socket-proxy'
+];
+
+function normalizeImageRef(ref) {
+  const value = String(ref || '').trim();
+  if (!value) {
+    return '';
+  }
+
+  const withoutDigest = value.split('@')[0];
+  const lastSlash = withoutDigest.lastIndexOf('/');
+  const lastColon = withoutDigest.lastIndexOf(':');
+  return lastColon > lastSlash ? withoutDigest.slice(0, lastColon) : withoutDigest;
+}
+
+function isProjectImageName(name) {
+  const normalized = normalizeImageRef(name).toLowerCase();
+  return projectImagePrefixes.some((prefix) => normalized.startsWith(prefix.toLowerCase()));
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) {
+    return 'Unknown size';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unit = 0;
+
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function formatDockerTime(value) {
+  const time = Number(value);
+  if (!Number.isFinite(time) || time <= 0) {
+    return 'Unknown';
+  }
+
+  const milliseconds = time > 1e12 ? time : time * 1000;
+  return new Date(milliseconds).toLocaleString();
+}
+
+function extractDockerImages(payload) {
+  const docker = payload?.docker || payload?.Docker || payload;
+  const rawImages = asArray(docker?.images || docker?.Images || payload?.images);
+
+  return rawImages.flatMap((item) => {
+    if (item === null || item === undefined) {
+      return [];
+    }
+
+    if (typeof item === 'string') {
+      return isProjectImageName(item) ? [{ name: item }] : [];
+    }
+
+    if (typeof item !== 'object') {
+      return [];
+    }
+
+    const tags = asArray(item.repoTags || item.RepoTags || item.tags || item.Tags);
+    const name = tags.find(Boolean) || item.repository || item.Repository || item.image || item.Image || item.name || item.Name || item.id || item.ID;
+    if (!isProjectImageName(name)) {
+      return [];
+    }
+
+    return [{
+      name: String(name),
+      sizeBytes: item.sizeBytes ?? item.SizeBytes ?? item.size ?? item.Size,
+      created: item.created ?? item.Created
+    }];
+  }).filter((image, index, list) => list.findIndex((entry) => entry.name === image.name) === index);
+}
+
+function renderDockerImages(payload) {
+  const images = extractDockerImages(payload);
+
+  if (architectureState.imagesCount) {
+    architectureState.imagesCount.textContent = images.length ? `${images.length} project image${images.length === 1 ? '' : 's'}` : 'No project images';
+  }
+
+  architectureState.images.innerHTML = '';
+
+  if (images.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'image-empty';
+    empty.textContent = 'No project images were returned by the Docker feed.';
+    architectureState.images.append(empty);
+    return;
+  }
+
+  for (const image of images) {
+    const card = document.createElement('article');
+    card.className = 'image-card';
+
+    const name = document.createElement('div');
+    name.className = 'image-name';
+    name.textContent = image.name;
+
+    const meta = document.createElement('div');
+    meta.className = 'image-meta';
+
+    const size = document.createElement('span');
+    size.textContent = formatBytes(image.sizeBytes);
+
+    const created = document.createElement('span');
+    created.textContent = `Created ${formatDockerTime(image.created)}`;
+
+    meta.append(size, created);
+    card.append(name, meta);
+    architectureState.images.append(card);
+  }
+}
+
 function setLoading(isLoading) {
   architectureState.refresh.disabled = isLoading;
   architectureState.refresh.textContent = isLoading ? 'Refreshing...' : 'Refresh snapshot';
@@ -270,6 +406,7 @@ function renderArchitecture(payload, sourceLabel = 'Live') {
   renderFacts(payload);
   renderHighlights(payload);
   renderDiagram(payload);
+  renderDockerImages(payload);
   architectureState.raw.textContent = JSON.stringify(payload, null, 2);
 }
 
@@ -282,6 +419,12 @@ function renderError(message) {
   architectureState.facts.innerHTML = '';
   architectureState.highlights.innerHTML = '';
   architectureState.diagram.textContent = 'No live topology was returned.';
+  if (architectureState.images) {
+    architectureState.images.innerHTML = '';
+  }
+  if (architectureState.imagesCount) {
+    architectureState.imagesCount.textContent = 'No project images';
+  }
   architectureState.raw.textContent = JSON.stringify({ error: message }, null, 2);
 }
 
