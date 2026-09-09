@@ -2,6 +2,13 @@ backend:
   name: mongo
   api_root: /api/cms
 
+media_folder: "public/images"
+public_folder: "/images"
+media_library:
+  name: uploadcare
+  config:
+    publicKey: ""
+
 site_url: /
 display_url: /
 
