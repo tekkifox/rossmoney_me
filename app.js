@@ -1,4 +1,5 @@
 const architectureUrl = document.body.dataset.architectureUrl || document.querySelector('meta[name="architecture-api"]')?.content || '/api/architecture';
+const cmsUrl = document.body.dataset.cmsUrl || '/api/cms/site';
 
 const architectureState = {
   title: document.getElementById('architecture-title'),
@@ -7,6 +8,7 @@ const architectureState = {
   facts: document.getElementById('architecture-facts'),
   highlights: document.getElementById('architecture-highlights'),
   diagram: document.getElementById('architecture-diagram'),
+  systemStats: document.getElementById('architecture-system-stats'),
   images: document.getElementById('architecture-images'),
   imagesCount: document.getElementById('architecture-images-count'),
   raw: document.getElementById('architecture-raw'),
@@ -59,6 +61,28 @@ const demoArchitecturePayload = {
   nodes: ['edge-node-a', 'edge-node-b', 'batch-worker-01'],
   regions: ['preview-region-1', 'preview-region-2'],
   pipelines: ['commit', 'scan', 'deploy', 'verify'],
+  system: {
+    hostname: 'preview-host',
+    os: 'Linux',
+    kernel: 'preview-kernel',
+    architecture: 'amd64',
+    uptimeSeconds: 86400,
+    cpuCount: 4,
+    loadAverage: [0.22, 0.31, 0.28],
+    memory: {
+      totalBytes: 17179869184,
+      availableBytes: 11811160064,
+      freeBytes: 8589934592,
+      usedBytes: 5368709120,
+      usedPercent: 31.25,
+      swapTotalBytes: 2147483648,
+      swapFreeBytes: 2147483648
+    },
+    network: [
+      { interface: 'eth0', receivedBytes: 2147483648, sentBytes: 1073741824 },
+      { interface: 'lo', receivedBytes: 102400, sentBytes: 102400 }
+    ]
+  },
   diagram: [
     'browser',
     '  -> portfolio site',
@@ -73,6 +97,7 @@ architectureState.refresh.addEventListener('click', () => {
 
 void loadArchitecture();
 void loadGitHubCommits();
+void loadCmsContent();
 
 function formatValue(value) {
   if (value === null || value === undefined || value === '') {
@@ -140,6 +165,299 @@ function buildFacts(payload) {
     ['Nodes', normalizeList(pickFirst(payload, ['nodes', 'hosts', 'instances'])).length || pickFirst(payload, ['nodeCount'])],
     ['Images', dockerImages.length || pickFirst(payload, ['imagesCount'])]
   ];
+}
+
+function formatCmsText(value, fallback = '') {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
+  return String(value);
+}
+
+function formatBytesHuman(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = value;
+  let unit = 0;
+
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function formatUptime(seconds) {
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total < 0) {
+    return '—';
+  }
+
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days > 0) {
+    return `${days}d ${hours}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+function sumNetworkBytes(network) {
+  return asArray(network).reduce((acc, item) => {
+    acc.received += Number(item?.receivedBytes || item?.received || 0);
+    acc.sent += Number(item?.sentBytes || item?.sent || 0);
+    return acc;
+  }, { received: 0, sent: 0 });
+}
+
+function renderSystemStats(payload) {
+  if (!architectureState.systemStats) {
+    return;
+  }
+
+  const system = payload?.system || {};
+  const loadAverage = asArray(system.loadAverage || system.load || system.avgLoad);
+  const memory = system.memory || {};
+  const network = asArray(system.network || system.interfaces || system.net);
+  const networkTotals = sumNetworkBytes(network);
+
+  architectureState.systemStats.innerHTML = '';
+
+  const cpuCard = document.createElement('article');
+  cpuCard.className = 'system-card system-card-cpu';
+
+  const cpuHeader = document.createElement('div');
+  cpuHeader.className = 'system-card-header';
+  const cpuKicker = document.createElement('span');
+  cpuKicker.className = 'panel-kicker';
+  cpuKicker.textContent = 'CPU';
+  const cpuTitle = document.createElement('h4');
+  cpuTitle.textContent = `${formatValue(system.cpuCount || system.CPUCount || '—')} cores`;
+  cpuHeader.append(cpuKicker, cpuTitle);
+
+  const cpuBody = document.createElement('p');
+  cpuBody.className = 'system-card-summary';
+  cpuBody.textContent = `Load average ${loadAverage.slice(0, 3).map((item) => formatValue(item)).join(' / ') || '—'} · uptime ${formatUptime(system.uptimeSeconds || system.uptime || 0)}`;
+
+  const nestedGrid = document.createElement('div');
+  nestedGrid.className = 'system-nested-grid';
+
+  const memoryCard = document.createElement('article');
+  memoryCard.className = 'system-mini-card';
+  memoryCard.innerHTML = `
+    <span class="panel-label">Memory</span>
+    <p>${formatBytesHuman(memory.usedBytes || 0)} used of ${formatBytesHuman(memory.totalBytes || 0)}</p>
+    <p>${formatValue(memory.usedPercent || 0)}% used · ${formatBytesHuman(memory.availableBytes || memory.freeBytes || 0)} available</p>
+  `;
+
+  const networkCard = document.createElement('article');
+  networkCard.className = 'system-mini-card';
+  networkCard.innerHTML = `
+    <span class="panel-label">Network</span>
+    <p>${formatBytesHuman(networkTotals.received)} received</p>
+    <p>${formatBytesHuman(networkTotals.sent)} sent across ${network.length} interface${network.length === 1 ? '' : 's'}</p>
+  `;
+
+  nestedGrid.append(memoryCard, networkCard);
+  cpuCard.append(cpuHeader, cpuBody, nestedGrid);
+  architectureState.systemStats.append(cpuCard);
+}
+
+function renderButton(element, button, fallbackLabel, fallbackHref) {
+  if (!element) {
+    return;
+  }
+
+  const label = formatCmsText(button?.label, fallbackLabel);
+  const href = formatCmsText(button?.href, fallbackHref);
+  element.textContent = label;
+  element.setAttribute('href', href);
+}
+
+function renderHeroContent(home) {
+  const eyebrow = document.getElementById('hero-eyebrow');
+  const title = document.getElementById('hero-title');
+  const lead = document.getElementById('hero-lead');
+  const primaryButton = document.getElementById('hero-primary-button');
+  const secondaryButton = document.getElementById('hero-secondary-button');
+  const metrics = document.getElementById('hero-metrics');
+  const heroPanel = document.querySelector('.hero-panel');
+
+  if (eyebrow) {
+    eyebrow.textContent = formatCmsText(home?.eyebrow, eyebrow.textContent);
+  }
+  if (title) {
+    title.textContent = formatCmsText(home?.title, title.textContent);
+  }
+  if (lead) {
+    lead.textContent = formatCmsText(home?.lead, lead.textContent);
+  }
+
+  renderButton(primaryButton, home?.primaryButton, primaryButton?.textContent || 'Start a conversation', '#contact');
+  renderButton(secondaryButton, home?.secondaryButton, secondaryButton?.textContent || 'Inspect live architecture', '#architecture');
+
+  if (metrics && Array.isArray(home?.metrics) && home.metrics.length > 0) {
+    metrics.innerHTML = '';
+    for (const metric of home.metrics.slice(0, 3)) {
+      const article = document.createElement('article');
+      const value = document.createElement('span');
+      value.className = 'metric-value';
+      value.textContent = formatCmsText(metric.value, '—');
+      const label = document.createElement('span');
+      label.className = 'metric-label';
+      label.textContent = formatCmsText(metric.label, 'Metric');
+      article.append(value, label);
+      metrics.append(article);
+    }
+  }
+
+  if (heroPanel && home?.focus) {
+    const focusHeading = heroPanel.querySelector('h2');
+    const focusStatus = heroPanel.querySelector('.status-pill');
+    const focusGrid = heroPanel.querySelector('.panel-grid');
+
+    if (focusHeading) {
+      focusHeading.textContent = formatCmsText(home.focus.title, focusHeading.textContent);
+    }
+
+    if (focusStatus) {
+      focusStatus.textContent = formatCmsText(home.focus.status, focusStatus.textContent);
+    }
+
+    if (focusGrid && Array.isArray(home.focus.items) && home.focus.items.length > 0) {
+      focusGrid.innerHTML = '';
+      for (const item of home.focus.items.slice(0, 4)) {
+        const cell = document.createElement('div');
+        const labelNode = document.createElement('span');
+        labelNode.className = 'panel-label';
+        labelNode.textContent = formatCmsText(item.label, 'Item');
+        const valueNode = document.createElement('p');
+        valueNode.textContent = formatCmsText(item.value, '');
+        cell.append(labelNode, valueNode);
+        focusGrid.append(cell);
+      }
+    }
+  }
+}
+
+function renderProjectCards(projects) {
+  const container = document.getElementById('cms-projects');
+  if (!container || !Array.isArray(projects) || projects.length === 0) {
+    return;
+  }
+
+  container.innerHTML = '';
+  for (const project of projects) {
+    const card = document.createElement('article');
+    card.className = 'glass-card feature-card';
+
+    const kicker = document.createElement('p');
+    kicker.className = 'card-kicker';
+    kicker.textContent = formatCmsText(project.role, 'Project');
+
+    const heading = document.createElement('h3');
+    heading.textContent = formatCmsText(project.title, 'Untitled project');
+
+    const summary = document.createElement('p');
+    summary.textContent = formatCmsText(project.summary, '');
+
+    const tags = document.createElement('ul');
+    tags.className = 'tag-list';
+    for (const tag of asArray(project.tags).slice(0, 6)) {
+      const li = document.createElement('li');
+      li.textContent = formatCmsText(tag, 'Tag');
+      tags.append(li);
+    }
+
+    card.append(kicker, heading, summary);
+    if (tags.children.length > 0) {
+      card.append(tags);
+    }
+    container.append(card);
+  }
+}
+
+function renderExperienceEntries(entries) {
+  const container = document.getElementById('cms-experience');
+  if (!container || !Array.isArray(entries) || entries.length === 0) {
+    return;
+  }
+
+  container.innerHTML = '';
+  for (const entry of entries) {
+    const item = document.createElement('article');
+    item.className = 'timeline-item';
+
+    const year = document.createElement('p');
+    year.className = 'timeline-year';
+    year.textContent = formatCmsText(entry.year, '—');
+
+    const body = document.createElement('div');
+    const heading = document.createElement('h3');
+    heading.textContent = [entry.title, entry.organization].filter(Boolean).join(' · ') || 'Experience';
+    const summary = document.createElement('p');
+    summary.textContent = formatCmsText(entry.summary, '');
+    body.append(heading, summary);
+
+    const highlights = asArray(entry.highlights);
+    if (highlights.length > 0) {
+      const list = document.createElement('ul');
+      list.className = 'tag-list';
+      for (const highlight of highlights.slice(0, 6)) {
+        const li = document.createElement('li');
+        li.textContent = formatCmsText(highlight, 'Highlight');
+        list.append(li);
+      }
+      body.append(list);
+    }
+
+    item.append(year, body);
+    container.append(item);
+  }
+}
+
+function renderContactContent(contact) {
+  const eyebrow = document.getElementById('contact-eyebrow');
+  const title = document.getElementById('contact-title');
+  const lead = document.getElementById('contact-lead');
+  const links = document.getElementById('contact-links');
+
+  if (eyebrow) {
+    eyebrow.textContent = formatCmsText(contact?.eyebrow, eyebrow.textContent);
+  }
+  if (title) {
+    title.textContent = formatCmsText(contact?.title, title.textContent);
+  }
+  if (lead) {
+    lead.textContent = formatCmsText(contact?.lead, lead.textContent);
+  }
+
+  if (links && Array.isArray(contact?.links) && contact.links.length > 0) {
+    links.innerHTML = '';
+    for (const link of contact.links.slice(0, 6)) {
+      const anchor = document.createElement('a');
+      anchor.href = formatCmsText(link.href, '#');
+      anchor.rel = 'noreferrer';
+      anchor.textContent = formatCmsText(link.label, link.href || 'Contact');
+      links.append(anchor);
+    }
+  }
+}
+
+function renderCmsContent(payload) {
+  renderHeroContent(payload?.home);
+  renderProjectCards(payload?.projects);
+  renderExperienceEntries(payload?.experience);
+  renderContactContent(payload?.contact);
 }
 
 function buildHighlights(payload) {
@@ -391,6 +709,7 @@ function renderArchitecture(payload, sourceLabel = 'Live') {
   renderFacts(payload);
   renderHighlights(payload);
   renderDiagram(payload);
+  renderSystemStats(payload);
   renderDockerImages(payload);
   architectureState.raw.textContent = JSON.stringify(payload, null, 2);
 }
@@ -404,6 +723,9 @@ function renderError(message) {
   architectureState.facts.innerHTML = '';
   architectureState.highlights.innerHTML = '';
   architectureState.diagram.textContent = 'No live topology was returned.';
+  if (architectureState.systemStats) {
+    architectureState.systemStats.innerHTML = '';
+  }
   if (architectureState.images) {
     architectureState.images.innerHTML = '';
   }
@@ -499,5 +821,30 @@ async function loadArchitecture(force = false) {
     renderError(message);
   } finally {
     setLoading(false);
+  }
+}
+
+async function loadCmsContent() {
+  if (window.location.protocol === 'file:') {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${cmsUrl}${cmsUrl.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json, text/plain;q=0.9, */*;q=0.8'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`CMS API returned ${response.status}`);
+    }
+
+    const payload = await response.json();
+    renderCmsContent(payload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load CMS content.';
+    console.warn(message);
   }
 }

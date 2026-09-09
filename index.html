@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="./styles.css">
   <script defer src="./app.js"></script>
 </head>
-  <body data-architecture-url="/api/architecture">
+  <body data-architecture-url="/api/architecture" data-cms-url="/api/cms/site">
   <div class="page-shell">
     <div class="ambient ambient-left"></div>
     <div class="ambient ambient-right"></div>
@@ -29,28 +29,30 @@
 
       <nav class="topnav" aria-label="Primary">
         <a href="#work">Work</a>
+        <a href="#experience">Experience</a>
         <a href="#architecture">Architecture</a>
         <a href="#commits">Commits</a>
         <a href="#contact">Contact</a>
+        <a href="/admin/">CMS</a>
       </nav>
     </header>
 
     <main>
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Available for devops and developer roles</p>
-          <h1>Building dependable systems with operational discipline.</h1>
-          <p class="lead">
+          <p class="eyebrow" id="hero-eyebrow">Available for devops and developer roles</p>
+          <h1 id="hero-title">Building dependable systems with operational discipline.</h1>
+          <p class="lead" id="hero-lead">
             I design and ship resilient developer experiences, automation layers, and production-ready interfaces.
             This portfolio surfaces the live topology behind the work through a custom Go-backed architecture feed.
           </p>
 
           <div class="hero-actions">
-            <a class="button button-primary" href="#contact">Start a conversation</a>
-            <a class="button button-secondary" href="#architecture">Inspect live architecture</a>
+            <a class="button button-primary" id="hero-primary-button" href="#contact">Start a conversation</a>
+            <a class="button button-secondary" id="hero-secondary-button" href="#architecture">Inspect live architecture</a>
           </div>
 
-          <div class="hero-metrics" aria-label="Highlights">
+          <div class="hero-metrics" aria-label="Highlights" id="hero-metrics">
             <article>
               <span class="metric-value">99.95%</span>
               <span class="metric-label">availability target</span>
@@ -102,7 +104,7 @@
           <h2>Real roles and projects from my CV.</h2>
         </div>
 
-        <div class="cards-grid">
+        <div class="cards-grid" id="cms-projects">
           <article class="glass-card feature-card">
             <p class="card-kicker">Morphsites</p>
             <h3>Backend developer across Laravel and legacy PHP</h3>
@@ -147,6 +149,30 @@
         </div>
       </section>
 
+      <section class="section" id="experience">
+        <div class="section-heading">
+          <p class="eyebrow">Experience</p>
+          <h2>Recent delivery history.</h2>
+        </div>
+
+        <div class="timeline" id="cms-experience">
+          <article class="timeline-item">
+            <p class="timeline-year">2024 - Present</p>
+            <div>
+              <h3>Personal infrastructure</h3>
+              <p>Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.</p>
+            </div>
+          </article>
+          <article class="timeline-item">
+            <p class="timeline-year">2021 - 2024</p>
+            <div>
+              <h3>Platform support</h3>
+              <p>Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section class="section architecture-section" id="architecture">
         <div class="section-heading architecture-heading">
           <div>
@@ -185,6 +211,8 @@
             </div>
 
             <pre class="diagram-view" id="architecture-diagram">Loading architecture diagram...</pre>
+
+            <div class="system-panel" id="architecture-system-stats"></div>
 
             <div class="image-panel">
               <div class="panel-header image-panel-header">
@@ -230,14 +258,14 @@
       <section class="section contact-section" id="contact">
         <div class="glass-card contact-card">
           <div>
-            <p class="eyebrow">Contact</p>
-            <h2>Open to platform, DevOps, and development work.</h2>
-            <p>
+            <p class="eyebrow" id="contact-eyebrow">Contact</p>
+            <h2 id="contact-title">Open to platform, DevOps, and development work.</h2>
+            <p id="contact-lead">
               I'm available for contract and full-time work, and I enjoy collaborating with teams to improve delivery and reliability.
             </p>
           </div>
 
-          <div class="contact-links">
+          <div class="contact-links" id="contact-links">
             <a href="mailto:dev@rossmoney.me">dev@rossmoney.me</a>
             <a href="https://github.com/tekkifox" rel="noreferrer">github.com/tekkifox</a>
             <a href="https://www.linkedin.com/in/rossmoney" rel="noreferrer">linkedin.com/in/rossmoney</a>

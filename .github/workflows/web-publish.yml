@@ -8,6 +8,7 @@ on:
       - 'index.html'
       - 'app.js'
       - 'styles.css'
+      - 'admin/**'
       - 'web/**'
       - '.github/workflows/web-publish.yml'
   workflow_dispatch:

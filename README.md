@@ -6,11 +6,12 @@ This workspace contains a static portfolio site for a developer with a DevOps fo
 
 - A bold single-page portfolio with hero, work, experience, and contact sections.
 - A live architecture panel that fetches JSON from a host-provided Go service.
+- A Decap CMS admin at `/admin/` backed by MongoDB for editable page content.
 - A fallback rendering path so the page still shows useful state when the feed is unavailable.
 
 ## Architecture feed
 
-By default the site calls `http://localhost:8080/api/architecture`. The Go service lives in `go-service/` and is intended to run as a separate container.
+By default the site calls `http://localhost:8080/api/architecture`. The telemetry service lives in the sibling `archview` repo and runs as a separate container.
 
 The frontend is tolerant of a few common field names, including:
 
@@ -26,6 +27,22 @@ The frontend is tolerant of a few common field names, including:
 This project is plain HTML, CSS, and JavaScript, so you can serve it from any static host and point it at the API container directly.
 
 The Go API sends permissive CORS headers, so the site can fetch it across origins during local development.
+
+## CMS
+
+The content editor stores documents in MongoDB through the `cms-api` service.
+
+The CMS API exposes:
+
+- `GET /api/cms/site`
+- `GET /api/cms/collections/:collection`
+- `GET /api/cms/collections/:collection/:slug`
+- `PUT /api/cms/collections/:collection/:slug`
+- `DELETE /api/cms/collections/:collection/:slug`
+
+Open `/admin/` to manage the home page, projects, experience entries, and contact block.
+
+MongoDB database name defaults to `rossmoney_me`.
 
 ## Go service
 
@@ -46,6 +63,38 @@ docker compose up -d
 The stack is exposed on `http://localhost` through the reverse proxy. The browser uses same-origin `/api/architecture`, so it works cleanly in Portainer.
 
 The ArchView service reaches Docker through `lscr.io/linuxserver/socket-proxy:latest` using `DOCKER_HOST=tcp://socket-proxy:2375`.
+
+Local stack values now live in `.env` and are loaded by Compose.
+
+## Environment file
+
+Create a root `.env` file with these values:
+
+```ini
+ARCHVIEW_PORT=8080
+CMS_API_PORT=8082
+
+MONGODB_URI=mongodb://mongo:27017
+MONGODB_DATABASE=rossmoney_me
+MONGODB_COLLECTION=cms_documents
+MONGODB_SEED_DEFAULTS=true
+
+DOCKER_API_VERSION=v1.44
+DOCKER_HOST=tcp://socket-proxy:2375
+HOST_PROC=/host/proc
+HOST_SYS=/host/sys
+HOST_ROOT=/host/root
+
+CONTAINERS=1
+IMAGES=1
+INFO=1
+PING=1
+POST=0
+VERSION=1
+LOG_LEVEL=info
+```
+
+The first block is for the CMS and telemetry services; the remaining socket-proxy variables are passed through to the Docker API proxy.
 
 ## Web UI image
 
@@ -73,4 +122,4 @@ Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions rede
 
 ## Notes
 
-The environment used here does not include a Node.js or Go toolchain, so this version is intentionally dependency-free.
+The frontend remains plain HTML, CSS, and JavaScript; the CMS API is a separate Go service backed by MongoDB.

@@ -506,6 +506,56 @@ h3 {
   min-height: 300px;
 }
 
+.system-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.system-card,
+.system-mini-card {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.system-card {
+  padding: 16px;
+}
+
+.system-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.system-card-header h4 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.system-card-summary {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.system-nested-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.system-mini-card {
+  padding: 14px;
+}
+
+.system-mini-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
 .image-panel {
   display: grid;
   gap: 16px;
@@ -646,6 +696,7 @@ details summary {
   .hero-metrics,
   .mini-grid,
   .image-grid,
+  .system-nested-grid,
   .facts-grid {
     grid-template-columns: 1fr;
   }
