@@ -64,11 +64,25 @@ The stack is exposed on `http://localhost` through the reverse proxy. The browse
 
 The ArchView service reaches Docker through `lscr.io/linuxserver/socket-proxy:latest` using `DOCKER_HOST=tcp://socket-proxy:2375`.
 
-Local stack values now live in `stack.env` and are loaded by Compose.
+`stack.env` is shared by both the local and Portainer Compose files.
+
+Use `docker-compose.portainer.yml` for Portainer stack deploys.
+
+Local build:
+
+```bash
+docker compose -f docker-compose.yml up --build
+```
+
+Portainer stack:
+
+```bash
+docker compose -f docker-compose.portainer.yml config
+```
 
 ## Environment file
 
-Create a root `stack.env` file with these values:
+Create a root `stack.env` file for local Compose with these values:
 
 ```ini
 ARCHVIEW_PORT=8080

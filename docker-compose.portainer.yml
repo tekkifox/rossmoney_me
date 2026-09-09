@@ -2,18 +2,18 @@ version: "3.8"
 
 services:
   web:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
+    image: ghcr.io/tekkifox/rossmoney_me:latest
+    pull_policy: always
+    env_file:
+      - stack.env
     networks:
       - rossmoney-stack
     depends_on:
       - archview
 
   cms-api:
-    build:
-      context: .
-      dockerfile: cms-api/Dockerfile
+    image: ghcr.io/tekkifox/rossmoney_me-cms-api:latest
+    pull_policy: always
     env_file:
       - stack.env
     restart: unless-stopped
@@ -27,6 +27,8 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    env_file:
+      - stack.env
     networks:
       - rossmoney-stack
     volumes:
@@ -70,9 +72,8 @@ services:
       start_period: 5s
 
   proxy:
-    build:
-      context: .
-      dockerfile: deploy/proxy.Dockerfile
+    image: ghcr.io/tekkifox/rossmoney_me-proxy:latest
+    pull_policy: always
     depends_on:
       - web
       - archview
