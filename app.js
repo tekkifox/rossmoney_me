@@ -261,13 +261,6 @@ function renderDiagram(payload) {
   architectureState.diagram.textContent = lines.join('\n');
 }
 
-const projectImagePrefixes = [
-  'ghcr.io/tekkifox/rossmoney_me',
-  'ghcr.io/tekkifox/rossmoney_me-proxy',
-  'ghcr.io/tekkifox/archview',
-  'lscr.io/linuxserver/socket-proxy'
-];
-
 function normalizeImageRef(ref) {
   const value = String(ref || '').trim();
   if (!value) {
@@ -278,11 +271,6 @@ function normalizeImageRef(ref) {
   const lastSlash = withoutDigest.lastIndexOf('/');
   const lastColon = withoutDigest.lastIndexOf(':');
   return lastColon > lastSlash ? withoutDigest.slice(0, lastColon) : withoutDigest;
-}
-
-function isProjectImageName(name) {
-  const normalized = normalizeImageRef(name).toLowerCase();
-  return projectImagePrefixes.some((prefix) => normalized.startsWith(prefix.toLowerCase()));
 }
 
 function formatBytes(bytes) {
@@ -323,7 +311,7 @@ function extractDockerImages(payload) {
     }
 
     if (typeof item === 'string') {
-      return isProjectImageName(item) ? [{ name: item }] : [];
+      return [{ name: item }];
     }
 
     if (typeof item !== 'object') {
@@ -332,16 +320,13 @@ function extractDockerImages(payload) {
 
     const tags = asArray(item.repoTags || item.RepoTags || item.tags || item.Tags);
     const name = tags.find(Boolean) || item.repository || item.Repository || item.image || item.Image || item.name || item.Name || item.id || item.ID;
-    if (!isProjectImageName(name)) {
-      return [];
-    }
 
     return [{
       name: String(name),
       sizeBytes: item.sizeBytes ?? item.SizeBytes ?? item.size ?? item.Size,
       created: item.created ?? item.Created
     }];
-  }).filter((image, index, list) => list.findIndex((entry) => entry.name === image.name) === index);
+  }).filter((image, index, list) => image.name && list.findIndex((entry) => entry.name === image.name) === index);
 }
 
 function renderDockerImages(payload) {
