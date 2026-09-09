@@ -64,11 +64,11 @@ The stack is exposed on `http://localhost` through the reverse proxy. The browse
 
 The ArchView service reaches Docker through `lscr.io/linuxserver/socket-proxy:latest` using `DOCKER_HOST=tcp://socket-proxy:2375`.
 
-Local stack values now live in `.env` and are loaded by Compose.
+Local stack values now live in `stack.env` and are loaded by Compose.
 
 ## Environment file
 
-Create a root `.env` file with these values:
+Create a root `stack.env` file with these values:
 
 ```ini
 ARCHVIEW_PORT=8080

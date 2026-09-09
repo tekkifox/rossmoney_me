@@ -14,7 +14,7 @@ services:
     build:
       context: ./cms-api
     env_file:
-      - .env
+      - stack.env
     restart: unless-stopped
     environment:
       PORT: ${CMS_API_PORT}
@@ -35,7 +35,7 @@ services:
     image: ghcr.io/tekkifox/archview:latest
     pull_policy: always
     env_file:
-      - .env
+      - stack.env
     environment:
       PORT: ${ARCHVIEW_PORT}
     networks:
@@ -52,7 +52,7 @@ services:
     image: lscr.io/linuxserver/socket-proxy:latest
     container_name: socket-proxy
     env_file:
-      - .env
+      - stack.env
     networks:
       - rossmoney-stack
     volumes:
