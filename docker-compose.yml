@@ -78,6 +78,8 @@ services:
     build:
       context: .
       dockerfile: deploy/proxy.Dockerfile
+    ports:
+      - "80:80"
     depends_on:
       - web
       - archview
