@@ -85,13 +85,10 @@ docker compose -f docker-compose.portainer.yml config
 Create a root `stack.env` file for local Compose with these values:
 
 ```ini
-ARCHVIEW_PORT=8080
-CMS_API_PORT=8082
-
-MONGODB_URI=mongodb://mongo:27017
-MONGODB_DATABASE=rossmoney_me
-MONGODB_COLLECTION=cms_documents
-MONGODB_SEED_DEFAULTS=true
+MONGODB_URI=mongodb://mongo:27017/rossmoney_me
+PAYLOAD_SECRET=rossmoney_payload_secret_key_change_me
+SERVER_URL=https://www.rossmoney.me
+PAYLOAD_SEED=true
 
 DOCKER_API_VERSION=v1.44
 DOCKER_HOST=tcp://socket-proxy:2375
