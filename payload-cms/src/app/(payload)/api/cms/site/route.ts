@@ -1,20 +1,33 @@
 import { NextResponse } from 'next/server';
-import { getPayload } from 'payload';
-import config from '@payload-config';
+import { getSafePayload } from '@/utilities/getSafePayload';
 
 export async function GET() {
   try {
-    const payload = await getPayload({ config });
+    const payload = await getSafePayload();
     const pClient = payload as any;
     const pages = await pClient.find({ collection: 'pages', limit: 100 });
     const projects = await pClient.find({ collection: 'projects', limit: 100, sort: 'order' });
     const experience = await pClient.find({ collection: 'experience', limit: 100, sort: 'order' });
+    const headerDoc = await pClient.findGlobal({ slug: 'header' }).catch(() => ({ navItems: [] }));
 
     const homeDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'home') || {};
     const contactDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'contact') || {};
     const archDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'architecture') || {};
     const commitsDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'commits') || {};
     const navDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'navigation') || {};
+
+    const navLinks = Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0
+      ? headerDoc.navItems.map((item: any) => ({
+          label: item?.link?.label || item?.label || 'Link',
+          href: item?.link?.url || item?.href || '#'
+        }))
+      : (((navDoc as any).data as Record<string, unknown>)?.links || [
+          { label: 'Work', href: '#work' },
+          { label: 'Experience', href: '#experience' },
+          { label: 'Architecture', href: '#architecture' },
+          { label: 'Commits', href: '#commits' },
+          { label: 'Contact', href: '#contact' }
+        ]);
 
     return NextResponse.json({
       home: {
@@ -40,7 +53,8 @@ export async function GET() {
         ...(((commitsDoc as any).data as Record<string, unknown>) || {})
       },
       navigation: {
-        ...(((navDoc as any).data as Record<string, unknown>) || {})
+        ...(((navDoc as any).data as Record<string, unknown>) || {}),
+        links: navLinks
       },
       projects: projects.docs,
       experience: experience.docs,
