@@ -310,9 +310,10 @@ function renderProjectCards(projects) {
 
     const tags = document.createElement('ul');
     tags.className = 'tag-list';
-    for (const tag of asArray(project.tags).slice(0, 6)) {
+    for (const tagObj of asArray(project.tags).slice(0, 6)) {
+      const tagVal = typeof tagObj === 'object' && tagObj !== null ? (tagObj.tag || tagObj.name || tagObj.title || '') : tagObj;
       const li = document.createElement('li');
-      li.textContent = formatCmsText(tag, 'Tag');
+      li.textContent = formatCmsText(tagVal, 'Tag');
       tags.append(li);
     }
 
@@ -350,9 +351,10 @@ function renderExperienceEntries(entries) {
     if (highlights.length > 0) {
       const list = document.createElement('ul');
       list.className = 'tag-list';
-      for (const highlight of highlights.slice(0, 6)) {
+      for (const hlObj of highlights.slice(0, 6)) {
+        const hlVal = typeof hlObj === 'object' && hlObj !== null ? (hlObj.highlight || hlObj.name || hlObj.title || '') : hlObj;
         const li = document.createElement('li');
-        li.textContent = formatCmsText(highlight, 'Highlight');
+        li.textContent = formatCmsText(hlVal, 'Highlight');
         list.append(li);
       }
       body.append(list);
