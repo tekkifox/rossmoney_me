@@ -22,6 +22,7 @@ RUN \
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+ARG SKIP_DB=false
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -29,6 +30,9 @@ COPY . .
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
 # ENV NEXT_TELEMETRY_DISABLED 1
+ENV NODE_OPTIONS=--no-deprecation
+
+ENV SKIP_DB=$SKIP_DB
 
 RUN \
   if [ -f yarn.lock ]; then yarn run build; \

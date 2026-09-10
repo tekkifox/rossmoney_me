@@ -18,11 +18,14 @@ export async function GET() {
     const expPageDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'experience-page') || {};
     const navDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'navigation') || {};
 
-    const navLinks = Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0
-      ? headerDoc.navItems.map((item: any) => ({
-          label: item?.link?.label || item?.label || 'Link',
-          href: item?.link?.url || item?.href || '#'
-        }))
+    const navLinks = (Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0)
+      ? headerDoc.navItems.map((item: any) => {
+          const l = item?.link || item;
+          return {
+            label: l?.label || l?.title || 'Link',
+            href: l?.url || l?.href || '#'
+          };
+        })
       : (((navDoc as any).data as Record<string, unknown>)?.links || [
           { label: 'Work', href: '#work' },
           { label: 'Experience', href: '#experience' },
@@ -69,6 +72,7 @@ export async function GET() {
         ...(((navDoc as any).data as Record<string, unknown>) || {}),
         links: navLinks
       },
+      navItems: navLinks,
       projects: projects.docs,
       experience: experience.docs,
       updatedAt: new Date().toISOString()

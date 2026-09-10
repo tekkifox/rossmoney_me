@@ -20,8 +20,29 @@ import { Categories } from './collections/Categories';
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
+const noopDb = {
+  connect: async () => undefined,
+  destroy: async () => undefined,
+  create: async () => ({}) as any,
+  update: async () => ({}) as any,
+  delete: async () => ({}) as any,
+  find: async () => ({ docs: [], totalDocs: 0 }) as any,
+  findOne: async () => null as any,
+  count: async () => 0,
+  countVersions: async () => 0,
+  createGlobal: async () => ({}) as any,
+  updateGlobal: async () => ({}) as any,
+  findGlobal: async () => null as any,
+  createMigration: async () => ({}) as any,
+  migrate: async () => undefined,
+  rollbackMigration: async () => undefined,
+  transaction: async (fn: any) => fn?.(),
+} as any;
+
+const useNoopDb = process.env.SKIP_DB === 'true' || process.env.NEXT_PHASE === 'phase-production-build';
+
 export default buildConfig({
-  serverURL: process.env.SERVER_URL || 'http://localhost:8082',
+  serverURL: process.env.SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8082',
   editor: lexicalEditor(),
   admin: {
     components: {
@@ -61,11 +82,14 @@ export default buildConfig({
   },
   collections: [Users, Pages, Posts, Categories, Projects, Experience, Media],
   cors: [getServerSideURL()].filter(Boolean),
+  csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   globals: [Header, Footer],
   plugins,
-  db: mongooseAdapter({
-    url: process.env.MONGODB_URI || process.env.DATABASE_URL || 'mongodb://127.0.0.1:27017/rossmoney_me',
-  }),
+  db: useNoopDb
+    ? noopDb
+    : mongooseAdapter({
+        url: process.env.MONGODB_URI || process.env.DATABASE_URL || 'mongodb://127.0.0.1:27017/rossmoney_me',
+      }),
   secret: process.env.PAYLOAD_SECRET || 'rossmoney_payload_secret_key_change_me',
   sharp,
   typescript: {
@@ -74,6 +98,31 @@ export default buildConfig({
   onInit: async (payload: Payload) => {
     try {
       const pClient = payload as any;
+
+      // Ensure header global is seeded/synced on every startup
+        try {
+          const headerData = {
+            navItems: [
+              { link: { type: 'custom', label: 'Work', url: '#work' } },
+              { link: { type: 'custom', label: 'Experience', url: '#experience' } },
+              { link: { type: 'custom', label: 'Architecture', url: '#architecture' } },
+              { link: { type: 'custom', label: 'Commits', url: '#commits' } },
+              { link: { type: 'custom', label: 'Contact', url: '#contact' } },
+            ],
+          };
+
+          const currentHeader = await pClient.db.findGlobal({ slug: 'header' }).catch(() => null);
+          if (!currentHeader) {
+            await pClient.db.createGlobal({ slug: 'header', data: headerData });
+            payload.logger.info('Header global created and seeded successfully.');
+          } else if (!Array.isArray((currentHeader as any).navItems) || (currentHeader as any).navItems.length === 0 || process.env.PAYLOAD_SEED === 'true') {
+            await pClient.db.updateGlobal({ slug: 'header', data: headerData });
+            payload.logger.info('Header global updated and seeded successfully.');
+          }
+        } catch (err) {
+          payload.logger.warn(`Header global seed note: ${err}`);
+        }
+
       const existingPages = await pClient.find({ collection: 'pages', limit: 10 });
       const shouldSeed = existingPages.totalDocs === 0 || process.env.PAYLOAD_SEED === 'true';
 
@@ -173,21 +222,6 @@ export default buildConfig({
             await pClient.create({ collection: 'experience', data: exp });
           }
         }
-
-        try {
-          await pClient.updateGlobal({
-            slug: 'header',
-            data: {
-              navItems: [
-                { link: { type: 'custom', label: 'Work', url: '#work' } },
-                { link: { type: 'custom', label: 'Experience', url: '#experience' } },
-                { link: { type: 'custom', label: 'Architecture', url: '#architecture' } },
-                { link: { type: 'custom', label: 'Commits', url: '#commits' } },
-                { link: { type: 'custom', label: 'Contact', url: '#contact' } },
-              ],
-            },
-          });
-        } catch {}
 
         payload.logger.info('Default Payload CMS documents seeded/synced successfully.');
       }

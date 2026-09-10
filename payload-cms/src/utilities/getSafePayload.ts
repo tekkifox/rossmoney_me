@@ -2,7 +2,7 @@ import configPromise from '@payload-config'
 import { getPayload } from 'payload'
 
 export async function getSafePayload() {
-  if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.SKIP_DB === 'true') {
+  if (process.env.SKIP_DB === 'true' || process.env.NEXT_PHASE === 'phase-production-build') {
     return {
       find: async () => ({ docs: [], totalDocs: 0 }),
       findGlobal: async () => ({}),
