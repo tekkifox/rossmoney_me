@@ -415,6 +415,28 @@ function renderCommitsSectionContent(com) {
   }
 }
 
+function renderWorkSectionContent(work) {
+  const eyebrow = document.getElementById('work-section-eyebrow');
+  const title = document.getElementById('work-section-title');
+  if (eyebrow) {
+    eyebrow.textContent = formatCmsText(work?.eyebrow, eyebrow.textContent);
+  }
+  if (title) {
+    title.textContent = formatCmsText(work?.title, title.textContent);
+  }
+}
+
+function renderExperienceSectionContent(exp) {
+  const eyebrow = document.getElementById('experience-section-eyebrow');
+  const title = document.getElementById('experience-section-title');
+  if (eyebrow) {
+    eyebrow.textContent = formatCmsText(exp?.eyebrow, eyebrow.textContent);
+  }
+  if (title) {
+    title.textContent = formatCmsText(exp?.title, title.textContent);
+  }
+}
+
 function renderNavigationContent(nav) {
   const topnav = document.querySelector('.topnav');
   if (!topnav || !Array.isArray(nav?.links) || nav.links.length === 0) {
@@ -432,7 +454,9 @@ function renderNavigationContent(nav) {
 
 function renderCmsContent(payload) {
   renderHeroContent(payload?.home);
+  renderWorkSectionContent(payload?.work);
   renderProjectCards(payload?.projects);
+  renderExperienceSectionContent(payload?.experiencePage);
   renderExperienceEntries(payload?.experience);
   renderContactContent(payload?.contact);
   renderArchitectureSectionContent(payload?.architecture);

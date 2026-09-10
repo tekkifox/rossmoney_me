@@ -1,106 +1,58 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark light">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="architecture-api" content="/api/architecture">
   <title>Ross Money | Developer & DevOps Portfolio</title>
-  <meta
-    name="description"
-    content="Portfolio site for a developer with a DevOps focus, featuring live architecture data from a custom Go service."
-  >
-  <link rel="stylesheet" href="./styles.css">
-  <script defer src="./app.js"></script>
+  <meta name="description" content="Portfolio site for a developer with a DevOps focus, featuring live architecture data from Payload CMS and a custom Go-backed architecture feed.">
+  <link rel="stylesheet" href="styles.css">
 </head>
-  <body data-architecture-url="/api/architecture" data-cms-url="/api/cms/site">
+<body data-architecture-url="/api/architecture" data-cms-url="/api/cms/site">
   <div class="page-shell">
-    <div class="ambient ambient-left"></div>
-    <div class="ambient ambient-right"></div>
-
     <header class="topbar">
-      <div class="brand-lockup">
+      <a class="brand-lockup" href="#">
         <span class="brand-mark">RM</span>
         <div>
-          <p class="eyebrow">DevOps Portfolio</p>
-          <p class="brand-subtitle">Infrastructure-minded product engineering</p>
+          <span style="font-weight: 600; color: var(--text);">Ross Money</span>
+          <p class="brand-subtitle">Developer</p>
         </div>
-      </div>
-
-      <nav class="topnav" aria-label="Primary">
-        <a href="#work">Work</a>
-        <a href="#experience">Experience</a>
-        <a href="#architecture">Architecture</a>
-        <a href="#commits">Commits</a>
-        <a href="#contact">Contact</a>
-      </nav>
+      </a>
+      <nav class="topnav"></nav>
     </header>
 
     <main>
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow" id="hero-eyebrow">Available for devops and developer roles</p>
-          <h1 id="hero-title">Building dependable systems with operational discipline.</h1>
-          <p class="lead" id="hero-lead">
-            I design and ship resilient developer experiences, automation layers, and production-ready interfaces.
-            This portfolio surfaces the live topology behind the work through a custom Go-backed architecture feed.
-          </p>
+          <p class="eyebrow" id="hero-eyebrow"></p>
+          <h1 id="hero-title"></h1>
+          <p class="lead" id="hero-lead"></p>
 
           <div class="hero-actions">
             <a class="button button-primary" id="hero-primary-button" href="#contact">Start a conversation</a>
             <a class="button button-secondary" id="hero-secondary-button" href="#architecture">Inspect live architecture</a>
           </div>
 
-          <div class="hero-metrics" aria-label="Highlights" id="hero-metrics">
-            <article>
-              <span class="metric-value">99.95%</span>
-              <span class="metric-label">availability target</span>
-            </article>
-            <article>
-              <span class="metric-value">24/7</span>
-              <span class="metric-label">operations mindset</span>
-            </article>
-            <article>
-              <span class="metric-value">DX</span>
-              <span class="metric-label">developer experience focus</span>
-            </article>
-          </div>
+          <div class="hero-metrics" aria-label="Highlights" id="hero-metrics"></div>
         </div>
 
         <aside class="hero-panel glass-card">
           <div class="panel-header">
             <div>
               <p class="panel-kicker">Current focus</p>
-              <h2>Building personal infrastructure</h2>
+              <h2></h2>
             </div>
             <span class="status-pill status-live">Live</span>
           </div>
 
-          <div class="panel-grid">
-            <div>
-              <span class="panel-label">Role</span>
-              <p>DevOps-focused developer working on personal projects</p>
-            </div>
-            <div>
-              <span class="panel-label">Specialty</span>
-              <p>Storage servers, media servers, and reliable self-hosted services</p>
-            </div>
-            <div>
-              <span class="panel-label">Current build</span>
-              <p>Custom connectors and tooling for homelab and service automation</p>
-            </div>
-            <div>
-              <span class="panel-label">Delivery model</span>
-              <p>Small iterations, practical ops, and systems I can run myself</p>
-            </div>
-          </div>
+          <div class="panel-grid"></div>
         </aside>
       </section>
 
       <section class="section" id="work">
         <div class="section-heading">
-          <p class="eyebrow">Selected work</p>
-          <h2>Real roles and projects from my CV.</h2>
+          <p class="eyebrow" id="work-section-eyebrow">Selected work</p>
+          <h2 id="work-section-title">Real roles and projects from my CV.</h2>
         </div>
 
         <div class="cards-grid" id="cms-projects"></div>
@@ -108,8 +60,8 @@
 
       <section class="section" id="experience">
         <div class="section-heading">
-          <p class="eyebrow">Experience</p>
-          <h2>Recent delivery history.</h2>
+          <p class="eyebrow" id="experience-section-eyebrow">Experience</p>
+          <h2 id="experience-section-title">Recent delivery history.</h2>
         </div>
 
         <div class="timeline" id="cms-experience"></div>
@@ -200,21 +152,16 @@
       <section class="section contact-section" id="contact">
         <div class="glass-card contact-card">
           <div>
-            <p class="eyebrow" id="contact-eyebrow">Contact</p>
-            <h2 id="contact-title">Open to platform, DevOps, and development work.</h2>
-            <p id="contact-lead">
-              I'm available for contract and full-time work, and I enjoy collaborating with teams to improve delivery and reliability.
-            </p>
+            <p class="eyebrow" id="contact-eyebrow"></p>
+            <h2 id="contact-title"></h2>
+            <p id="contact-lead"></p>
           </div>
 
-          <div class="contact-links" id="contact-links">
-            <a href="mailto:dev@rossmoney.me">dev@rossmoney.me</a>
-            <a href="https://github.com/tekkifox" rel="noreferrer">github.com/tekkifox</a>
-            <a href="https://www.linkedin.com/in/rossmoney" rel="noreferrer">linkedin.com/in/rossmoney</a>
-          </div>
+          <div class="contact-links" id="contact-links"></div>
         </div>
       </section>
     </main>
   </div>
+  <script src="app.js"></script>
 </body>
 </html>

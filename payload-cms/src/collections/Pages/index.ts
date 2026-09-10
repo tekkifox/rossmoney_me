@@ -73,6 +73,23 @@ export const Pages: CollectionConfig<'pages'> = {
       type: 'json',
     },
     {
+      name: 'focus',
+      type: 'group',
+      fields: [
+        { name: 'kicker', type: 'text' },
+        { name: 'title', type: 'text' },
+        { name: 'status', type: 'text' },
+        {
+          name: 'items',
+          type: 'array',
+          fields: [
+            { name: 'label', type: 'text' },
+            { name: 'value', type: 'text' },
+          ],
+        },
+      ],
+    },
+    {
       type: 'tabs',
       tabs: [
         {
@@ -85,7 +102,7 @@ export const Pages: CollectionConfig<'pages'> = {
               name: 'layout',
               type: 'blocks',
               blocks: [CallToAction, Content, MediaBlock, Archive, FormBlock],
-              required: true,
+              required: false,
               admin: {
                 initCollapsed: true,
               },

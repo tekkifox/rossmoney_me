@@ -74,16 +74,29 @@ export default buildConfig({
   onInit: async (payload: Payload) => {
     try {
       const pClient = payload as any;
-      const existingPages = await pClient.find({ collection: 'pages', limit: 1 });
-      if (existingPages.totalDocs === 0) {
-        payload.logger.info('Seeding default Payload CMS documents...');
-        await pClient.create({
-          collection: 'pages',
-          data: {
+      const existingPages = await pClient.find({ collection: 'pages', limit: 10 });
+      const shouldSeed = existingPages.totalDocs === 0 || process.env.PAYLOAD_SEED === 'true';
+
+      if (shouldSeed) {
+        payload.logger.info('Seeding/syncing default Payload CMS documents...');
+
+        const defaultPages = [
+          {
             slug: 'home',
             eyebrow: 'Available for devops and developer roles',
             title: 'Building dependable systems with operational discipline.',
             lead: 'I design and ship resilient developer experiences, automation layers, and production-ready interfaces. This portfolio can now be edited in Payload CMS and persisted in MongoDB.',
+            focus: {
+              kicker: 'Current focus',
+              title: 'Building personal infrastructure',
+              status: 'Live',
+              items: [
+                { label: 'Role', value: 'DevOps-focused developer working on personal projects' },
+                { label: 'Specialty', value: 'Storage servers, media servers, and reliable self-hosted services' },
+                { label: 'Current build', value: 'Custom connectors and tooling for homelab and service automation' },
+                { label: 'Delivery model', value: 'Small iterations, practical ops, and systems I can run myself' }
+              ]
+            },
             data: {
               primaryButton: { label: 'Start a conversation', href: '#contact' },
               secondaryButton: { label: 'Inspect live architecture', href: '#architecture' },
@@ -91,24 +104,10 @@ export default buildConfig({
                 { value: '99.95%', label: 'availability target' },
                 { value: '24/7', label: 'operations mindset' },
                 { value: 'DX', label: 'developer experience focus' }
-              ],
-              focus: {
-                kicker: 'Current focus',
-                title: 'Building personal infrastructure',
-                status: 'Live',
-                items: [
-                  { label: 'Role', value: 'DevOps-focused developer working on personal projects' },
-                  { label: 'Specialty', value: 'Storage servers, media servers, and reliable self-hosted services' },
-                  { label: 'Current build', value: 'Custom connectors and tooling for homelab and service automation' },
-                  { label: 'Delivery model', value: 'Small iterations, practical ops, and systems I can run myself' }
-                ]
-              }
+              ]
             }
-          }
-        });
-        await pClient.create({
-          collection: 'pages',
-          data: {
+          },
+          {
             slug: 'contact',
             eyebrow: 'Contact',
             title: 'Open to platform, DevOps, and development work.',
@@ -120,20 +119,77 @@ export default buildConfig({
                 { label: 'linkedin.com/in/rossmoney', href: 'https://www.linkedin.com/in/rossmoney' }
               ]
             }
+          },
+          { slug: 'architecture', eyebrow: 'Live architecture example', title: 'Data streamed from the host Go service.' },
+          { slug: 'commits', eyebrow: 'Recent commits', title: 'Last few GitHub commits from my portfolio repo.' },
+          { slug: 'work', eyebrow: 'Selected work', title: 'Real roles and projects from my CV.' },
+          { slug: 'experience-page', eyebrow: 'Experience', title: 'Recent delivery history.' },
+          { slug: 'navigation', data: { links: [{ label: 'Work', href: '#work' }, { label: 'Experience', href: '#experience' }, { label: 'Architecture', href: '#architecture' }, { label: 'Commits', href: '#commits' }, { label: 'Contact', href: '#contact' }] } }
+        ];
+
+        for (const pageData of defaultPages) {
+          const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
+          if (found) {
+            await pClient.update({
+              collection: 'pages',
+              id: found.id,
+              data: pageData,
+            });
+          } else {
+            await pClient.create({
+              collection: 'pages',
+              data: pageData,
+            });
           }
-        });
-        await pClient.create({ collection: 'pages', data: { slug: 'architecture', eyebrow: 'Live architecture example', title: 'Data streamed from the host Go service.' } });
-        await pClient.create({ collection: 'pages', data: { slug: 'commits', eyebrow: 'Recent commits', title: 'Last few GitHub commits from my portfolio repo.' } });
-        await pClient.create({ collection: 'pages', data: { slug: 'navigation', data: { links: [{ label: 'Work', href: '#work' }, { label: 'Experience', href: '#experience' }, { label: 'Architecture', href: '#architecture' }, { label: 'Commits', href: '#commits' }, { label: 'Contact', href: '#contact' }] } } });
+        }
 
-        await pClient.create({ collection: 'projects', data: { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 } });
-        await pClient.create({ collection: 'projects', data: { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 } });
-        await pClient.create({ collection: 'projects', data: { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 } });
+        const defaultProjects = [
+          { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
+          { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
+          { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
+        ];
 
-        await pClient.create({ collection: 'experience', data: { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 } });
-        await pClient.create({ collection: 'experience', data: { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 } });
+        const existingProjects = await pClient.find({ collection: 'projects', limit: 10 });
+        for (const proj of defaultProjects) {
+          const found = existingProjects.docs.find((p: any) => p.title === proj.title);
+          if (found) {
+            await pClient.update({ collection: 'projects', id: found.id, data: proj });
+          } else {
+            await pClient.create({ collection: 'projects', data: proj });
+          }
+        }
 
-        payload.logger.info('Default Payload CMS documents seeded successfully.');
+        const defaultExperience = [
+          { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
+          { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
+        ];
+
+        const existingExp = await pClient.find({ collection: 'experience', limit: 10 });
+        for (const exp of defaultExperience) {
+          const found = existingExp.docs.find((e: any) => e.title === exp.title);
+          if (found) {
+            await pClient.update({ collection: 'experience', id: found.id, data: exp });
+          } else {
+            await pClient.create({ collection: 'experience', data: exp });
+          }
+        }
+
+        try {
+          await pClient.updateGlobal({
+            slug: 'header',
+            data: {
+              navItems: [
+                { link: { type: 'custom', label: 'Work', url: '#work' } },
+                { link: { type: 'custom', label: 'Experience', url: '#experience' } },
+                { link: { type: 'custom', label: 'Architecture', url: '#architecture' } },
+                { link: { type: 'custom', label: 'Commits', url: '#commits' } },
+                { link: { type: 'custom', label: 'Contact', url: '#contact' } },
+              ],
+            },
+          });
+        } catch {}
+
+        payload.logger.info('Default Payload CMS documents seeded/synced successfully.');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

@@ -14,6 +14,8 @@ export async function GET() {
     const contactDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'contact') || {};
     const archDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'architecture') || {};
     const commitsDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'commits') || {};
+    const workDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'work') || {};
+    const expPageDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'experience-page') || {};
     const navDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'navigation') || {};
 
     const navLinks = Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0
@@ -34,7 +36,18 @@ export async function GET() {
         eyebrow: (homeDoc as any).eyebrow,
         title: (homeDoc as any).title,
         lead: (homeDoc as any).lead,
-        ...(((homeDoc as any).data as Record<string, unknown>) || {})
+        ...(((homeDoc as any).data as Record<string, unknown>) || {}),
+        focus: (homeDoc as any).focus || ((homeDoc as any).data as any)?.focus
+      },
+      work: {
+        eyebrow: (workDoc as any).eyebrow,
+        title: (workDoc as any).title,
+        ...(((workDoc as any).data as Record<string, unknown>) || {})
+      },
+      experiencePage: {
+        eyebrow: (expPageDoc as any).eyebrow,
+        title: (expPageDoc as any).title,
+        ...(((expPageDoc as any).data as Record<string, unknown>) || {})
       },
       contact: {
         eyebrow: (contactDoc as any).eyebrow,
