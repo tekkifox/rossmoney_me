@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 
 import { PayloadRedirects } from '@/components/PayloadRedirects'
-import configPromise from '@payload-config'
-import { getPayload, type RequiredDataFromCollectionSlug } from 'payload'
+import { getSafePayload } from '@/utilities/getSafePayload'
+import type { RequiredDataFromCollectionSlug } from 'payload'
 import { draftMode } from 'next/headers'
 import React, { cache } from 'react'
 import { homeStatic } from '@/endpoints/seed/home-static'
@@ -15,7 +15,7 @@ import { LivePreviewListener } from '@/components/LivePreviewListener'
 
 export async function generateStaticParams() {
   try {
-    const payload = await getPayload({ config: configPromise })
+    const payload = await getSafePayload()
     const pages = await payload.find({
       collection: 'pages',
       draft: false,
@@ -28,10 +28,10 @@ export async function generateStaticParams() {
     })
 
     const params = pages.docs
-      ?.filter((doc) => {
+      ?.filter((doc: any) => {
         return doc.slug !== 'home'
       })
-      .map(({ slug }) => {
+      .map(({ slug }: { slug: string }) => {
         return { slug }
       })
 
@@ -61,7 +61,7 @@ export default async function Page({ params: paramsPromise }: Args) {
 
   // Remove this code once your website is seeded
   if (!page && slug === 'home') {
-    page = homeStatic
+    page = homeStatic as any
   }
 
   if (!page) {
@@ -99,7 +99,7 @@ const queryPageBySlug = cache(async ({ slug }: { slug: string }) => {
   try {
     const { isEnabled: draft } = await draftMode()
 
-    const payload = await getPayload({ config: configPromise })
+    const payload = await getSafePayload()
 
     const result = await payload.find({
       collection: 'pages',

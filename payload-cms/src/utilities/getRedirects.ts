@@ -1,22 +1,17 @@
-import configPromise from '@payload-config'
-import { getPayload } from 'payload'
+import { getSafePayload } from './getSafePayload'
 import { unstable_cache } from 'next/cache'
 
 export async function getRedirects(depth = 1) {
-  try {
-    const payload = await getPayload({ config: configPromise })
+  const payload = await getSafePayload()
 
-    const { docs: redirects } = await payload.find({
-      collection: 'redirects',
-      depth,
-      limit: 0,
-      pagination: false,
-    })
+  const { docs: redirects } = await payload.find({
+    collection: 'redirects',
+    depth,
+    limit: 0,
+    pagination: false,
+  })
 
-    return redirects
-  } catch {
-    return []
-  }
+  return redirects
 }
 
 /**
