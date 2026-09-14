@@ -5,6 +5,7 @@ This workspace contains a static portfolio site for a developer with a DevOps fo
 ## What’s included
 
 - A bold single-page portfolio with hero, work, experience, and contact sections.
+- A dedicated `/travelling` page with a travel project summary and architecture snapshot.
 - A live architecture panel that fetches JSON from a host-provided Go service.
 - A Decap CMS admin at `/admin/` backed by MongoDB for editable page content.
 - A fallback rendering path so the page still shows useful state when the feed is unavailable.
@@ -12,6 +13,8 @@ This workspace contains a static portfolio site for a developer with a DevOps fo
 ## Architecture feed
 
 By default the site calls `http://localhost:8080/api/architecture`. The telemetry service lives in the sibling `archview` repo and runs as a separate container.
+
+The travelling page uses `http://localhost:8080/api/architecture?project=image-mosaic`.
 
 The frontend is tolerant of a few common field names, including:
 

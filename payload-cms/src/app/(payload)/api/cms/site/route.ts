@@ -12,6 +12,7 @@ export async function GET() {
 
     const homeDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'home') || {};
     const contactDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'contact') || {};
+    const travellingDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'travelling') || {};
     const archDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'architecture') || {};
     const commitsDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'commits') || {};
     const workDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'work') || {};
@@ -57,6 +58,13 @@ export async function GET() {
         title: (contactDoc as any).title,
         lead: (contactDoc as any).lead,
         ...(((contactDoc as any).data as Record<string, unknown>) || {})
+      },
+      travelling: {
+        eyebrow: (travellingDoc as any).eyebrow,
+        title: (travellingDoc as any).title,
+        lead: (travellingDoc as any).lead,
+        ...(((travellingDoc as any).data as Record<string, unknown>) || {}),
+        focus: (travellingDoc as any).focus || ((travellingDoc as any).data as any)?.focus
       },
       architecture: {
         eyebrow: (archDoc as any).eyebrow,

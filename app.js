@@ -1,5 +1,7 @@
+const pageMode = document.body.dataset.page || 'home';
 const architectureUrl = document.body.dataset.architectureUrl || document.querySelector('meta[name="architecture-api"]')?.content || '/api/architecture';
 const cmsUrl = document.body.dataset.cmsUrl || '/api/cms/site';
+const architecturePath = architectureUrl.includes('?') ? architectureUrl : architectureUrl.split('?')[0];
 
 const architectureState = {
   title: document.getElementById('architecture-title'),
@@ -27,14 +29,26 @@ const githubRepo = {
   branch: 'main'
 };
 
+const travelGithubRepo = {
+  owner: 'tekkifox',
+  repo: 'image-mosaic',
+  branch: 'main'
+};
+
 let currentArchitecturePayload = null;
 
-architectureState.refresh.addEventListener('click', () => {
-  void loadArchitecture(true);
-});
+if (architectureState.refresh) {
+  architectureState.refresh.addEventListener('click', () => {
+    void loadArchitecture(true);
+  });
+}
 
 void loadArchitecture();
-void loadGitHubCommits();
+
+if (commitsState.output && commitsState.status) {
+  void loadGitHubCommits();
+}
+
 void loadCmsContent();
 
 function formatValue(value) {
@@ -452,8 +466,74 @@ function renderNavigationContent(nav) {
   }
 }
 
+function setTextContentById(id, value, fallback = '') {
+  const element = document.getElementById(id);
+  if (element) {
+    element.textContent = formatCmsText(value, fallback || element.textContent);
+  }
+}
+
+function renderTravelContent(travel) {
+  if (!travel) {
+    return;
+  }
+
+  setTextContentById('travelling-eyebrow', travel.eyebrow, 'Travelling.rossmoney.me');
+  setTextContentById('travelling-title', travel.title, 'Travel archive built around a private image pipeline.');
+  setTextContentById('travelling-lead', travel.lead, 'The travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos I brought back from the journey.');
+
+  const focus = travel.focus || {};
+  setTextContentById('travelling-focus-kicker', focus.kicker, 'Project summary');
+  setTextContentById('travelling-focus-title', focus.title, 'Image mosaic, not a host overview.');
+  setTextContentById('travelling-focus-status', focus.status, 'Live');
+
+  const focusItems = document.getElementById('travelling-focus-items');
+  if (focusItems && Array.isArray(focus.items) && focus.items.length > 0) {
+    focusItems.innerHTML = '';
+    for (const item of focus.items.slice(0, 4)) {
+      const wrapper = document.createElement('div');
+      const label = document.createElement('span');
+      label.className = 'panel-label';
+      label.textContent = formatCmsText(item.label, 'Label');
+
+      const value = document.createElement('p');
+      value.textContent = formatCmsText(item.value, 'Value');
+
+      wrapper.append(label, value);
+      focusItems.append(wrapper);
+    }
+  }
+
+  const data = travel.data || {};
+  setTextContentById('travelling-section-eyebrow', data.summaryEyebrow, 'What it is');
+  setTextContentById('travelling-section-title', data.summaryTitle, 'A visual archive of the 2016 Southeast Asia journey.');
+  setTextContentById('travelling-summary-lead', data.summaryLead, 'A private archive for revisiting the journey.');
+
+  const cards = Array.isArray(data.cards) ? data.cards : [];
+  const cardTargets = [
+    ['travelling-card-1', cards[0]],
+    ['travelling-card-2', cards[1]],
+    ['travelling-card-3', cards[2]],
+    ['travelling-card-4', cards[3]],
+  ];
+
+  for (const [baseId, card] of cardTargets) {
+    if (!card) {
+      continue;
+    }
+    setTextContentById(`${baseId}-kicker`, card.kicker, 'Card');
+    setTextContentById(`${baseId}-title`, card.title, 'Travel card');
+    setTextContentById(`${baseId}-body`, card.text, '');
+  }
+
+  const architecture = data.architecture || {};
+  setTextContentById('travelling-architecture-eyebrow', architecture.eyebrow, 'Travel architecture feed');
+  setTextContentById('travelling-architecture-title', architecture.title, 'Architecture for travelling.rossmoney.me.');
+}
+
 function renderCmsContent(payload) {
   renderHeroContent(payload?.home);
+  renderTravelContent(payload?.travelling);
   renderWorkSectionContent(payload?.work);
   renderProjectCards(payload?.projects);
   renderExperienceSectionContent(payload?.experiencePage);
@@ -563,7 +643,7 @@ function renderDiagram(payload) {
   const lines = [];
   lines.push('client');
   lines.push('  -> portfolio site');
-  lines.push('     -> /api/architecture');
+  lines.push(`     -> ${architecturePath}`);
   lines.push('        -> host Go service');
   lines.push('');
   lines.push('services');
@@ -754,10 +834,12 @@ async function loadGitHubCommits() {
     return;
   }
 
+  const repo = pageMode === 'travel' ? travelGithubRepo : githubRepo;
+
   commitsState.status.textContent = 'Live';
 
   try {
-    const response = await fetch(`https://api.github.com/repos/${githubRepo.owner}/${githubRepo.repo}/commits?per_page=5&sha=${githubRepo.branch}`, {
+    const response = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.repo}/commits?per_page=5&sha=${repo.branch}`, {
       headers: {
         Accept: 'application/vnd.github+json'
       }

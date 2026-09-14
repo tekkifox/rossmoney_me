@@ -6,9 +6,15 @@ import { home } from './home'
 import { image1 } from './image-1'
 import { image2 } from './image-2'
 import { imageHero1 } from './image-hero-1'
+import { architecture } from './architecture-page'
+import { commits } from './commits-page'
+import { experiencePage } from './experience-page'
+import { navigation } from './navigation-page'
 import { post1 } from './post-1'
 import { post2 } from './post-2'
 import { post3 } from './post-3'
+import { work } from './work-page'
+import { travelling } from './travelling-page'
 
 const collections: CollectionSlug[] = [
   'categories',
@@ -212,6 +218,36 @@ export const seed = async ({
       collection: 'pages',
       depth: 0,
       data: contactPageData({ contactForm: contactForm }),
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: travelling,
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: architecture,
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: commits,
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: work,
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: experiencePage,
+    }),
+    payload.create({
+      collection: 'pages',
+      depth: 0,
+      data: navigation,
     }),
   ])
 

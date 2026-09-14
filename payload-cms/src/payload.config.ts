@@ -16,6 +16,12 @@ import { Experience } from './collections/Experience';
 import { Media } from './collections/Media';
 import { Posts } from './collections/Posts';
 import { Categories } from './collections/Categories';
+import { architecture } from './endpoints/seed/architecture-page';
+import { commits } from './endpoints/seed/commits-page';
+import { experiencePage } from './endpoints/seed/experience-page';
+import { navigation } from './endpoints/seed/navigation-page';
+import { work } from './endpoints/seed/work-page';
+import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -130,50 +136,14 @@ export default buildConfig({
         payload.logger.info('Seeding/syncing default Payload CMS documents...');
 
         const defaultPages = [
-          {
-            slug: 'home',
-            eyebrow: 'Available for devops and developer roles',
-            title: 'Building dependable systems with operational discipline.',
-            lead: 'I design and ship resilient developer experiences, automation layers, and production-ready interfaces. This portfolio can now be edited in Payload CMS and persisted in MongoDB.',
-            focus: {
-              kicker: 'Current focus',
-              title: 'Building personal infrastructure',
-              status: 'Live',
-              items: [
-                { label: 'Role', value: 'DevOps-focused developer working on personal projects' },
-                { label: 'Specialty', value: 'Storage servers, media servers, and reliable self-hosted services' },
-                { label: 'Current build', value: 'Custom connectors and tooling for homelab and service automation' },
-                { label: 'Delivery model', value: 'Small iterations, practical ops, and systems I can run myself' }
-              ]
-            },
-            data: {
-              primaryButton: { label: 'Start a conversation', href: '#contact' },
-              secondaryButton: { label: 'Inspect live architecture', href: '#architecture' },
-              metrics: [
-                { value: '99.95%', label: 'availability target' },
-                { value: '24/7', label: 'operations mindset' },
-                { value: 'DX', label: 'developer experience focus' }
-              ]
-            }
-          },
-          {
-            slug: 'contact',
-            eyebrow: 'Contact',
-            title: 'Open to platform, DevOps, and development work.',
-            lead: 'I am available for contract and full-time work, and I enjoy collaborating with teams to improve delivery and reliability.',
-            data: {
-              links: [
-                { label: 'dev@rossmoney.me', href: 'mailto:dev@rossmoney.me' },
-                { label: 'github.com/tekkifox', href: 'https://github.com/tekkifox' },
-                { label: 'linkedin.com/in/rossmoney', href: 'https://www.linkedin.com/in/rossmoney' }
-              ]
-            }
-          },
-          { slug: 'architecture', eyebrow: 'Live architecture example', title: 'Data streamed from the host Go service.' },
-          { slug: 'commits', eyebrow: 'Recent commits', title: 'Last few GitHub commits from my portfolio repo.' },
-          { slug: 'work', eyebrow: 'Selected work', title: 'Real roles and projects from my CV.' },
-          { slug: 'experience-page', eyebrow: 'Experience', title: 'Recent delivery history.' },
-          { slug: 'navigation', data: { links: [{ label: 'Work', href: '#work' }, { label: 'Experience', href: '#experience' }, { label: 'Architecture', href: '#architecture' }, { label: 'Commits', href: '#commits' }, { label: 'Contact', href: '#contact' }] } }
+          home({ heroImage: imageHomeDoc, metaImage: image2Doc }),
+          contactPageData({ contactForm: contactForm }),
+          travellingPage,
+          architecture,
+          commits,
+          work,
+          experiencePage,
+          navigation,
         ];
 
         for (const pageData of defaultPages) {
