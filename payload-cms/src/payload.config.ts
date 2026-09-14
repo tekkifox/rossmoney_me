@@ -21,7 +21,6 @@ import { Categories } from './collections/Categories';
 import { architecture } from './endpoints/seed/architecture-page';
 import { commits } from './endpoints/seed/commits-page';
 import { experiencePage } from './endpoints/seed/experience-page';
-import { navigation } from './endpoints/seed/navigation-page';
 import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 
@@ -112,6 +111,7 @@ export default buildConfig({
           const headerData = {
             navItems: [
               { link: { type: 'custom', label: 'Work', url: '#work' } },
+              { link: { type: 'custom', label: 'Travelling', url: '/travelling' } },
               { link: { type: 'custom', label: 'Experience', url: '#experience' } },
               { link: { type: 'custom', label: 'Architecture', url: '#architecture' } },
               { link: { type: 'custom', label: 'Commits', url: '#commits' } },
@@ -145,7 +145,6 @@ export default buildConfig({
           commits,
           work,
           experiencePage,
-          navigation,
         ];
 
         for (const pageData of defaultPages) {

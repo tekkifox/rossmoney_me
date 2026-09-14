@@ -9,7 +9,6 @@ import { imageHero1 } from './image-hero-1'
 import { architecture } from './architecture-page'
 import { commits } from './commits-page'
 import { experiencePage } from './experience-page'
-import { navigation } from './navigation-page'
 import { post1 } from './post-1'
 import { post2 } from './post-2'
 import { post3 } from './post-3'
@@ -243,11 +242,6 @@ export const seed = async ({
       collection: 'pages',
       depth: 0,
       data: experiencePage,
-    }),
-    payload.create({
-      collection: 'pages',
-      depth: 0,
-      data: navigation,
     }),
   ])
 

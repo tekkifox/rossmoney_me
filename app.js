@@ -45,7 +45,7 @@ if (architectureState.refresh) {
 
 void loadArchitecture();
 
-if (commitsState.output && commitsState.status) {
+if (commitsState.output && commitsState.status && pageMode !== 'travel') {
   void loadGitHubCommits();
 }
 
@@ -504,7 +504,7 @@ function renderTravelContent(travel) {
     }
   }
 
-  const data = travel.data || {};
+  const data = travel.data || travel;
   setTextContentById('travelling-section-eyebrow', data.summaryEyebrow, 'What it is');
   setTextContentById('travelling-section-title', data.summaryTitle, 'A visual archive of the 2016 Southeast Asia journey.');
   setTextContentById('travelling-summary-lead', data.summaryLead, 'A private archive for revisiting the journey.');
@@ -526,11 +526,11 @@ function renderTravelContent(travel) {
     setTextContentById(`${baseId}-body`, card.text, '');
   }
 
-  const architecture = data.architecture || {};
+  const architecture = data.architecture || travel.architecture || {};
   setTextContentById('travelling-architecture-eyebrow', architecture.eyebrow, 'Travel architecture feed');
   setTextContentById('travelling-architecture-title', architecture.title, 'Architecture for travelling.rossmoney.me.');
 
-  const metrics = Array.isArray(data.metrics) ? data.metrics : [];
+  const metrics = Array.isArray(data.metrics) ? data.metrics : Array.isArray(travel.metrics) ? travel.metrics : [];
   const metricsWrap = document.getElementById('travelling-metrics');
   if (metricsWrap && metrics.length > 0) {
     metricsWrap.innerHTML = '';
@@ -546,9 +546,20 @@ function renderTravelContent(travel) {
       metricsWrap.append(article);
     }
   }
+
+  const commitOwner = document.body.dataset.githubOwner || 'tekkifox';
+  const commitRepo = document.body.dataset.githubRepo || travel.commitRepository?.split('/')?.[1] || 'image-mosaic';
+  const commitBranch = document.body.dataset.githubBranch || travel.commitBranch || 'main';
+  loadGitHubCommits({ owner: commitOwner, repo: commitRepo, branch: commitBranch });
 }
 
 function renderCmsContent(payload) {
+  if (pageMode === 'travel') {
+    renderTravelContent(payload?.travelling);
+    renderNavigationContent(payload?.navigation);
+    return;
+  }
+
   renderHeroContent(payload?.home);
   renderTravelContent(payload?.travelling);
   renderWorkSectionContent(payload?.work);
@@ -845,13 +856,13 @@ function formatCommitLine(commit) {
   return `${sha} ${message}`;
 }
 
-async function loadGitHubCommits() {
+async function loadGitHubCommits(repoOverride = null) {
   if (window.location.protocol === 'file:') {
     renderCommitFallback('Local preview mode');
     return;
   }
 
-  const repo = pageMode === 'travel' ? travelGithubRepo : githubRepo;
+  const repo = repoOverride || (pageMode === 'travel' ? travelGithubRepo : githubRepo);
 
   commitsState.status.textContent = 'Live';
 

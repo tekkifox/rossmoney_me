@@ -27,13 +27,7 @@ export async function GET() {
             href: l?.url || l?.href || '#'
           };
         })
-      : (((navDoc as any).data as Record<string, unknown>)?.links || [
-          { label: 'Work', href: '#work' },
-          { label: 'Experience', href: '#experience' },
-          { label: 'Architecture', href: '#architecture' },
-          { label: 'Commits', href: '#commits' },
-          { label: 'Contact', href: '#contact' }
-        ]);
+      : (((navDoc as any).data as Record<string, unknown>)?.links);
 
     return NextResponse.json({
       home: {

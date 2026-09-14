@@ -20,6 +20,8 @@ export const travelling = {
     ],
   },
   data: {
+    commitRepository: 'tekkifox/image-mosaic',
+    commitBranch: 'main',
     metrics: [
       { value: 'PhotoPrism', label: 'Source library' },
       { value: 'Private API', label: 'Server-side URL mapping' },
