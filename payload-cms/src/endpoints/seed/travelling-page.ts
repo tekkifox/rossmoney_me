@@ -20,6 +20,11 @@ export const travelling = {
     ],
   },
   data: {
+    metrics: [
+      { value: 'PhotoPrism', label: 'Source library' },
+      { value: 'Private API', label: 'Server-side URL mapping' },
+      { value: 'Cached', label: 'Service worker and assets' },
+    ],
     summaryTitle: 'A private archive for revisiting the journey.',
     summaryLead:
       'The travelling project is a separate gallery stack built to revisit the trip cleanly, with PhotoPrism as the photo source and a privacy-preserving API layer around the images.',

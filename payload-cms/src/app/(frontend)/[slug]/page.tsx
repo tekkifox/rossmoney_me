@@ -10,7 +10,15 @@ import { homeStatic } from '@/endpoints/seed/home-static'
 import { generateMeta } from '@/utilities/generateMeta'
 import PageClient from './page.client'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
-import { PageTemplates } from '../PageTemplates'
+import HomeTemplate from '../templates/home'
+import ContactTemplate from '../templates/contact'
+import TravellingTemplate from '../templates/travelling'
+import ArchitectureTemplate from '../templates/architecture'
+import CommitsTemplate from '../templates/commits'
+import WorkTemplate from '../templates/work'
+import ExperiencePageTemplate from '../templates/experience-page'
+import NavigationTemplate from '../templates/navigation'
+import { loadCollections } from '../templates/shared'
 
 export async function generateStaticParams() {
   try {
@@ -67,6 +75,8 @@ export default async function Page({ params: paramsPromise }: Args) {
     return <PayloadRedirects url={url} />
   }
 
+  const collections = page.slug === 'work' || page.slug === 'experience-page' ? await loadCollections() : null
+
   return (
     <article className="pt-16 pb-24">
       <PageClient />
@@ -75,7 +85,14 @@ export default async function Page({ params: paramsPromise }: Args) {
 
       {draft && <LivePreviewListener />}
 
-      <PageTemplates page={page} />
+      {page.slug === 'home' && <HomeTemplate page={page} />}
+      {page.slug === 'contact' && <ContactTemplate page={page} />}
+      {page.slug === 'travelling' && <TravellingTemplate page={page} />}
+      {page.slug === 'architecture' && <ArchitectureTemplate page={page} />}
+      {page.slug === 'commits' && <CommitsTemplate page={page} />}
+      {page.slug === 'work' && <WorkTemplate page={page} projects={collections?.projects || []} />}
+      {page.slug === 'experience-page' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
+      {page.slug === 'navigation' && <NavigationTemplate page={page} />}
     </article>
   )
 }

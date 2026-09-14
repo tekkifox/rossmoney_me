@@ -529,6 +529,23 @@ function renderTravelContent(travel) {
   const architecture = data.architecture || {};
   setTextContentById('travelling-architecture-eyebrow', architecture.eyebrow, 'Travel architecture feed');
   setTextContentById('travelling-architecture-title', architecture.title, 'Architecture for travelling.rossmoney.me.');
+
+  const metrics = Array.isArray(data.metrics) ? data.metrics : [];
+  const metricsWrap = document.getElementById('travelling-metrics');
+  if (metricsWrap && metrics.length > 0) {
+    metricsWrap.innerHTML = '';
+    for (const metric of metrics.slice(0, 3)) {
+      const article = document.createElement('article');
+      const value = document.createElement('span');
+      value.className = 'metric-value';
+      value.textContent = formatCmsText(metric.value, 'Metric');
+      const label = document.createElement('span');
+      label.className = 'metric-label';
+      label.textContent = formatCmsText(metric.label, 'Label');
+      article.append(value, label);
+      metricsWrap.append(article);
+    }
+  }
 }
 
 function renderCmsContent(payload) {
