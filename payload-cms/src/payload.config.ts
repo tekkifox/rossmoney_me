@@ -110,12 +110,12 @@ export default buildConfig({
         try {
           const headerData = {
             navItems: [
-              { link: { type: 'custom', label: 'Work', url: '#work' } },
+              { link: { type: 'custom', label: 'Work', url: '/#work' } },
               { link: { type: 'custom', label: 'Travelling', url: '/travelling' } },
-              { link: { type: 'custom', label: 'Experience', url: '#experience' } },
-              { link: { type: 'custom', label: 'Architecture', url: '#architecture' } },
-              { link: { type: 'custom', label: 'Commits', url: '#commits' } },
-              { link: { type: 'custom', label: 'Contact', url: '#contact' } },
+              { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
+              { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
+              { link: { type: 'custom', label: 'Commits', url: '/#commits' } },
+              { link: { type: 'custom', label: 'Contact', url: '/#contact' } },
             ],
           };
 
