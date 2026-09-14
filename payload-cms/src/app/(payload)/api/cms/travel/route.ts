@@ -11,6 +11,23 @@ export async function GET() {
     const contactDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'contact') || {};
     const travellingDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'travelling') || {};
     const navDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'navigation') || {};
+    const commits = await fetch('https://api.github.com/repos/tekkifox/image-mosaic/commits?per_page=5&sha=main', {
+      headers: {
+        Accept: 'application/vnd.github+json'
+      },
+      cache: 'no-store'
+    }).then(async (response) => {
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json().catch(() => []);
+      return Array.isArray(data)
+        ? data.map((commit: any) => ({
+            sha: commit?.sha,
+            message: commit?.commit?.message?.split('\n')[0] || 'No commit message'
+          }))
+        : [];
+    }).catch(() => []);
 
     const navLinks = (Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0)
       ? headerDoc.navItems.map((item: any) => {
@@ -44,6 +61,11 @@ export async function GET() {
         title: (contactDoc as any).title,
         lead: (contactDoc as any).lead,
         ...(((contactDoc as any).data as Record<string, unknown>) || {})
+      },
+      commits: {
+        items: commits,
+        repo: 'tekkifox/image-mosaic',
+        branch: 'main'
       },
       navItems: navLinks,
       updatedAt: new Date().toISOString()

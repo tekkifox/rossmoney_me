@@ -550,7 +550,18 @@ function renderTravelContent(travel) {
   const commitOwner = document.body.dataset.githubOwner || travel.github?.owner || 'tekkifox';
   const commitRepo = document.body.dataset.githubRepo || travel.github?.repo || travel.commitRepository?.split('/')?.[1] || 'image-mosaic';
   const commitBranch = document.body.dataset.githubBranch || travel.github?.branch || travel.commitBranch || 'main';
-  loadGitHubCommits({ owner: commitOwner, repo: commitRepo, branch: commitBranch });
+  const commitItems = Array.isArray(travel.commits?.items) ? travel.commits.items : [];
+  const commitsOutput = document.getElementById('github-commits');
+  const commitsStatus = document.getElementById('github-commits-status');
+  if (commitsOutput && commitItems.length > 0) {
+    commitsStatus.textContent = 'Live';
+    commitsOutput.textContent = [
+      '$ git log --oneline -n 5',
+      ...commitItems.map((commit) => `${String(commit.sha || '').slice(0, 7)} ${commit.message || 'No commit message'}`)
+    ].join('\n');
+  } else {
+    loadGitHubCommits({ owner: commitOwner, repo: commitRepo, branch: commitBranch });
+  }
 }
 
 function renderCmsContent(payload) {
