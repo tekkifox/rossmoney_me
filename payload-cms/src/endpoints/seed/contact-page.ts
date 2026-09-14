@@ -1,56 +1,21 @@
-import type { Form } from '@/payload-types'
-import { RequiredDataFromCollectionSlug } from 'payload'
+import type { RequiredDataFromCollectionSlug } from 'payload'
 
-type ContactArgs = {
-  contactForm: Form
-}
-
-export const contact: (args: ContactArgs) => RequiredDataFromCollectionSlug<'pages'> = ({
-  contactForm,
-}) => {
-  return {
-    slug: 'contact',
-    _status: 'published',
-    hero: {
-      type: 'none',
-    },
-    layout: [
-      {
-        blockType: 'formBlock',
-        enableIntro: true,
-        form: contactForm,
-        introContent: {
-          root: {
-            type: 'root',
-            children: [
-              {
-                type: 'heading',
-                children: [
-                  {
-                    type: 'text',
-                    detail: 0,
-                    format: 0,
-                    mode: 'normal',
-                    style: '',
-                    text: 'Example contact form:',
-                    version: 1,
-                  },
-                ],
-                direction: 'ltr',
-                format: '',
-                indent: 0,
-                tag: 'h3',
-                version: 1,
-              },
-            ],
-            direction: 'ltr',
-            format: '',
-            indent: 0,
-            version: 1,
-          },
-        },
-      },
+export const contact: RequiredDataFromCollectionSlug<'pages'> = {
+  slug: 'contact',
+  _status: 'published',
+  hero: {
+    type: 'none',
+  },
+  eyebrow: 'Contact',
+  title: 'Open to platform, DevOps, and development work.',
+  lead:
+    'I am available for contract and full-time work, and I enjoy collaborating with teams to improve delivery and reliability.',
+  data: {
+    links: [
+      { label: 'dev@rossmoney.me', href: 'mailto:dev@rossmoney.me' },
+      { label: 'github.com/tekkifox', href: 'https://github.com/tekkifox' },
+      { label: 'linkedin.com/in/rossmoney', href: 'https://www.linkedin.com/in/rossmoney' },
     ],
-    title: 'Contact',
-  }
+  },
+  layout: [],
 }

@@ -1,6 +1,4 @@
-import type { RequiredDataFromCollectionSlug } from 'payload'
-
-export const travelling: RequiredDataFromCollectionSlug<'pages'> = {
+export const travelling = {
   slug: 'travelling',
   _status: 'published',
   hero: {
@@ -53,4 +51,4 @@ export const travelling: RequiredDataFromCollectionSlug<'pages'> = {
     },
   },
   layout: [],
-}
+} as any

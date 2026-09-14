@@ -9,6 +9,8 @@ import { Footer } from './Footer/config'
 import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
+import { contact as contactPageData } from './endpoints/seed/contact-page';
+import { home } from './endpoints/seed/home';
 import { Pages } from './collections/Pages';
 import { Users } from './collections/Users';
 import { Projects } from './collections/Projects';
@@ -136,8 +138,8 @@ export default buildConfig({
         payload.logger.info('Seeding/syncing default Payload CMS documents...');
 
         const defaultPages = [
-          home({ heroImage: imageHomeDoc, metaImage: image2Doc }),
-          contactPageData({ contactForm: contactForm }),
+          home,
+          contactPageData,
           travellingPage,
           architecture,
           commits,
