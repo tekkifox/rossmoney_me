@@ -8,6 +8,7 @@ export async function GET() {
     const pages = await pClient.find({ collection: 'pages', limit: 100 });
     const headerDoc = await pClient.findGlobal({ slug: 'header' }).catch(() => ({ navItems: [] }));
 
+    const contactDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'contact') || {};
     const travellingDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'travelling') || {};
     const navDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'navigation') || {};
 
@@ -27,11 +28,22 @@ export async function GET() {
         title: (travellingDoc as any).title,
         lead: (travellingDoc as any).lead,
         ...(((travellingDoc as any).data as Record<string, unknown>) || {}),
+        github: {
+          owner: 'tekkifox',
+          repo: 'image-mosaic',
+          branch: 'main'
+        },
         focus: (travellingDoc as any).focus || ((travellingDoc as any).data as any)?.focus
       },
       navigation: {
         ...(((navDoc as any).data as Record<string, unknown>) || {}),
         links: navLinks
+      },
+      contact: {
+        eyebrow: (contactDoc as any).eyebrow,
+        title: (contactDoc as any).title,
+        lead: (contactDoc as any).lead,
+        ...(((contactDoc as any).data as Record<string, unknown>) || {})
       },
       navItems: navLinks,
       updatedAt: new Date().toISOString()

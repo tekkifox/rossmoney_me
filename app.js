@@ -547,9 +547,9 @@ function renderTravelContent(travel) {
     }
   }
 
-  const commitOwner = document.body.dataset.githubOwner || 'tekkifox';
-  const commitRepo = document.body.dataset.githubRepo || travel.commitRepository?.split('/')?.[1] || 'image-mosaic';
-  const commitBranch = document.body.dataset.githubBranch || travel.commitBranch || 'main';
+  const commitOwner = document.body.dataset.githubOwner || travel.github?.owner || 'tekkifox';
+  const commitRepo = document.body.dataset.githubRepo || travel.github?.repo || travel.commitRepository?.split('/')?.[1] || 'image-mosaic';
+  const commitBranch = document.body.dataset.githubBranch || travel.github?.branch || travel.commitBranch || 'main';
   loadGitHubCommits({ owner: commitOwner, repo: commitRepo, branch: commitBranch });
 }
 
@@ -557,6 +557,7 @@ function renderCmsContent(payload) {
   if (pageMode === 'travel') {
     renderTravelContent(payload?.travelling);
     renderNavigationContent(payload?.navigation);
+    renderContactContent(payload?.contact);
     return;
   }
 
