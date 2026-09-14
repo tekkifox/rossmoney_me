@@ -1,0 +1,12 @@
+{
+  "_meta": {
+    "version": 1,
+    "exportedAt": "2026-09-14T19:36:26.171Z"
+  },
+  "$schema": "https://app.kilo.ai/config.json",
+  "permission": {
+    "external_directory": {
+      "C:\\Users\\rosss\\Documents\\GitHub\\archview\\internal\\service\\*": "allow"
+    }
+  }
+}

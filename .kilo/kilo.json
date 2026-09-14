@@ -1,0 +1,9 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "instructions": ["CONTEXT.md"],
+  "snapshot": true,
+  "compaction": {
+    "auto": true,
+    "prune": true
+  }
+}
