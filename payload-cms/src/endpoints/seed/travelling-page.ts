@@ -4,7 +4,7 @@ export const travelling = {
   hero: {
     type: 'none',
   },
-  eyebrow: 'Travelling',
+  eyebrow: 'Travelling.RossMoney.Me',
   title: 'Travelling round Southeast Asia in 2016.',
   lead:
     'A visual archive from the 2016 journey through Thailand, Laos, Vietnam, Cambodia, South Korea, Japan, Hong Kong, and Australia.',
