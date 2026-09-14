@@ -7,7 +7,7 @@ export const travelling = {
   eyebrow: 'Travelling.RossMoney.Me',
   title: 'Travelling round Southeast Asia in 2016.',
   lead:
-    'A visual archive from the 2016 journey through Thailand, Laos, Vietnam, Cambodia, South Korea, Japan, Hong Kong, and Australia.',
+    'This travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos I brought back from Thailand, Laos, Vietnam, Cambodia, South Korea, Japan, Hong Kong, and Australia.',
   focus: {
     kicker: 'Trip summary',
     title: '2016 route and archive',
@@ -15,7 +15,7 @@ export const travelling = {
     items: [
       { label: 'Core region', value: 'Southeast Asia' },
       { label: 'Year', value: '2016' },
-      { label: 'Format', value: 'Photo archive' },
+      { label: 'Format', value: 'Photo gallery' },
       { label: 'Source', value: 'PhotoPrism' },
     ],
   },
@@ -27,9 +27,9 @@ export const travelling = {
       { value: 'Private API', label: 'Server-side URL mapping' },
       { value: 'Cached', label: 'Service worker and assets' },
     ],
-    summaryTitle: 'A private archive for revisiting the journey.',
+    summaryTitle: 'An archive for revisiting the journey.',
     summaryLead:
-      'The travelling project is a separate gallery stack built to revisit the trip cleanly, with PhotoPrism as the photo source and a privacy-preserving API layer around the images.',
+      'PhotoPrism web app provides the image source, PHP and nginx serve a privacy-preserving API and shell, and a client-side gallery renders the final experience.',
     cards: [
       {
         kicker: 'Story',
