@@ -77,11 +77,21 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
 
 .architecture-layout{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start}
 .image-column{display:flex;flex-direction:column;gap:12px}
-.diagram-view{background:#f1f3f5;padding:12px;border-radius:8px;font-family:monospace;color:#0b1220;overflow:auto}
+.diagram-view{background:#f1f3f5;padding:12px;border-radius:8px;font-family:monospace;color:#0b1220;overflow:auto;font-size:0.9rem}
 .image-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 .image-card{display:block;padding:14px;border-radius:10px;background:var(--color-card);border:1px solid var(--color-border);box-shadow:0 6px 12px rgba(16,24,40,0.04);color:var(--color-card-foreground)}
 .image-name{font-weight:600}
 .image-meta{color:var(--muted);display:flex;gap:8px;font-size:0.9rem;margin-top:6px}
+
+/* Architecture metric cards (CPU, Memory, Load) */
+.metrics-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.metric-card{background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:64px}
+.metric-card-label{font-size:0.78rem;color:var(--muted);margin-bottom:6px}
+.metric-card-value{font-weight:700;font-size:0.98rem}
+
+@media (max-width: 720px){
+  .metrics-cards{grid-template-columns:1fr}
+}
 
 .image-desc{margin-top:8px;color:var(--muted);font-size:0.95rem}
 

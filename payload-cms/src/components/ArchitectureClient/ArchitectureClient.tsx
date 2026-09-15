@@ -1,6 +1,6 @@
 "use client"
 import React, { useEffect } from 'react'
-import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload, buildMetrics, buildHostStats } from '@/utilities/archHelpers'
 
 interface Props {
   project?: string
@@ -33,8 +33,9 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const factsEl = document.getElementById('architecture-facts')
         const highlightsEl = document.getElementById('architecture-highlights')
         const diagramEl = document.getElementById('architecture-diagram')
-        const imagesEl = document.getElementById('architecture-images')
-        const imagesCountEl = document.getElementById('architecture-images-count')
+        // image elements removed from layout; no-op placeholders kept for compatibility
+        const imagesEl = null
+        const imagesCountEl = null
         const rawEl = document.getElementById('architecture-raw')
         const updatedEl = document.getElementById('architecture-updated')
 
@@ -86,62 +87,61 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
 
         if (diagramEl) diagramEl.textContent = renderDiagram(arch)
 
-        const archImages = extractDockerImages(arch)
-        if (imagesEl) {
-          imagesEl.innerHTML = ''
-          if (archImages.length === 0) {
-            const p = document.createElement('p')
-            p.className = 'image-empty'
-            p.textContent = 'No project images were returned by the Docker feed.'
-            imagesEl.appendChild(p)
-          } else {
-        for (const img of archImages) {
-          const card = document.createElement('article')
-          card.className = 'image-card'
-          const name = document.createElement('div')
-          name.className = 'image-name'
-          name.textContent = img.name
-          card.appendChild(name)
-          if (img.description) {
-            const desc = document.createElement('p')
-            desc.className = 'image-desc'
-            desc.textContent = img.description
-            card.appendChild(desc)
-          }
-          const meta = document.createElement('div')
-          meta.className = 'image-meta'
-              const sizeSpan = document.createElement('span')
-              sizeSpan.textContent = img.sizeBytes ? `${(img.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'
-              meta.appendChild(sizeSpan)
-
-              // Show CPU and memory stats when available on the image object
-              if (img.cpuPercent !== undefined && img.cpuPercent !== null) {
-                const cpuSpan = document.createElement('span')
-                cpuSpan.textContent = `CPU: ${String(img.cpuPercent)}%`
-                meta.appendChild(cpuSpan)
-              }
-
-              if ((img.memoryUsedBytes || img.memoryUsedBytes === 0) && (img.memoryTotalBytes || img.memoryTotalBytes === 0)) {
-                const memSpan = document.createElement('span')
-                const used = img.memoryUsedBytes ? (img.memoryUsedBytes / (1024 * 1024)).toFixed(1) : '0.0'
-                const total = img.memoryTotalBytes ? (img.memoryTotalBytes / (1024 * 1024)).toFixed(1) : '0.0'
-                const pct = img.memoryPercent !== null && img.memoryPercent !== undefined ? ` (${img.memoryPercent}%)` : ''
-                memSpan.textContent = `Mem: ${used} MB / ${total} MB${pct}`
-                meta.appendChild(memSpan)
-              }
-
-              const dateSpan = document.createElement('span')
-              dateSpan.textContent = img.created ? new Date(img.created).toLocaleString() : ''
-              meta.appendChild(dateSpan)
-              card.appendChild(meta)
-              imagesEl.appendChild(card)
-            }
-          }
-        }
-
-        if (imagesCountEl) imagesCountEl.textContent = archImages.length ? `${archImages.length} image${archImages.length === 1 ? '' : 's'}` : 'No project images'
+        // Image cards removed per UI update. The topology now lists images and descriptions
         if (rawEl) rawEl.textContent = arch ? JSON.stringify(arch, null, 2) : 'No snapshot returned'
         if (updatedEl) updatedEl.textContent = (new Date()).toLocaleString()
+
+        // Always prefer telemetry from API. Do not compute from payload locally.
+        const telemetry = (arch && arch.telemetry && arch.telemetry.metrics) ? arch.telemetry.metrics : null
+        const cpuEl = document.getElementById('architecture-metric-cpu')
+        const memEl = document.getElementById('architecture-metric-memory')
+        const loadEl = document.getElementById('architecture-metric-load')
+        if (cpuEl) cpuEl.textContent = telemetry && telemetry.cpuAvg !== null && telemetry.cpuAvg !== undefined ? `${Number(telemetry.cpuAvg)}%` : 'N/A'
+        if (memEl) {
+          if (telemetry && telemetry.memoryUsedBytes !== null && telemetry.memoryTotalBytes !== null) {
+            const usedMB = (Number(telemetry.memoryUsedBytes) / (1024 * 1024)).toFixed(1)
+            const totalMB = (Number(telemetry.memoryTotalBytes) / (1024 * 1024)).toFixed(1)
+            const pct = telemetry.memoryPercent !== null && telemetry.memoryPercent !== undefined ? ` (${telemetry.memoryPercent}%)` : ''
+            memEl.textContent = `${usedMB} MB / ${totalMB} MB${pct}`
+          } else {
+            memEl.textContent = 'N/A'
+          }
+        }
+        if (loadEl) loadEl.textContent = telemetry && (telemetry.loadSample || telemetry.loadAvg) ? String(telemetry.loadSample || telemetry.loadAvg) : 'N/A'
+
+        // Populate additional metric placeholders: disk, hosts count, top OS
+        const diskEl = document.getElementById('architecture-metric-disk')
+        const hostsCountEl = document.getElementById('architecture-metric-hosts')
+        const osEl = document.getElementById('architecture-metric-os')
+        try {
+          // Only use telemetry from API for these cards
+          const metricsFull = telemetry
+          if (diskEl) {
+            if (metricsFull && metricsFull.diskUsedBytes !== null && metricsFull.diskTotalBytes !== null) {
+              const usedMB = (Number(metricsFull.diskUsedBytes) / (1024 * 1024)).toFixed(1)
+              const totalMB = (Number(metricsFull.diskTotalBytes) / (1024 * 1024)).toFixed(1)
+              const pct = metricsFull.diskPercent !== null && metricsFull.diskPercent !== undefined ? ` (${metricsFull.diskPercent}%)` : ''
+              diskEl.textContent = `${usedMB} MB / ${totalMB} MB${pct}`
+            } else {
+              diskEl.textContent = 'N/A'
+            }
+          }
+          if (hostsCountEl) hostsCountEl.textContent = metricsFull && metricsFull.hostCount ? String(metricsFull.hostCount) : '0'
+          if (osEl) osEl.textContent = metricsFull && metricsFull.topOS ? String(metricsFull.topOS) : 'N/A'
+          const netEl = document.getElementById('architecture-metric-network')
+          if (netEl) {
+            if (metricsFull && ((metricsFull.networkRxMB !== null && metricsFull.networkRxMB !== undefined) || (metricsFull.networkTxMB !== null && metricsFull.networkTxMB !== undefined))) {
+              const rx = (metricsFull.networkRxMB !== null && metricsFull.networkRxMB !== undefined) ? `${Number(metricsFull.networkRxMB).toFixed(1)} MB rx` : ''
+              const tx = (metricsFull.networkTxMB !== null && metricsFull.networkTxMB !== undefined) ? `${Number(metricsFull.networkTxMB).toFixed(1)} MB tx` : ''
+              netEl.textContent = [rx, tx].filter(Boolean).join(' / ') || 'N/A'
+            } else {
+              netEl.textContent = 'N/A'
+            }
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('Failed to populate additional metrics', e)
+        }
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('ArchitectureClient updateDom failed', e)

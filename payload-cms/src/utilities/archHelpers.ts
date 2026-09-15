@@ -26,7 +26,7 @@ export function buildFacts(payload: AnyObject | null | undefined): Array<[string
     ['Region', String(pickFirst(payload, ['region', 'primaryRegion', 'zone']) || 'Unknown')],
     ['Cluster', String(pickFirst(payload, ['cluster', 'clusterName', 'namespace']) || 'Unknown')],
     ['Updated', String(pickFirst(payload, ['updatedAt', 'lastUpdated', 'syncedAt', 'timestamp']) || 'Unknown')],
-    ['Services', String(services.length || pickFirst(payload, ['servicesCount']) || '0')],
+    ['Containers', String(services.length || pickFirst(payload, ['servicesCount']) || '0')],
     ['Nodes', String(nodes.length || pickFirst(payload, ['nodeCount']) || '0')],
     ['Images', String(dockerImages.length || pickFirst(payload, ['imagesCount']) || '0')],
   ]
@@ -37,7 +37,7 @@ export function buildHighlights(payload: AnyObject | null | undefined) {
   const regions = normalizeList(pickFirst(payload, ['regions', 'availabilityZones', 'zones']))
 
   return [
-    { label: 'Services', value: services.length ? services.slice(0, 6) : ['Waiting on feed'] },
+    { label: 'Containers', value: services.length ? services.slice(0, 6) : ['Waiting on feed'] },
     { label: 'Regions', value: regions.length ? regions.slice(0, 6) : ['Unknown'] },
   ]
 }
@@ -55,8 +55,9 @@ export function renderDiagram(payload: AnyObject | null | undefined) {
   lines.push('     -> /api/architecture')
   lines.push('        -> host Go service')
   lines.push('')
-  lines.push('services')
-  lines.push(services.length ? services.map((s: any) => `  - ${s}`).join('\n') : '  - awaiting live service list')
+  // Containers (previously called "services")
+  lines.push('containers')
+  lines.push(services.length ? services.map((s: any) => `  - ${s}`).join('\n') : '  - awaiting live container list')
   lines.push('')
   // Images: list images with their short description for quick topology context
   lines.push('images')
@@ -66,74 +67,207 @@ export function renderDiagram(payload: AnyObject | null | undefined) {
     lines.push('  - No images reported')
   }
   lines.push('')
-  // Nodes: list original node identifiers and also show concise system stats (load, memory)
-  lines.push('nodes')
-  lines.push(nodes.length ? nodes.map((n: any) => `  - ${n}`).join('\n') : '  - awaiting live node list')
-  lines.push('')
-  lines.push('node stats')
-  if (rawNodes.length) {
-    const formatBytes = (n: number | null | undefined) => {
-      if (!n && n !== 0) return '0 B'
-      const bytes = Number(n) || 0
-      const units = ['B', 'KB', 'MB', 'GB', 'TB']
-      let idx = 0
-      let val = bytes
-      while (val >= 1024 && idx < units.length - 1) { val = val / 1024; idx++ }
-      return `${Math.round(val * 10) / 10} ${units[idx]}`
-    }
-
-    const fmtLoad = (item: any) => {
-      const loads = item?.load || item?.loads || item?.loadavg || item?.loadAvg || item?.load_1 || item?.load1 || item?.cpuLoad
-      if (Array.isArray(loads) && loads.length) return String(loads.slice(0, 3).join(', '))
-      if (typeof loads === 'object') return String(Object.values(loads).slice(0, 3).join(', '))
-      if (loads !== undefined && loads !== null) return String(loads)
-      // try nested keys
-      const l1 = item?.['load.1'] || item?.['load_1']
-      if (l1 !== undefined) return String(l1)
-      return null
-    }
-
-    const fmtMem = (item: any) => {
-      const mem = item?.memory || item?.mem || item?.meminfo || item?.Memory
-      let total = null
-      let used = null
-      if (mem && typeof mem === 'object') {
-        total = mem.total ?? mem.totalBytes ?? mem.total_memory ?? mem.mem_total
-        used = mem.used ?? mem.usedBytes ?? mem.usage ?? mem.mem_used
-      }
-      total = total ?? item?.memoryTotal ?? item?.memTotal ?? item?.mem_total
-      used = used ?? item?.memoryUsed ?? item?.memUsed ?? item?.mem_used
-      if (total || used) {
-        const t = Number(total) || 0
-        const u = Number(used) || 0
-        const pct = t > 0 ? Math.round((u / t) * 100) : null
-        return { total: t || null, used: u || null, pct }
-      }
-      return null
-    }
-
-    const nodeLines = rawNodes.map((n: any, idx: number) => {
-      if (!n) return '  - (unknown)'
-      if (typeof n === 'string') return `  - ${n}`
-      // Try to resolve a friendly name; fall back to the normalized node name at the same index
-      const name = n.name || n.node || n.id || n.host || n.hostname || n.container || nodes[idx] || JSON.stringify(n).slice(0, 24)
-      const load = fmtLoad(n)
-      const mem = fmtMem(n)
-      const parts: string[] = []
-      if (load) parts.push(`load: ${load}`)
-      if (mem && mem.total !== null) parts.push(`mem: ${formatBytes(mem.used)} / ${formatBytes(mem.total)}${mem.pct !== null ? ` (${mem.pct}%)` : ''}`)
-      return `  - ${name}${parts.length ? ' — ' + parts.join(', ') : ''}`
-    })
-
-    lines.push(nodeLines.join('\n'))
-  } else {
-    lines.push('  - awaiting live node list')
-  }
+  // 'nodes' removed from telemetry (redundant with containers)
   lines.push('')
   lines.push('regions')
   lines.push(regions.length ? regions.map((r: any) => `  - ${r}`).join('\n') : '  - awaiting live region list')
 
   return lines.join('\n')
+}
+
+export function buildMetrics(payload: AnyObject | null | undefined) {
+  // Use per-host parser to produce aggregated metrics
+  const hosts = buildHostStats(payload)
+  const cpuVals: number[] = []
+  let memUsedTotal = 0
+  let memTotalTotal = 0
+  let memFound = false
+  let diskUsedTotal = 0
+  let diskTotalTotal = 0
+  let diskFound = false
+  let networkRxTotal = 0
+  let networkTxTotal = 0
+  let networkFound = false
+  const loadFirstValues: number[] = []
+  const osCounts: Record<string, number> = {}
+
+  for (const h of hosts) {
+    if (h.cpu !== undefined && h.cpu !== null) cpuVals.push(Number(h.cpu))
+    if (h.memoryUsed !== undefined && h.memoryUsed !== null) { memFound = true; memUsedTotal += Number(h.memoryUsed) }
+    if (h.memoryTotal !== undefined && h.memoryTotal !== null) { memFound = true; memTotalTotal += Number(h.memoryTotal) }
+    if (h.diskUsed !== undefined && h.diskUsed !== null) { diskFound = true; diskUsedTotal += Number(h.diskUsed) }
+    if (h.diskTotal !== undefined && h.diskTotal !== null) { diskFound = true; diskTotalTotal += Number(h.diskTotal) }
+    if ((h as any).networkRx !== undefined && (h as any).networkRx !== null) { networkRxTotal += Number((h as any).networkRx); networkFound = true }
+    if ((h as any).networkTx !== undefined && (h as any).networkTx !== null) { networkTxTotal += Number((h as any).networkTx); networkFound = true }
+    if (h.load) {
+      // parse first numeric value from comma-separated load
+      const first = String(h.load).split(',')[0].trim()
+      const n = Number(first)
+      if (!Number.isNaN(n)) loadFirstValues.push(n)
+    }
+    if (h.os) {
+      const key = String(h.os)
+      osCounts[key] = (osCounts[key] || 0) + 1
+    }
+  }
+
+  const cpuAvg = cpuVals.length ? Math.round((cpuVals.reduce((a, b) => a + b, 0) / cpuVals.length) * 10) / 10 : null
+  const memoryPercent = memFound && memTotalTotal > 0 ? Math.round((memUsedTotal / memTotalTotal) * 100) : null
+  const diskPercent = diskFound && diskTotalTotal > 0 ? Math.round((diskUsedTotal / diskTotalTotal) * 100) : null
+  const networkRxMB = networkFound ? Math.round((networkRxTotal / (1024 * 1024)) * 10) / 10 : null
+  const networkTxMB = networkFound ? Math.round((networkTxTotal / (1024 * 1024)) * 10) / 10 : null
+  const loadAvg = loadFirstValues.length ? Math.round((loadFirstValues.reduce((a, b) => a + b, 0) / loadFirstValues.length) * 100) / 100 : null
+  const loadSample = loadAvg !== null ? String(loadAvg) : null
+  const hostCount = hosts.length
+  const topOS = Object.keys(osCounts).length ? Object.entries(osCounts).sort((a, b) => b[1] - a[1])[0][0] : null
+
+  return {
+    cpuAvg: cpuAvg ?? null,
+    memoryUsedBytes: memFound ? memUsedTotal : null,
+    memoryTotalBytes: memFound ? memTotalTotal : null,
+    memoryPercent: memoryPercent ?? null,
+    diskUsedBytes: diskFound ? diskUsedTotal : null,
+    diskTotalBytes: diskFound ? diskTotalTotal : null,
+    diskPercent: diskPercent ?? null,
+    networkRxMB: networkRxMB ?? null,
+    networkTxMB: networkTxMB ?? null,
+    loadAvg: loadAvg ?? null,
+    loadSample: loadSample ?? null,
+    hostCount,
+    topOS,
+  }
+}
+
+export function buildHostStats(payload: AnyObject | null | undefined) {
+  const rawNodes = asArray(pickFirst(payload, ['nodes', 'hosts', 'instances']))
+  const hosts: Array<{ name: string; cpu?: number | null; load?: string | null; memoryUsed?: number | null; memoryTotal?: number | null; memoryPercent?: number | null; diskUsed?: number | null; diskTotal?: number | null; diskPercent?: number | null; os?: string | null; networkRx?: number | null; networkTx?: number | null }> = []
+
+  const parseCpu = (v: any) => {
+    if (v === undefined || v === null || v === '') return null
+    if (Array.isArray(v) && v.length) {
+      const nums = v.map((x: any) => Number(String(x).replace('%', ''))).filter((n: number) => !Number.isNaN(n))
+      if (nums.length) return Math.round((nums.reduce((a: number, b: number) => a + b, 0) / nums.length) * 10) / 10
+      return null
+    }
+    if (typeof v === 'object') {
+      const vals = Object.values(v).map((x: any) => Number(String(x).replace('%', ''))).filter((n: number) => !Number.isNaN(n))
+      if (vals.length) return Math.round((vals.reduce((a: number, b: number) => a + b, 0) / vals.length) * 10) / 10
+      return null
+    }
+    const s = String(v).replace('%', '')
+    const n = Number(s)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const parseMem = (m: any) => {
+    if (!m && m !== 0) return { used: null, total: null, pct: null }
+    if (typeof m === 'object') {
+      const used = Number(m.used ?? m.usage ?? m.usedBytes ?? m.rss ?? m['memory.usage']) || null
+      const total = Number(m.total ?? m.totalBytes ?? m.limit ?? m['memory.limit']) || null
+      const pct = (used !== null && total) ? (total > 0 ? Math.round((used / total) * 100) : null) : null
+      return { used, total, pct }
+    }
+    const n = Number(m)
+    if (!Number.isNaN(n)) return { used: n, total: null, pct: null }
+    return { used: null, total: null, pct: null }
+  }
+
+  const parseDisk = (d: any) => {
+    if (!d && d !== 0) return { used: null, total: null, pct: null }
+    // Often disk stats come as objects, arrays, or single numbers
+    if (Array.isArray(d) && d.length) {
+      // attempt to sum used/total if elements are objects
+      let usedSum = 0
+      let totalSum = 0
+      let found = false
+      for (const el of d) {
+        if (el && typeof el === 'object') {
+          const used = Number(el.used ?? el.usage ?? el.usedBytes ?? el.used_kb ?? el.used_bytes)
+          const total = Number(el.total ?? el.size ?? el.totalBytes ?? el.total_kb ?? el.total_bytes)
+          if (!Number.isNaN(used)) { usedSum += used; found = true }
+          if (!Number.isNaN(total)) { totalSum += total; found = true }
+        }
+      }
+      if (found) {
+        const pct = totalSum > 0 ? Math.round((usedSum / totalSum) * 100) : null
+        return { used: usedSum || null, total: totalSum || null, pct }
+      }
+    }
+    if (typeof d === 'object') {
+      const used = Number(d.used ?? d.usage ?? d.usedBytes ?? d.used_kb ?? d.used_bytes ?? d.avail ?? d.available) || null
+      const total = Number(d.total ?? d.size ?? d.totalBytes ?? d.total_kb ?? d.total_bytes ?? d.capacity) || null
+      const pct = (used !== null && total) ? (total > 0 ? Math.round((used / total) * 100) : null) : null
+      return { used, total, pct }
+    }
+    const n = Number(d)
+    if (!Number.isNaN(n)) return { used: n, total: null, pct: null }
+    return { used: null, total: null, pct: null }
+  }
+
+  const parseNetwork = (n: any) => {
+    if (!n && n !== 0) return { rx: null, tx: null }
+    // common shapes: { rxBytes, txBytes } or { rx, tx } or { rx_b, tx_b } or nested per-interface arrays
+    if (Array.isArray(n) && n.length) {
+      let rxSum = 0
+      let txSum = 0
+      let found = false
+      for (const el of n) {
+        if (el && typeof el === 'object') {
+          const r = Number(el.rx ?? el.rxBytes ?? el.rx_bytes ?? el.rx_b ?? el.rx_kb ?? el.rx_bytes_total ?? el.receivedBytes ?? el.received ?? el.rx_rate)
+          const t = Number(el.tx ?? el.txBytes ?? el.tx_bytes ?? el.tx_b ?? el.tx_kb ?? el.tx_bytes_total ?? el.sentBytes ?? el.sent ?? el.tx_rate)
+          if (!Number.isNaN(r)) { rxSum += r; found = true }
+          if (!Number.isNaN(t)) { txSum += t; found = true }
+        }
+      }
+      if (found) return { rx: rxSum || null, tx: txSum || null }
+    }
+    if (typeof n === 'object') {
+      const rx = Number(n.rx ?? n.rxBytes ?? n.rx_bytes ?? n.rx_b ?? n.rx_kb ?? n.rx_bytes_total ?? n.rx_rate ?? n.receivedBytes ?? n.received) || null
+      const tx = Number(n.tx ?? n.txBytes ?? n.tx_bytes ?? n.tx_b ?? n.tx_kb ?? n.tx_bytes_total ?? n.tx_rate ?? n.sentBytes ?? n.sent) || null
+      return { rx, tx }
+    }
+    const num = Number(n)
+    if (!Number.isNaN(num)) return { rx: num, tx: null }
+    return { rx: null, tx: null }
+  }
+
+  for (const n of rawNodes) {
+    if (!n) continue
+    if (typeof n === 'string') {
+      hosts.push({ name: String(n) })
+      continue
+    }
+    // prefer nested system object when present
+    const sys = (n.system && typeof n.system === 'object') ? n.system : n
+    const name = sys.hostname || n.name || n.node || n.id || n.host || n.hostname || n.container || JSON.stringify(n).slice(0, 24)
+    const cpu = parseCpu(sys.cpu ?? sys.cpuPercent ?? sys.CPUPercent ?? sys.cpu_percent ?? sys.cpuUsage ?? sys.stats?.cpu ?? sys.metrics?.cpu ?? n.cpu ?? n.cpuPercent)
+    let load: string | null = null
+    const loads = sys?.loadAverage || sys?.load || sys?.loads || sys?.loadavg || sys?.loadAvg || sys?.load_1 || sys?.load1 || sys?.cpuLoad
+    if (loads) {
+      if (Array.isArray(loads)) load = loads.slice(0, 3).join(', ')
+      else if (typeof loads === 'object') load = Object.values(loads).slice(0, 3).join(', ')
+      else load = String(loads)
+    }
+
+    // if no explicit cpu percent, estimate from loadAverage and cpuCount when possible
+    let cpuFinal = cpu
+    if ((cpuFinal === null || cpuFinal === undefined) && Array.isArray(sys?.loadAverage) && sys.cpuCount) {
+      const first = Number(sys.loadAverage[0])
+      const count = Number(sys.cpuCount) || 1
+      if (!Number.isNaN(first) && Number.isFinite(first) && count > 0) {
+        cpuFinal = Math.round((first / count) * 100 * 10) / 10
+      }
+    }
+
+    const memParsed = parseMem(sys.memory ?? sys.mem ?? sys.meminfo ?? sys.Memory ?? sys.memoryStats ?? sys.stats?.memory ?? sys.metrics?.memory ?? n.memory)
+    const os = (sys.os || sys.platform || sys.osVersion || sys.os_version || sys.kernel || sys.uname || (sys && (sys.platform || sys.system)) || null) as string | null
+    const diskParsed = parseDisk(sys.disks ?? sys.disk ?? sys.diskStats ?? sys.storage ?? sys.fs ?? sys.filesystem ?? sys.disk_usage ?? sys.diskUsage ?? sys.metrics?.disk ?? n.disk)
+    const netParsed = parseNetwork(sys.network ?? sys.net ?? sys.networkStats ?? sys.net_stats ?? sys.net_io ?? sys.metrics?.network ?? sys.interfaces ?? n.network)
+
+    hosts.push({ name: String(name), cpu: cpuFinal ?? null, load, memoryUsed: memParsed.used, memoryTotal: memParsed.total, memoryPercent: memParsed.pct, diskUsed: diskParsed.used, diskTotal: diskParsed.total, diskPercent: diskParsed.pct, os, networkRx: netParsed.rx, networkTx: netParsed.tx })
+  }
+
+  return hosts
 }
 
 export function extractDockerImages(payload: AnyObject | null | undefined): Array<{ name: string; tag?: string | null; sizeBytes?: number | null; created?: number | null; description?: string | null; cpuPercent?: number | null; memoryUsedBytes?: number | null; memoryTotalBytes?: number | null; memoryPercent?: number | null }> {
@@ -240,6 +374,75 @@ export function extractDockerImages(payload: AnyObject | null | undefined): Arra
         const t = Number(memoryTotalBytes) || 0
         const u = Number(memoryUsedBytes) || 0
         memoryPercent = t > 0 ? Math.round((u / t) * 100) : null
+      }
+
+      // If no metrics were directly attached to the image object, try to find metrics elsewhere in the payload
+      // that reference this image (common in node/container-centric feeds). We perform a shallow search for
+      // objects containing an image reference and cpu/memory stats and try to match by normalized image name.
+      const normalize = (s: any) => normalizeImageRef(String(s || ''))
+      const targetRef = normalize(tagValue || name)
+      if ((cpuPercent === null || memoryPercent === null) && payload && targetRef) {
+        const seen = new Set<any>()
+        const maxDepth = 4
+        let foundMetrics: any = null
+
+        function dfs(obj: any, depth = 0) {
+          if (!obj || typeof obj !== 'object' || depth > maxDepth) return
+          if (seen.has(obj)) return
+          seen.add(obj)
+          // Check if this node has an image reference
+          const candidateImage = obj.image || obj.Image || obj.imageName || obj.imageRef || obj.repoTags || obj.RepoTags || obj.Repository || obj.repository
+          if (candidateImage) {
+            const cand = Array.isArray(candidateImage) ? String(candidateImage.find(Boolean) || '') : String(candidateImage)
+            if (cand && normalize(cand) === targetRef) {
+              // collect cpu/memory if present
+              const cRaw = obj.cpu ?? obj.cpuPercent ?? obj.CPUPercent ?? obj.cpu_percent ?? obj.cpuUsage ?? obj.stats?.cpu ?? obj.metrics?.cpu
+              const mRaw = obj.memory ?? obj.mem ?? obj.meminfo ?? obj.Memory ?? obj.memoryStats ?? obj.stats?.memory ?? obj.metrics?.memory
+              if (cRaw || mRaw) {
+                foundMetrics = { cRaw, mRaw }
+                return
+              }
+            }
+          }
+          for (const k of Object.keys(obj)) {
+            const v = obj[k]
+            if (v && typeof v === 'object') {
+              dfs(v, depth + 1)
+              if (foundMetrics) return
+            }
+            if (Array.isArray(v)) {
+              for (const el of v) {
+                if (el && typeof el === 'object') { dfs(el, depth + 1); if (foundMetrics) return }
+              }
+            }
+          }
+        }
+
+        try { dfs(payload, 0) } catch (e) { /* ignore */ }
+
+        if (foundMetrics) {
+          const s = foundMetrics.cRaw
+          if (s !== undefined && s !== null && s !== '') {
+            const ss = String(s).replace('%', '')
+            const nn = Number(ss)
+            if (!Number.isNaN(nn)) cpuPercent = nn
+          }
+          const m = foundMetrics.mRaw
+          if (m !== undefined && m !== null && m !== '') {
+            if (typeof m === 'object') {
+              memoryUsedBytes = Number(m.used ?? m.usage ?? m.usedBytes ?? m.rss ?? m['memory.usage']) || memoryUsedBytes
+              memoryTotalBytes = Number(m.total ?? m.totalBytes ?? m.limit ?? m['memory.limit']) || memoryTotalBytes
+            } else {
+              const nn = Number(m)
+              if (!Number.isNaN(nn)) memoryUsedBytes = nn
+            }
+            if ((memoryUsedBytes || memoryUsedBytes === 0) && (memoryTotalBytes || memoryTotalBytes === 0)) {
+              const t = Number(memoryTotalBytes) || 0
+              const u = Number(memoryUsedBytes) || 0
+              memoryPercent = t > 0 ? Math.round((u / t) * 100) : null
+            }
+          }
+        }
       }
 
       return [

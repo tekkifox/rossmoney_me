@@ -179,27 +179,38 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           <aside className="image-column card">
             <div className="panel-header image-panel-header">
               <div>
-                <p className="panel-kicker">Docker images</p>
-                <h3>Project image inventory</h3>
+                <p className="panel-kicker">Host stats</p>
               </div>
-              <span className="status-pill status-muted" id="architecture-images-count">{archImages.length ? `${archImages.length} image${archImages.length === 1 ? '' : 's'}` : 'No project images'}</span>
             </div>
-
-            <div className="image-grid" id="architecture-images">
-              {archImages.length === 0 ? (
-                <p className="image-empty">No project images were returned by the Docker feed.</p>
-              ) : (
-                archImages.map((img: any, i: number) => (
-                  <article className="image-card" key={i}>
-                    <div className="image-name">{img.name}</div>
-                    {img.description && <p className="image-desc">{img.description}</p>}
-                    <div className="image-meta">
-                      <span>{img.sizeBytes ? `${(img.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}</span>
-                      <span>{img.created ? new Date(img.created).toLocaleString() : ''}</span>
-                    </div>
-                  </article>
-                ))
-              )}
+            <div className="metrics-cards" id="architecture-metrics">
+              <article className="metric-card">
+                <div className="metric-card-label">CPU (avg)</div>
+                <div id="architecture-metric-cpu" className="metric-card-value">N/A</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">Memory</div>
+                <div id="architecture-metric-memory" className="metric-card-value">N/A</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">Load</div>
+                <div id="architecture-metric-load" className="metric-card-value">N/A</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">Disk</div>
+                <div id="architecture-metric-disk" className="metric-card-value">N/A</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">Network</div>
+                <div id="architecture-metric-network" className="metric-card-value">N/A</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">Hosts</div>
+                <div id="architecture-metric-hosts" className="metric-card-value">0</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">OS</div>
+                <div id="architecture-metric-os" className="metric-card-value">N/A</div>
+              </article>
             </div>
           </aside>
         </div>
