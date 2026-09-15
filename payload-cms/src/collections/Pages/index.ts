@@ -10,6 +10,7 @@ import { MediaBlock } from '../../blocks/MediaBlock/config'
 import { hero } from '@/heros/config'
 import { slugField } from 'payload'
 import { populatePublishedAt } from '../../hooks/populatePublishedAt'
+import { validateCVFile, syncCVToPublic } from './hooks/cvHooks'
 import { generatePreviewPath } from '../../utilities/generatePreviewPath'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
 
@@ -140,6 +141,19 @@ export const Pages: CollectionConfig<'pages'> = {
       ],
     },
     {
+      name: 'cvFile',
+      label: 'CV (DOCX)',
+      type: 'upload',
+      relationTo: 'media',
+      admin: { position: 'sidebar', description: 'Upload a .docx CV file here' },
+    },
+    {
+      name: 'liveUrl',
+      label: 'Live URL',
+      type: 'text',
+      admin: { position: 'sidebar', description: 'URL to an external live site for this page (e.g. travelling site). Include protocol (https://) or it will be assumed.' },
+    },
+    {
       name: 'publishedAt',
       type: 'date',
       admin: {
@@ -149,8 +163,8 @@ export const Pages: CollectionConfig<'pages'> = {
     slugField(),
   ],
   hooks: {
-    afterChange: [revalidatePage],
-    beforeChange: [populatePublishedAt],
+    afterChange: [revalidatePage, syncCVToPublic],
+    beforeChange: [populatePublishedAt, validateCVFile],
     afterDelete: [revalidateDelete],
   },
   versions: {

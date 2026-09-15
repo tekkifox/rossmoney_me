@@ -88,6 +88,8 @@ export async function assembleSite(pClientArg?: any) {
       title: (travellingDoc as any).title,
       lead: (travellingDoc as any).lead,
       ...(((travellingDoc as any).data as Record<string, unknown>) || {}),
+      // include top-level liveUrl if present on the page doc (sidebar field)
+      liveUrl: (travellingDoc as any).liveUrl || (((travellingDoc as any).data as any)?.liveUrl),
       focus: (travellingDoc as any).focus || ((travellingDoc as any).data as any)?.focus,
     },
     architecture: {

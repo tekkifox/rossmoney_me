@@ -1,9 +1,9 @@
 version: "3.8"
 services:
-  cms-api:
-    image: ghcr.io/tekkifox/rossmoney_me-cms-api:latest
+  cms:
+    image: ghcr.io/tekkifox/rossmoney_me-cms:latest
     pull_policy: always
-    hostname: rossmoney_me-cms-api-1
+    hostname: rossmoney_me-cms-1
     env_file:
       - stack.env
     restart: unless-stopped
@@ -16,6 +16,8 @@ services:
       - proxy
     depends_on:
       - mongo
+    volumes:
+      - payload-media:/app/public/media:rw
 
   mongo:
     image: mongo:7
@@ -72,3 +74,4 @@ networks:
 
 volumes:
   mongo-data:
+  payload-media:

@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  cms-api:
+  cms:
     build:
       context: ./payload-cms
       dockerfile: Dockerfile
@@ -17,6 +17,7 @@ services:
     volumes:
       - /app/.next
       - /app/node_modules
+      - payload-media:/app/public/media:rw
     depends_on:
       - mongo
 
@@ -73,3 +74,4 @@ networks:
 
 volumes:
   mongo-data:
+  payload-media:

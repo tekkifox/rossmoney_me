@@ -23,6 +23,9 @@ import { commits } from './endpoints/seed/commits-page';
 import { experiencePage } from './endpoints/seed/experience-page';
 import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
+import fs from 'fs'
+import os from 'os'
+import { fileURLToPath as fURL } from 'url'
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -103,6 +106,25 @@ export default buildConfig({
     outputFile: path.resolve(dirname, 'payload-types.ts'),
   },
   onInit: async (payload: Payload) => {
+    // Ensure public/media directory exists and is writable when possible.
+    try {
+      const publicMedia = path.resolve(process.cwd(), 'public', 'media')
+      if (!fs.existsSync(publicMedia)) {
+        try {
+          fs.mkdirSync(publicMedia, { recursive: true })
+          // try to set permissive mode on POSIX systems
+          if (os.platform() !== 'win32') {
+            try { fs.chmodSync(publicMedia, 0o755) } catch (e) { /* ignore */ }
+          }
+          payload.logger?.info && payload.logger.info(`Created public media directory at ${publicMedia}`)
+        } catch (e) {
+          payload.logger?.warn && payload.logger.warn(`Could not create public media directory: ${e}`)
+        }
+      }
+    } catch (err) {
+      // ignore any file-system errors here; upload will fail later with a clearer error
+      console.warn('public media dir check failed', err)
+    }
     try {
       const pClient = payload as any;
 
@@ -115,6 +137,7 @@ export default buildConfig({
               { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
               { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
               { link: { type: 'custom', label: 'Commits', url: '/#commits' } },
+              { link: { type: 'custom', label: 'CV', url: '/cv' } },
               { link: { type: 'custom', label: 'Contact', url: '/#contact' } },
             ],
           };

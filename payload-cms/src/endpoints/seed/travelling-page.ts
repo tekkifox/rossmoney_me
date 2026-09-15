@@ -19,10 +19,11 @@ export const travelling = {
       { label: 'Source', value: 'PhotoPrism' },
     ],
   },
-  data: {
-    commitRepository: 'tekkifox/image-mosaic',
-    commitBranch: 'main',
-    metrics: [
+    data: {
+      commitRepository: 'tekkifox/image-mosaic',
+      commitBranch: 'main',
+      liveUrl: 'https://travelling.rossmoney.me',
+      metrics: [
       { value: 'PhotoPrism', label: 'Source library' },
       { value: 'Private API', label: 'Server-side URL mapping' },
       { value: 'Cached', label: 'Service worker and assets' },

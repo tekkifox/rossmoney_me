@@ -33,7 +33,7 @@ The Go API sends permissive CORS headers, so the site can fetch it across origin
 
 ## CMS
 
-The content editor stores documents in MongoDB through the `cms-api` service.
+The content editor stores documents in MongoDB through the `cms` service.
 
 The CMS API exposes:
 

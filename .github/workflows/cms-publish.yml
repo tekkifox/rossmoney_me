@@ -1,4 +1,4 @@
-name: Build and Publish CMS API Image
+name: Build and Publish CMS Image
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - 'payload-cms/**'
-      - '.github/workflows/cms-api-publish.yml'
+      - '.github/workflows/cms-publish.yml'
   workflow_dispatch:
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/rossmoney_me-cms-api
+          images: ghcr.io/${{ github.repository_owner }}/rossmoney_me-cms
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=

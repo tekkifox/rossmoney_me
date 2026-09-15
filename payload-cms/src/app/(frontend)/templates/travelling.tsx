@@ -64,11 +64,18 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
             <p className="lead" id="travelling-lead">{travelPayload.lead || summaryLead || 'The travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos from the trip.'}</p>
 
           <div className="hero-actions">
-            {travelPayload.liveUrl || data.liveUrl ? (
-              <a className="btn btn-primary" href={travelPayload.liveUrl || data.liveUrl} target="_blank" rel="noreferrer">Open live site</a>
-            ) : (
-              <button className="btn btn-primary" type="button">Open live site</button>
-            )}
+            {/* Normalize and validate live URL; prefer https when scheme missing */}
+            {(() => {
+              const raw = (travelPayload.liveUrl || data.liveUrl || '').trim()
+              if (!raw) return (
+                <button className="btn btn-primary" type="button" disabled title="Set a 'liveUrl' on the travelling page to enable this link">Open live site</button>
+              )
+              const hasScheme = /^https?:\/\//i.test(raw)
+              const href = hasScheme ? raw : `https://${raw}`
+              return (
+                <a className="btn btn-primary" href={href} target="_blank" rel="noopener noreferrer">Open live site</a>
+              )
+            })()}
             <a className="btn btn-secondary" href="/">Back to portfolio</a>
           </div>
 

@@ -18,6 +18,7 @@ import CommitsTemplate from '../templates/commits'
 import WorkTemplate from '../templates/work'
 import ExperiencePageTemplate from '../templates/experience-page'
 import NavigationTemplate from '../templates/navigation'
+import CVTemplate from '../templates/cv'
 import { loadCollections } from '../templates/shared'
 
 // This page intentionally uses dynamic data from internal APIs (architecture, commits)
@@ -98,6 +99,7 @@ export default async function Page({ params: paramsPromise }: Args) {
         {page.slug === 'work' && <WorkTemplate page={page} projects={collections?.projects || []} />}
         {page.slug === 'experience-page' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
         {page.slug === 'navigation' && <NavigationTemplate page={page} />}
+        {page.slug === 'cv' && <CVTemplate page={page} />}
       </article>
     )
   } catch (err: unknown) {

@@ -14,6 +14,7 @@ import { post2 } from './post-2'
 import { post3 } from './post-3'
 import { work } from './work-page'
 import { travelling } from './travelling-page'
+import { cv } from './cv-page'
 
 const collections: CollectionSlug[] = [
   'categories',
@@ -207,7 +208,7 @@ export const seed = async ({
 
   payload.logger.info(`— Seeding pages...`)
 
-  const [_, contactPage] = await Promise.all([
+    const [_, contactPage] = await Promise.all([
     payload.create({
       collection: 'pages',
       depth: 0,
@@ -233,16 +234,21 @@ export const seed = async ({
       depth: 0,
       data: commits,
     }),
-    payload.create({
-      collection: 'pages',
-      depth: 0,
-      data: work,
-    }),
-    payload.create({
-      collection: 'pages',
-      depth: 0,
-      data: experiencePage,
-    }),
+    	  payload.create({
+		  collection: 'pages',
+		  depth: 0,
+		  data: work,
+		}),
+		payload.create({
+		  collection: 'pages',
+		  depth: 0,
+                data: experiencePage,
+            }),
+            payload.create({
+              collection: 'pages',
+              depth: 0,
+              data: cv,
+            }),
   ])
 
   payload.logger.info(`— Seeding globals...`)
