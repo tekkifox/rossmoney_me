@@ -1,27 +1,56 @@
 import Link from 'next/link'
-import { getServerSideURL } from '@/utilities/getURL'
+import React from 'react'
+import { assembleSite } from '@/utilities/assembleSite'
+// Query ArchView directly from server-side to avoid requesting the Next server itself
+const ARCHVIEW_BASE = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
+import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
-import { PageDoc, RenderLayout } from './shared'
+import { PageDoc, RenderLayout, ContactPanel } from './shared'
 
 export default async function HomeTemplate({ page }: { page: PageDoc }) {
   const data = (page as any).data || {}
   const focus = (page as any).focus || {}
 
-  // Fetch the aggregated site payload so we can render live projects/experience/commits server-side
   let sitePayload: any = null
   try {
-    const base = getServerSideURL()
-    const res = await fetch(`${base}/api/cms/site`, { cache: 'no-store' })
-    if (res.ok) sitePayload = await res.json()
+    sitePayload = await assembleSite()
   } catch (err) {
-    // ignore and fall back to seeded/page content
     // eslint-disable-next-line no-console
-    console.warn('Failed to fetch site payload', err)
+    console.warn('assembleSite failed, falling back to page data', err)
+    sitePayload = { home: { ...data, focus }, projects: [], experience: [], contact: null }
   }
 
   const projects = sitePayload?.projects || []
   const experience = sitePayload?.experience || []
   const homeData = sitePayload?.home || { ...data, focus }
+
+  // Server-side fetch of architecture snapshot via CMS API route (ISR)
+  let archPayload: any = null
+  try {
+    const res = await fetch(`/api/architecture`, { cache: 'no-store' })
+    if (res.ok) archPayload = await res.json()
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Failed to fetch architecture snapshot', err)
+  }
+
+  const archTitle = titleFromPayload(archPayload)
+  const archDesc = descriptionFromPayload(archPayload)
+  const archDiagram = renderDiagram(archPayload)
+  const archImages = extractDockerImages(archPayload)
+  
+  // Optionally show recent commits for the site repo (homepage uses portfolio repo)
+  let homepageCommitsText = null
+  try {
+    const { getGithubCommits } = await import('@/utilities/getGithubCommits')
+    const commits = await getGithubCommits('tekkifox', 'rossmoney_me', 'main', 5)
+    if (Array.isArray(commits) && commits.length > 0) {
+      homepageCommitsText = ['$ git log --oneline -n 5', ...commits.map((c: any) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
+    }
+  } catch (err) {
+    // ignore
+  }
 
   return (
     <main>
@@ -93,6 +122,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           ))}
         </div>
       </section>
+      <ArchitectureClient />
 
       <section className="section container" id="experience">
         <div className="section-heading">
@@ -114,63 +144,64 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
       </section>
 
       <section className="section container architecture-section" id="architecture">
-        <div className="section-heading architecture-heading">
+            <div className="section-heading architecture-heading">
           <div>
             <p className="eyebrow" id="architecture-section-eyebrow">Live architecture example</p>
-            <h2 id="architecture-section-title">Data streamed from the host Go service.</h2>
+            <h2 id="architecture-section-title">Live architecture snapshot</h2>
           </div>
           <button className="btn btn-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
         </div>
 
         <div className="architecture-layout">
-          <article className="architecture-summary card">
-            <div className="panel-header">
-              <div>
-                <p className="panel-kicker">Snapshot</p>
-                <h3 id="architecture-title">Waiting for data</h3>
-              </div>
-              <span className="status-pill" id="architecture-status">Loading</span>
-            </div>
-
-            <p className="architecture-description" id="architecture-description">Fetching the current system shape from the host service.</p>
-
-            <dl className="facts-grid" id="architecture-facts"></dl>
-
-            <div className="mini-grid" id="architecture-highlights"></div>
-
-            <div className="system-panel" id="architecture-system-stats"></div>
-          </article>
-
+          {/* Left: topology + raw */}
           <article className="architecture-diagram card">
             <div className="panel-header">
               <div>
                 <p className="panel-kicker">Topology</p>
-                <h3>Structure view</h3>
+                <h3 id="architecture-title">{archTitle}</h3>
               </div>
-              <span className="status-pill status-muted" id="architecture-updated">Updating</span>
+              <span className="status-pill status-muted" id="architecture-updated">{archPayload ? 'Updated' : 'Loading'}</span>
             </div>
 
-            <pre className="diagram-view" id="architecture-diagram">Loading architecture diagram...</pre>
+            <p className="architecture-description" id="architecture-description">{archDesc}</p>
 
-            <div className="image-panel">
-              <div className="panel-header image-panel-header">
-                <div>
-                  <p className="panel-kicker">Docker images</p>
-                  <h3>Project image inventory</h3>
-                </div>
-                <span className="status-pill status-muted" id="architecture-images-count">No project images</span>
-              </div>
-
-              <div className="image-grid" id="architecture-images"></div>
-            </div>
+            <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
 
             <div className="raw-json-wrap">
               <details>
                 <summary>Raw payload</summary>
-                <pre className="raw-json" id="architecture-raw">{}</pre>
+                <pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(archPayload, null, 2) : 'No snapshot returned'}</pre>
               </details>
             </div>
           </article>
+
+          {/* Right: images inventory */}
+          <aside className="image-column card">
+            <div className="panel-header image-panel-header">
+              <div>
+                <p className="panel-kicker">Docker images</p>
+                <h3>Project image inventory</h3>
+              </div>
+              <span className="status-pill status-muted" id="architecture-images-count">{archImages.length ? `${archImages.length} image${archImages.length === 1 ? '' : 's'}` : 'No project images'}</span>
+            </div>
+
+            <div className="image-grid" id="architecture-images">
+              {archImages.length === 0 ? (
+                <p className="image-empty">No project images were returned by the Docker feed.</p>
+              ) : (
+                archImages.map((img: any, i: number) => (
+                  <article className="image-card" key={i}>
+                    <div className="image-name">{img.name}</div>
+                    {img.description && <p className="image-desc">{img.description}</p>}
+                    <div className="image-meta">
+                      <span>{img.sizeBytes ? `${(img.sizeBytes / (1024 * 1024)).toFixed(1)} MB` : 'Unknown size'}</span>
+                      <span>{img.created ? new Date(img.created).toLocaleString() : ''}</span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -186,24 +217,14 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
               <p className="panel-kicker">git log</p>
               <h3>tekkifox / rossmoney_me</h3>
             </div>
-            <span className="status-pill status-muted" id="github-commits-status">Loading</span>
           </div>
 
-          <pre className="diagram-view" id="github-commits">$ git log --oneline -n 5\nLoading recent commits...</pre>
+          <pre className="diagram-view" id="github-commits">{homepageCommitsText || '$ git log --oneline -n 5\nLoading recent commits...'}</pre>
         </article>
       </section>
 
-      <section className="section container contact-section" id="contact">
-        <div className="card contact-card">
-          <div>
-            <p className="eyebrow" id="contact-eyebrow"></p>
-            <h2 id="contact-title"></h2>
-            <p id="contact-lead"></p>
-          </div>
-
-          <div className="contact-links" id="contact-links"></div>
-        </div>
-      </section>
+      {/* Contact panel */}
+      <ContactPanel contact={sitePayload?.contact || (page as any).contact || ((page as any).data || null)} />
 
       <RenderLayout page={page} />
     </main>

@@ -31,7 +31,7 @@ export const HeaderClient: React.FC<HeaderClientProps> = ({ data }) => {
 
   return (
     <header className="container relative z-20   " {...(theme ? { 'data-theme': theme } : {})}>
-      <div className="py-8 flex justify-between">
+      <div className="topbar py-6 flex justify-between">
         <Link href="/" className="brand-lockup">
           <span className="brand-mark">RM</span>
           <div>

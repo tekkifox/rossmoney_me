@@ -20,6 +20,10 @@ import ExperiencePageTemplate from '../templates/experience-page'
 import NavigationTemplate from '../templates/navigation'
 import { loadCollections } from '../templates/shared'
 
+// This page intentionally uses dynamic data from internal APIs (architecture, commits)
+// Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
+export const dynamic = 'force-dynamic'
+
 export async function generateStaticParams() {
   try {
     const payload = await getSafePayload()

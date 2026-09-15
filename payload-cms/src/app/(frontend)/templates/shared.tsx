@@ -37,12 +37,35 @@ export async function loadCollections() {
 export function Section({ eyebrow, title, lead, children }: { eyebrow?: string; title: string; lead?: string; children?: React.ReactNode }) {
   return (
     <section className="container space-y-8 py-12 sm:py-16">
-      <div className="max-w-3xl space-y-3">
-        {eyebrow && <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">{eyebrow}</p>}
+      <div className="section-heading max-w-3xl">
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">{title}</h2>
-        {lead && <p className="text-base leading-7 text-muted-foreground sm:text-lg">{lead}</p>}
+        {lead && <p className="lead">{lead}</p>}
       </div>
       {children}
+    </section>
+  )
+}
+
+export function ContactPanel({ contact }: { contact?: any }) {
+  const c = contact || {}
+  const links = Array.isArray(c.links) ? c.links : []
+
+  return (
+    <section className="section container contact-section" id="contact">
+      <div className="card contact-card">
+        <div>
+          {c.eyebrow && <p className="eyebrow">{c.eyebrow}</p>}
+          {c.title && <h2>{c.title}</h2>}
+          {c.lead && <p className="lead">{c.lead}</p>}
+        </div>
+
+        <div className="contact-links">
+          {links.map((l: any, i: number) => (
+            <a key={i} href={l?.href || '#'} className="text-muted small" rel="noreferrer">{l?.label || l?.href || 'Contact'}</a>
+          ))}
+        </div>
+      </div>
     </section>
   )
 }

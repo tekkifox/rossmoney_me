@@ -1,26 +1,17 @@
 version: "3.8"
 
 services:
-  web:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
-    networks:
-      - rossmoney-stack
-    depends_on:
-      - archview
-
   cms-api:
     build:
       context: ./payload-cms
       dockerfile: Dockerfile
-      args:
-        SKIP_DB: "true"
     env_file:
       - stack.env
     restart: unless-stopped
     environment:
       PORT: "8082"
+    ports:
+      - "8082:8082"
     networks:
       - rossmoney-stack
     volumes:
@@ -54,6 +45,8 @@ services:
       - /sys:/host/sys:ro
       - /:/host/root:ro
 
+  # proxy service removed: CMS now proxies /api/architecture through its Next API route
+
   socket-proxy:
     image: lscr.io/linuxserver/socket-proxy:latest
     container_name: socket-proxy
@@ -73,19 +66,6 @@ services:
       timeout: 3s
       retries: 12
       start_period: 5s
-
-  proxy:
-    build:
-      context: .
-      dockerfile: deploy/proxy.Dockerfile
-    ports:
-      - "80:80"
-    depends_on:
-      - web
-      - archview
-      - cms-api
-    networks:
-      - rossmoney-stack
 
 networks:
   rossmoney-stack:

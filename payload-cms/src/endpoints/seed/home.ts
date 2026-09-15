@@ -70,7 +70,6 @@ export const home = {
       { label: 'Role', value: 'DevOps-focused developer working on personal projects' },
       { label: 'Specialty', value: 'Storage servers, media servers, and reliable self-hosted services' },
       { label: 'Current build', value: 'Custom connectors and tooling for homelab and service automation' },
-      { label: 'Delivery model', value: 'Small iterations, practical ops, and systems I can run myself' },
     ],
   },
   data: {
@@ -83,4 +82,8 @@ export const home = {
     ],
   },
   layout: [],
+  meta: {
+    title: 'Home',
+    description: 'Ross Money — DevOps-focused developer. Building dependable systems, automation layers, and production-ready interfaces.'
+  },
 } as any

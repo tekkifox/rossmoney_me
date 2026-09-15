@@ -58,4 +58,8 @@ export const travelling = {
     },
   },
   layout: [],
+  meta: {
+    title: 'Travelling',
+    description: 'A visual archive of the 2016 Southeast Asia trip and related route notes.'
+  },
 } as any

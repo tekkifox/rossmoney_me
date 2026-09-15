@@ -57,31 +57,21 @@ The Dockerized service exposes:
 - `/api/docker`
 - `/api/system`
 
-Start it with Docker Compose or as a Portainer stack:
+Start the stack with Docker Compose or deploy with Portainer.
 
-```bash
-docker compose up -d
-```
-
-The stack is exposed on `http://localhost` through the reverse proxy. The browser uses same-origin `/api/architecture`, so it works cleanly in Portainer.
-
-The ArchView service reaches Docker through `lscr.io/linuxserver/socket-proxy:latest` using `DOCKER_HOST=tcp://socket-proxy:2375`.
-
-`stack.env` is shared by both the local and Portainer Compose files.
-
-Use `docker-compose.portainer.yml` for Portainer stack deploys.
-
-Local build:
+Local (development) — exposes the CMS on port 8082:
 
 ```bash
 docker compose -f docker-compose.yml up --build
 ```
 
-Portainer stack:
+Portainer stack (CI/production):
 
 ```bash
 docker compose -f docker-compose.portainer.yml config
 ```
+
+The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. The ArchView telemetry service still runs separately and exposes its API on port 8080. `stack.env` is shared by both local and Portainer Compose files.
 
 ## Environment file
 
@@ -110,30 +100,10 @@ LOG_LEVEL=info
 
 The first block is for the CMS and telemetry services; the remaining socket-proxy variables are passed through to the Docker API proxy.
 
-## Web UI image
-
-The portfolio web UI is published separately as:
-
-```text
-ghcr.io/tekkifox/rossmoney_me:latest
-```
-
-It is built from [web/Dockerfile](web/Dockerfile) and deployed independently from the Go API image.
-
-## Reverse proxy image
-
-The Portainer-facing reverse proxy is published separately as:
-
-```text
-ghcr.io/tekkifox/rossmoney_me-proxy:latest
-```
-
-It is generated in CI from `nginx:1.27-alpine` and serves the web UI plus `/api/` routing.
-
 ## Portainer webhook
 
-Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing the web or proxy image.
+Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing images.
 
 ## Notes
 
-The frontend remains plain HTML, CSS, and JavaScript; the CMS API is a separate Go service backed by MongoDB.
+The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is still a separate Go service backed by Docker and accessible at port 8080.

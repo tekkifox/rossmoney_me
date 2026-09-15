@@ -1,26 +1,19 @@
 version: "3.8"
-
 services:
-  web:
-    image: ghcr.io/tekkifox/rossmoney_me:latest
-    pull_policy: always
-    env_file:
-      - stack.env
-    networks:
-      - rossmoney-stack
-    depends_on:
-      - archview
-
   cms-api:
     image: ghcr.io/tekkifox/rossmoney_me-cms-api:latest
     pull_policy: always
+    hostname: rossmoney_me-cms-api-1
     env_file:
       - stack.env
     restart: unless-stopped
     environment:
       PORT: "8082"
+    ports:
+      - "8082:8082"
     networks:
       - rossmoney-stack
+      - proxy
     depends_on:
       - mongo
 
@@ -51,6 +44,8 @@ services:
       - /sys:/host/sys:ro
       - /:/host/root:ro
 
+  # proxy service removed for Portainer stack; CMS now proxies /api/architecture through its Next API
+
   socket-proxy:
     image: lscr.io/linuxserver/socket-proxy:latest
     container_name: socket-proxy
@@ -71,20 +66,7 @@ services:
       retries: 12
       start_period: 5s
 
-  proxy:
-    image: ghcr.io/tekkifox/rossmoney_me-proxy:latest
-    pull_policy: always
-    depends_on:
-      - web
-      - archview
-      - cms-api
-    networks:
-      - rossmoney-stack
-      - proxy
-
 networks:
-  proxy:
-    external: true
   rossmoney-stack:
     driver: bridge
 
