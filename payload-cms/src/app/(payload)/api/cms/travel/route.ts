@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSafePayload } from '@/utilities/getSafePayload';
+import { travelling as travellingSeed } from '@/endpoints/seed/travelling-page';
 
 export async function GET() {
   try {
@@ -9,7 +10,7 @@ export async function GET() {
     const headerDoc = await pClient.findGlobal({ slug: 'header' }).catch(() => ({ navItems: [] }));
 
     const contactDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'contact') || {};
-    const travellingDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'travelling') || {};
+    const travellingDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'travelling') || (travellingSeed as any) || {};
     const navDoc = pages.docs.find((p: Record<string, unknown>) => p.slug === 'navigation') || {};
     const commits = await fetch('https://api.github.com/repos/tekkifox/image-mosaic/commits?per_page=5&sha=main', {
       headers: {
