@@ -1,20 +1,35 @@
 import { PageDoc, RenderLayout } from './shared'
+import { getServerSideURL } from '@/utilities/getURL'
 
-export default function TravellingTemplate({ page }: { page: PageDoc }) {
+export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   const data = (page as any).data || {}
   const cards = Array.isArray(data.cards) ? data.cards : []
+
+  // Attempt to hydrate server-rendered live data (commits, navigation, contact)
+  let liveTravel: any = null
+  try {
+    const base = getServerSideURL()
+    const res = await fetch(`${base}/api/cms/travel`, { cache: 'no-store' })
+    if (res.ok) liveTravel = await res.json()
+  } catch (err) {
+    // Ignore network errors and fall back to seeded/page data
+    // eslint-disable-next-line no-console
+    console.warn('Failed to fetch live travel feed', err)
+  }
+
+  const travelPayload = liveTravel?.travelling || { eyebrow: page.eyebrow, title: page.title, lead: page.lead, ...data }
 
   return (
     <main>
       <section className="hero container">
         <div className="hero-copy">
-          <p className="eyebrow" id="travelling-eyebrow">{page.eyebrow || 'Travelling.rossmoney.me'}</p>
-          <h1 id="travelling-title">{page.title || 'Travel archive built around a private image pipeline.'}</h1>
-          <p className="lead" id="travelling-lead">{page.lead || (data.summaryLead || 'The travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos from the trip.')}</p>
+          <p className="eyebrow" id="travelling-eyebrow">{travelPayload.eyebrow || page.eyebrow || 'Travelling.rossmoney.me'}</p>
+          <h1 id="travelling-title">{travelPayload.title || page.title || 'Travel archive built around a private image pipeline.'}</h1>
+          <p className="lead" id="travelling-lead">{travelPayload.lead || page.lead || (data.summaryLead || 'The travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos from the trip.')}</p>
 
           <div className="hero-actions">
-            {data.liveUrl ? (
-              <a className="btn btn-primary" href={data.liveUrl} target="_blank" rel="noreferrer">Open live site</a>
+          {travelPayload.liveUrl || data.liveUrl ? (
+              <a className="btn btn-primary" href={travelPayload.liveUrl || data.liveUrl} target="_blank" rel="noreferrer">Open live site</a>
             ) : (
               <a className="btn btn-primary" href="#" onClick={(e) => e.preventDefault()}>Open live site</a>
             )}
@@ -22,7 +37,7 @@ export default function TravellingTemplate({ page }: { page: PageDoc }) {
           </div>
 
           <div className="hero-metrics" id="travelling-metrics" aria-label="Project highlights">
-            {(data.metrics || []).map((m: any, i: number) => (
+            {(travelPayload.metrics || data.metrics || []).map((m: any, i: number) => (
               <article key={i} className="metric">
                 <span className="metric-value">{m.value}</span>
                 <span className="metric-label">{m.label}</span>
@@ -34,14 +49,14 @@ export default function TravellingTemplate({ page }: { page: PageDoc }) {
         <aside className="hero-panel card">
           <div className="panel-header">
             <div>
-              <p className="panel-kicker" id="travelling-focus-kicker">{(data.focus && data.focus.kicker) || 'Project summary'}</p>
-              <h2 id="travelling-focus-title">{(data.focus && data.focus.title) || (page.title ? page.title : 'Image mosaic, not a host overview.')}</h2>
+              <p className="panel-kicker" id="travelling-focus-kicker">{(travelPayload.focus && travelPayload.focus.kicker) || (data.focus && data.focus.kicker) || 'Project summary'}</p>
+              <h2 id="travelling-focus-title">{(travelPayload.focus && travelPayload.focus.title) || (data.focus && data.focus.title) || (page.title ? page.title : 'Image mosaic, not a host overview.')}</h2>
             </div>
             <span className={`status-pill ${data.status === 'live' ? 'status-live' : ''}`} id="travelling-focus-status">{(data.status && data.status.charAt(0).toUpperCase() + data.status.slice(1)) || 'Live'}</span>
           </div>
 
           <div className="panel-grid" id="travelling-focus-items">
-            {(data.focus && data.focus.items ? data.focus.items : [
+            {((travelPayload.focus && travelPayload.focus.items) || (data.focus && data.focus.items) || [
               { label: 'Scope', text: data.scope || 'Category-scoped to Travelling and tuned for public browsing.' },
               { label: 'Routing', text: data.routing || 'Static nginx delivery with an app-facing API layer for gallery data.' },
               { label: 'Protection', text: data.protection || 'Image URLs are hashed server-side before the frontend sees them.' },

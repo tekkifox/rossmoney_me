@@ -1,10 +1,27 @@
 import Link from 'next/link'
+import { getServerSideURL } from '@/utilities/getURL'
 
 import { PageDoc, RenderLayout } from './shared'
 
-export default function HomeTemplate({ page }: { page: PageDoc }) {
+export default async function HomeTemplate({ page }: { page: PageDoc }) {
   const data = (page as any).data || {}
   const focus = (page as any).focus || {}
+
+  // Fetch the aggregated site payload so we can render live projects/experience/commits server-side
+  let sitePayload: any = null
+  try {
+    const base = getServerSideURL()
+    const res = await fetch(`${base}/api/cms/site`, { cache: 'no-store' })
+    if (res.ok) sitePayload = await res.json()
+  } catch (err) {
+    // ignore and fall back to seeded/page content
+    // eslint-disable-next-line no-console
+    console.warn('Failed to fetch site payload', err)
+  }
+
+  const projects = sitePayload?.projects || []
+  const experience = sitePayload?.experience || []
+  const homeData = sitePayload?.home || { ...data, focus }
 
   return (
     <main>
@@ -15,14 +32,14 @@ export default function HomeTemplate({ page }: { page: PageDoc }) {
           <p className="lead" id="hero-lead">{page.lead || ''}</p>
 
           <div className="hero-actions">
-            {data.primaryButton?.label && data.primaryButton?.href ? (
-              <Link id="hero-primary-button" className="btn btn-primary" href={data.primaryButton.href}>{data.primaryButton.label}</Link>
+            {homeData.primaryButton?.label && homeData.primaryButton?.href ? (
+              <Link id="hero-primary-button" className="btn btn-primary" href={homeData.primaryButton.href}>{homeData.primaryButton.label}</Link>
             ) : (
               <a id="hero-primary-button" className="btn btn-primary" href="#contact">Start a conversation</a>
             )}
 
-            {data.secondaryButton?.label && data.secondaryButton?.href ? (
-              <Link id="hero-secondary-button" className="btn btn-secondary" href={data.secondaryButton.href}>{data.secondaryButton.label}</Link>
+            {homeData.secondaryButton?.label && homeData.secondaryButton?.href ? (
+              <Link id="hero-secondary-button" className="btn btn-secondary" href={homeData.secondaryButton.href}>{homeData.secondaryButton.label}</Link>
             ) : (
               <a id="hero-secondary-button" className="btn btn-secondary" href="#architecture">Inspect live architecture</a>
             )}
@@ -31,7 +48,7 @@ export default function HomeTemplate({ page }: { page: PageDoc }) {
           </div>
 
           <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">
-            {(data.metrics || []).map((m: any, i: number) => (
+            {(homeData.metrics || []).map((m: any, i: number) => (
               <article key={i} className="metric">
                 <span className="metric-value">{m.value}</span>
                 <span className="metric-label">{m.label}</span>
@@ -44,13 +61,13 @@ export default function HomeTemplate({ page }: { page: PageDoc }) {
           <div className="panel-header">
             <div>
               <p className="panel-kicker">Current focus</p>
-              <h2>{focus.title || 'Building personal infrastructure'}</h2>
+              <h2>{homeData.focus?.title || focus.title || 'Building personal infrastructure'}</h2>
             </div>
             <span className="status-pill status-live">Live</span>
           </div>
 
           <div className="panel-grid">
-            {(focus.items || []).map((item: any, idx: number) => (
+            {(homeData.focus?.items || focus.items || []).map((item: any, idx: number) => (
               <div key={idx} className="card">
                 <p className="text-xs uppercase text-muted">{item.label}</p>
                 <p className="mt-1">{item.value}</p>
@@ -66,7 +83,15 @@ export default function HomeTemplate({ page }: { page: PageDoc }) {
           <h2 id="work-section-title">Real roles and projects from my CV.</h2>
         </div>
 
-        <div className="cards-grid" id="cms-projects"></div>
+        <div className="cards-grid" id="cms-projects">
+          {projects.slice(0, 6).map((project: any, i: number) => (
+            <article key={i} className="feature-card card">
+              <p className="card-kicker">{project.role}</p>
+              <h3>{project.title}</h3>
+              <p>{project.summary}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="section container" id="experience">
@@ -75,7 +100,17 @@ export default function HomeTemplate({ page }: { page: PageDoc }) {
           <h2 id="experience-section-title">Recent delivery history.</h2>
         </div>
 
-        <div className="timeline" id="cms-experience"></div>
+        <div className="timeline" id="cms-experience">
+          {experience.slice(0, 6).map((entry: any, i: number) => (
+            <article key={i} className="timeline-item">
+              <p className="timeline-year">{entry.year}</p>
+              <div>
+                <h3>{[entry.title, entry.organization].filter(Boolean).join(' · ')}</h3>
+                <p>{entry.summary}</p>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className="section container architecture-section" id="architecture">
