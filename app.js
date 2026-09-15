@@ -1,4 +1,11 @@
-const pageMode = document.body.dataset.page || 'home';
+// Determine page mode: prefer explicit dataset, fall back to pathname
+let pageMode = document.body.dataset.page || '';
+if (!pageMode) {
+  const p = (window.location && window.location.pathname) || '/';
+  if (p === '/' || p === '') pageMode = 'home';
+  else if (p.startsWith('/travelling')) pageMode = 'travel';
+  else pageMode = 'site';
+}
 const architectureUrl = document.body.dataset.architectureUrl || document.querySelector('meta[name="architecture-api"]')?.content || '/api/architecture';
 const cmsUrl = document.body.dataset.cmsUrl || '/api/cms/site';
 const architecturePath = architectureUrl.includes('?') ? architectureUrl : architectureUrl.split('?')[0];
