@@ -129,6 +129,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
           if (hostsCountEl) hostsCountEl.textContent = metricsFull && metricsFull.hostCount ? String(metricsFull.hostCount) : '0'
           if (osEl) osEl.textContent = metricsFull && metricsFull.topOS ? String(metricsFull.topOS) : 'N/A'
           const netEl = document.getElementById('architecture-metric-network')
+          const swapEl = document.getElementById('architecture-metric-swap')
           if (netEl) {
             if (metricsFull && ((metricsFull.networkRxMB !== null && metricsFull.networkRxMB !== undefined) || (metricsFull.networkTxMB !== null && metricsFull.networkTxMB !== undefined))) {
               const rx = (metricsFull.networkRxMB !== null && metricsFull.networkRxMB !== undefined) ? `${Number(metricsFull.networkRxMB).toFixed(1)} MB rx` : ''
@@ -136,6 +137,27 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
               netEl.textContent = [rx, tx].filter(Boolean).join(' / ') || 'N/A'
             } else {
               netEl.textContent = 'N/A'
+            }
+          }
+          if (swapEl) {
+            if (metricsFull && metricsFull.swapTotalBytes !== null && metricsFull.swapFreeBytes !== null) {
+              const total = Number(metricsFull.swapTotalBytes)
+              const free = Number(metricsFull.swapFreeBytes)
+              const used = total - free
+              const usedMB = (used / (1024 * 1024)).toFixed(1)
+              const totalMB = (total / (1024 * 1024)).toFixed(1)
+              const pct = metricsFull.swapPercent !== null && metricsFull.swapPercent !== undefined ? ` (${Number(metricsFull.swapPercent)}%)` : ''
+              swapEl.textContent = `${usedMB} MB / ${totalMB} MB${pct}`
+            } else {
+              swapEl.textContent = 'N/A'
+            }
+          }
+          const processEl = document.getElementById('architecture-metric-processes')
+          if (processEl) {
+            if (metricsFull && (metricsFull.processCount !== null && metricsFull.processCount !== undefined)) {
+              processEl.textContent = String(metricsFull.processCount)
+            } else {
+              processEl.textContent = 'N/A'
             }
           }
         } catch (e) {

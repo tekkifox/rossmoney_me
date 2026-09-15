@@ -200,12 +200,20 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
                 <div id="architecture-metric-disk" className="metric-card-value">N/A</div>
               </article>
               <article className="metric-card">
+                <div className="metric-card-label">Swap</div>
+                <div id="architecture-metric-swap" className="metric-card-value">N/A</div>
+              </article>
+              <article className="metric-card">
                 <div className="metric-card-label">Network</div>
                 <div id="architecture-metric-network" className="metric-card-value">N/A</div>
               </article>
               <article className="metric-card">
                 <div className="metric-card-label">Hosts</div>
                 <div id="architecture-metric-hosts" className="metric-card-value">0</div>
+              </article>
+              <article className="metric-card">
+                <div className="metric-card-label">Processes</div>
+                <div id="architecture-metric-processes" className="metric-card-value">N/A</div>
               </article>
               <article className="metric-card">
                 <div className="metric-card-label">OS</div>
