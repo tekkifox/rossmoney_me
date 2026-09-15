@@ -16,18 +16,18 @@ export default function HomeTemplate({ page }: { page: PageDoc }) {
 
           <div className="hero-actions">
             {data.primaryButton?.label && data.primaryButton?.href ? (
-              <Link className="btn btn-primary" href={data.primaryButton.href}>{data.primaryButton.label}</Link>
+              <Link id="hero-primary-button" className="btn btn-primary" href={data.primaryButton.href}>{data.primaryButton.label}</Link>
             ) : (
-              <a className="btn btn-primary" href="#contact">Start a conversation</a>
+              <a id="hero-primary-button" className="btn btn-primary" href="#contact">Start a conversation</a>
             )}
 
             {data.secondaryButton?.label && data.secondaryButton?.href ? (
-              <Link className="btn btn-secondary" href={data.secondaryButton.href}>{data.secondaryButton.label}</Link>
+              <Link id="hero-secondary-button" className="btn btn-secondary" href={data.secondaryButton.href}>{data.secondaryButton.label}</Link>
             ) : (
-              <a className="btn btn-secondary" href="#architecture">Inspect live architecture</a>
+              <a id="hero-secondary-button" className="btn btn-secondary" href="#architecture">Inspect live architecture</a>
             )}
 
-            <Link className="btn btn-secondary" href="/travelling">Travelling</Link>
+            <Link id="hero-travelling-button" className="btn btn-secondary" href="/travelling">Travelling</Link>
           </div>
 
           <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">

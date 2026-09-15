@@ -4,7 +4,59 @@ export const home = {
   slug: 'home',
   _status: 'published',
   hero: {
-    type: 'none',
+    type: 'lowImpact',
+    richText: {
+      root: {
+        type: 'root',
+        children: [
+          {
+            type: 'heading',
+            children: [
+              {
+                type: 'text',
+                detail: 0,
+                format: 0,
+                mode: 'normal',
+                style: '',
+                text: 'Building dependable systems',
+                version: 1,
+              },
+            ],
+            direction: 'ltr',
+            format: '',
+            indent: 0,
+            tag: 'h1',
+            version: 1,
+          },
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'text',
+                detail: 0,
+                format: 0,
+                mode: 'normal',
+                style: '',
+                text: 'I design and ship resilient developer experiences, automation layers, and production-ready interfaces.',
+                version: 1,
+              },
+            ],
+            direction: 'ltr',
+            format: '',
+            indent: 0,
+            textFormat: 0,
+            version: 1,
+          },
+        ],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        version: 1,
+      },
+    },
+    links: [
+      { link: { type: 'custom', url: '/travelling', label: 'Travelling' } },
+    ],
   },
   eyebrow: 'Available for devops and developer roles',
   title: 'Building dependable systems with operational discipline.',
