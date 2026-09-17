@@ -135,8 +135,12 @@ export default function CVViewer() {
         </article>
       ) : (
         <div className="card" style={{ padding: 12 }}>
-          <div ref={containerRef} />
-          <p className="mt-2"><a className="cv-download" href="/media/rossmoney_cv.docx" download>Download CV (DOCX)</a></p>
+          <div className="cv-viewer-wrapper">
+            <a className="cv-download-top" href="/media/rossmoney_cv.docx" download>
+              Download CV (DOCX)
+            </a>
+            <div ref={containerRef} />
+          </div>
         </div>
       )}
     </div>
