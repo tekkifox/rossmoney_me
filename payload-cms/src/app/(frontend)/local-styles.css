@@ -153,3 +153,11 @@ pre{white-space:pre-wrap;word-break:break-word}
 .cv-left { font-weight:600; margin-bottom:6px }
 .cv-right { color:var(--muted) }
 .cv-download { display:inline-block; margin-top:8px; color:var(--primary) }
+
+/* Top-right download control inside the CV viewer */
+.cv-viewer-wrapper { position: relative }
+.cv-download-top { position: absolute; top: 8px; right: 8px; background: rgba(13,110,253,0.06); color: var(--primary); padding: 6px 10px; border-radius: 8px; font-weight:600; text-decoration:none }
+.cv-download-top:hover { background: rgba(13,110,253,0.12) }
+@media (max-width: 720px) {
+  .cv-download-top { position: static; display: inline-block; margin-bottom: 8px }
+}
