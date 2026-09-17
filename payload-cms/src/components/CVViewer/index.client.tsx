@@ -49,9 +49,11 @@ export default function CVViewer() {
         if (!container) return
 
         // attempt to render with sensible options
+        // Use continuous flow (breakPages: false) to avoid page-splitting issues
+        // that can cause the second page to be dropped when post-processing runs.
         await docx.renderAsync(blob, container, container, {
           className: 'docx',
-          breakPages: true,
+          breakPages: false,
           useBase64URL: true,
           renderHeaders: true,
           renderFooters: true,
