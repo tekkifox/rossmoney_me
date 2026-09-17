@@ -146,3 +146,10 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
 .mt-2{margin-top:8px}
 
 pre{white-space:pre-wrap;word-break:break-word}
+
+/* CV table stacking and download link styles */
+.cv-table-stack { display:flex; flex-direction:column; gap:8px }
+.cv-block { padding:8px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg) }
+.cv-left { font-weight:600; margin-bottom:6px }
+.cv-right { color:var(--muted) }
+.cv-download { display:inline-block; margin-top:8px; color:var(--primary) }
