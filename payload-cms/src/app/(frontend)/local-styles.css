@@ -161,3 +161,13 @@ pre{white-space:pre-wrap;word-break:break-word}
 @media (max-width: 720px) {
   .cv-download-top { position: static; display: inline-block; margin-bottom: 8px }
 }
+
+/* CV (docx) presentation tweaks: restore bullet points and section padding */
+.docx { color: var(--text); font-family: inherit }
+.docx p { margin: 0 0 0.75rem }
+.docx h1, .docx h2, .docx h3, .docx h4 { margin-top: 0.5rem; margin-bottom: 0.4rem }
+.docx ul, .docx ol { margin: 0 0 0.75rem 1.25rem; padding-left: 1rem; list-style-position: outside }
+.docx ul { list-style-type: disc }
+.docx ol { list-style-type: decimal }
+.docx li { margin-bottom: 0.25rem; line-height: 1.4 }
+.docx .section { padding: 0.6rem 0 }
