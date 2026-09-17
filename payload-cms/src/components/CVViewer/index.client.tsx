@@ -130,7 +130,6 @@ export default function CVViewer() {
     <div>
       {error ? (
         <article className="card" style={{ padding: 20 }}>
-          <h2>Curriculum Vitae</h2>
           <p className="text-muted">Unable to render DOCX: {error}</p>
           <p><a href="/media/rossmoney_cv.docx">Download CV</a></p>
         </article>
