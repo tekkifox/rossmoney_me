@@ -1,5 +1,5 @@
 import React from 'react'
-import { PageDoc, RenderLayout, ContactPanel } from './shared'
+import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
@@ -14,8 +14,6 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     try {
       sitePayload = await assembleSite()
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('assembleSite failed for travelling, falling back', err)
       sitePayload = null
     }
 
@@ -27,8 +25,13 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     // Server-side fetch architecture snapshot via the CMS API route (ISR)
     let archPayload: any = null
     try {
-      const r = await fetch(`/api/architecture?project=image-mosaic`, { cache: 'no-store' })
+      const archviewFromPage = travelPayload.archviewUrl || travelPayload.data?.archviewUrl || data.archviewUrl || data.archview
+      const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
+      const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
+      const url = `${base.replace(/\/$/, '')}/api/architecture?project=image-mosaic`
+      const r = await fetch(url, { cache: 'no-store' })
       if (r.ok) archPayload = await r.json()
+      else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('Failed to fetch architecture for travelling', err)
@@ -51,12 +54,12 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.warn('Failed to load GitHub commits', err)
       commitsText = '$ git log --oneline -n 5\nUnable to load recent commits'
     }
 
     return (
       <main>
+        <PageMeta page={page} />
       <section className="hero container">
         <div className="hero-copy">
           <p className="eyebrow" id="travelling-eyebrow">{travelPayload.eyebrow || page.eyebrow || 'Travelling.rossmoney.me'}</p>
@@ -88,8 +91,6 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
             ))}
           </div>
         </div>
-
-        {/* hero aside removed: Trip summary not shown */}
       </section>
 
       <section className="section container">

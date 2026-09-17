@@ -48,6 +48,7 @@ export async function assembleSite(pClientArg?: any) {
   const workDoc = pages.docs.find((p: any) => p.slug === 'work') || {}
   const expPageDoc = pages.docs.find((p: any) => p.slug === 'experience-page') || {}
   const navDoc = pages.docs.find((p: any) => p.slug === 'navigation') || {}
+  const gameserversDoc = pages.docs.find((p: any) => p.slug === 'game-servers' || p.slug === 'gameservers') || {}
 
   const navLinks = (Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0)
     ? headerDoc.navItems.map((item: any) => {
@@ -91,6 +92,15 @@ export async function assembleSite(pClientArg?: any) {
       // include top-level liveUrl if present on the page doc (sidebar field)
       liveUrl: (travellingDoc as any).liveUrl || (((travellingDoc as any).data as any)?.liveUrl),
       focus: (travellingDoc as any).focus || ((travellingDoc as any).data as any)?.focus,
+    },
+    gameservers: {
+      eyebrow: (gameserversDoc as any).eyebrow,
+      title: (gameserversDoc as any).title,
+      lead: (gameserversDoc as any).lead,
+      ...(((gameserversDoc as any).data as Record<string, unknown>) || {}),
+      // include top-level archviewUrl if present on the page doc (sidebar field)
+      archviewUrl: (gameserversDoc as any).archviewUrl || (((gameserversDoc as any).data as any)?.archviewUrl),
+      focus: (gameserversDoc as any).focus || ((gameserversDoc as any).data as any)?.focus,
     },
     architecture: {
       eyebrow: (archDoc as any).eyebrow,

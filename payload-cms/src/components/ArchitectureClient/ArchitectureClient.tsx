@@ -8,8 +8,18 @@ interface Props {
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
   useEffect(() => {
-    const meta = document.querySelector('meta[name="architecture-api"]') as HTMLMetaElement | null
-    const architectureUrl = (meta && meta.content) || '/api/architecture'
+    // Prefer a page-root data attribute when present (set by page wrapper) to guarantee page-level source
+    let architectureUrl: string = '/api/architecture'
+    const pageRoot = document.getElementById('page-root') as HTMLElement | null
+    const pageApi = pageRoot?.dataset?.architectureApi
+    if (pageApi && pageApi.trim()) {
+      architectureUrl = pageApi.trim()
+    } else {
+      // Fallback to meta tag if no page data attribute provided
+      const metas = Array.from(document.querySelectorAll('meta[name="architecture-api"]')) as HTMLMetaElement[]
+      const meta = metas.length ? metas[metas.length - 1] : null
+      architectureUrl = (meta && meta.content) || '/api/architecture'
+    }
 
     async function fetchArchitecture() {
       try {
@@ -21,8 +31,6 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const payload = ct.includes('application/json') ? await res.json() : { raw: await res.text() }
         updateDom(payload)
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('ArchitectureClient fetch failed', err)
       }
     }
 
@@ -89,7 +97,21 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
 
         // Image cards removed per UI update. The topology now lists images and descriptions
         if (rawEl) rawEl.textContent = arch ? JSON.stringify(arch, null, 2) : 'No snapshot returned'
-        if (updatedEl) updatedEl.textContent = (new Date()).toLocaleString()
+        if (updatedEl) {
+          // Prefer server-provided timestamp when available
+          const serverTs = arch?.updatedAt || arch?.telemetry?.metrics?.updatedAt || arch?.telemetry?.metrics?.loadSample
+          try {
+            if (serverTs) {
+              const d = new Date(serverTs)
+              if (!Number.isNaN(d.getTime())) updatedEl.textContent = d.toLocaleString()
+              else updatedEl.textContent = String(serverTs)
+            } else {
+              updatedEl.textContent = (new Date()).toLocaleString()
+            }
+          } catch (e) {
+            updatedEl.textContent = (new Date()).toLocaleString()
+          }
+        }
 
         // Always prefer telemetry from API. Do not compute from payload locally.
         const telemetry = (arch && arch.telemetry && arch.telemetry.metrics) ? arch.telemetry.metrics : null

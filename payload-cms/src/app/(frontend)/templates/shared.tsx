@@ -91,3 +91,16 @@ export function RenderLayout({ page }: { page: PageDoc }) {
 
   return null
 }
+
+import Head from 'next/head'
+
+export function PageMeta({ page }: { page: PageDoc }) {
+  const archview = (page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
+  const base = archview ? String(archview).replace(/\/$/, '') : ''
+  const api = base ? `${base}/api/architecture` : '/api/architecture'
+  return (
+    <Head>
+      <meta name="architecture-api" content={api} />
+    </Head>
+  )
+}

@@ -20,7 +20,7 @@ import ExperiencePageTemplate from '../templates/experience-page'
 import NavigationTemplate from '../templates/navigation'
 import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
-import { loadCollections } from '../templates/shared'
+import { loadCollections, PageMeta } from '../templates/shared'
 
 // This page intentionally uses dynamic data from internal APIs (architecture, commits)
 // Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
@@ -85,7 +85,8 @@ export default async function Page({ params: paramsPromise }: Args) {
 
   try {
     return (
-      <article className="pt-16 pb-24">
+      <article id="page-root" className="pt-16 pb-24" data-architecture-api={((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') ? (((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') + '/api/architecture') : '/api/architecture'}>
+        <PageMeta page={page} />
         <PageClient />
         {/* Allows redirects for valid pages too */}
         <PayloadRedirects disableNotFound url={url} />

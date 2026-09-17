@@ -154,6 +154,12 @@ export const Pages: CollectionConfig<'pages'> = {
       admin: { position: 'sidebar', description: 'URL to an external live site for this page (e.g. travelling site). Include protocol (https://) or it will be assumed.' },
     },
     {
+      name: 'archviewUrl',
+      label: 'ArchView URL',
+      type: 'text',
+      admin: { position: 'sidebar', description: 'Optional: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk).' },
+    },
+    {
       name: 'publishedAt',
       type: 'date',
       admin: {

@@ -1,5 +1,5 @@
 import React from 'react'
-import { PageDoc, RenderLayout, ContactPanel } from './shared'
+import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: ARCHVIEW base will be resolved from page data (projectPayload) when available; fall back to env.
 import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
@@ -25,7 +25,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
     let archPayload: any = null
     try {
       const archviewFromPage = projectPayload.archviewUrl || projectPayload.archview || data.archviewUrl || data.archview
-      const envFallback = process.env.ARCHVIEW_VORTEXSERVERS_URL || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
+      const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
       const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
       const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
       const r = await fetch(url, { cache: 'no-store' })
@@ -57,6 +57,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
 
     return (
       <main>
+        <PageMeta page={page} />
         {/* Reuse travelling-like layout but for Vortex project */}
         <section className="hero container">
           <div className="hero-copy">
@@ -76,19 +77,18 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
                 )
               })()}
               <a className="btn btn-secondary" href="/">Back to portfolio</a>
+
+            </div>
+            <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">
+              {(projectPayload.metrics || []).slice(0, 3).map((m: any, i: number) => (
+                <article key={i} className="metric">
+                  <span className="metric-value">{m.value}</span>
+                  <span className="metric-label">{m.label}</span>
+                </article>
+              ))}
             </div>
           </div>
         </section>
-
-        {/* Removed Project overview section: metrics shown in hero instead */}
-        <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">
-          {(projectPayload.metrics || []).slice(0, 3).map((m: any, i: number) => (
-            <article key={i} className="metric">
-              <span className="metric-value">{m.value}</span>
-              <span className="metric-label">{m.label}</span>
-            </article>
-          ))}
-        </div>
 
         <section id="architecture" className="section container">
           <div className="section-heading architecture-heading">

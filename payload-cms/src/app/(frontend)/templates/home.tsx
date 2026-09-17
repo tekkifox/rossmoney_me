@@ -6,7 +6,7 @@ const ARCHVIEW_BASE = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || p
 import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
-import { PageDoc, RenderLayout, ContactPanel } from './shared'
+import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
 
 export default async function HomeTemplate({ page }: { page: PageDoc }) {
   const data = (page as any).data || {}
@@ -54,6 +54,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
 
   return (
     <main>
+      <PageMeta page={page} />
       <section className="hero container">
         <div className="hero-copy">
           <p className="eyebrow" id="hero-eyebrow">{page.eyebrow || ''}</p>

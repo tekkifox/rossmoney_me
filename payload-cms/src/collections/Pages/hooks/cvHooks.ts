@@ -58,8 +58,6 @@ export async function syncCVToPublic({ req, doc }: any) {
       if (!mediaUrl) return
       const r = await fetch(mediaUrl)
       if (!r.ok) {
-        // eslint-disable-next-line no-console
-        console.warn(`Failed to download media from ${mediaUrl}, status ${r.status}`)
         return
       }
       const buffer = await r.arrayBuffer()
@@ -67,8 +65,6 @@ export async function syncCVToPublic({ req, doc }: any) {
       try { await fs.chmod(dest, 0o644) } catch (e) { /* ignore */ }
       return
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn('Failed to download and write media to public/media/rossmoney_cv.docx', e)
     }
   } catch (e) {
     // do not block the save on copy failure; log to server console
