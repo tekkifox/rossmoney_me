@@ -6,7 +6,7 @@ const defaultOpenGraph: Metadata['openGraph'] = {
   description: 'Ross Money — DevOps-focused developer. Portfolio showcasing projects, infrastructure, and tooling.',
   images: [
     {
-      url: `${getServerSideURL()}/favicon.svg`,
+      url: `${getServerSideURL()}/og.png`,
     },
   ],
   siteName: 'Ross Money - Developer & DevOps Portfolio',
