@@ -54,7 +54,6 @@
     "tailwind-merge": "^3.4.0",
     "@payloadcms/db-mongodb": "3.88.0"
     ,
-    "docx-preview": "^0.3.7",
     "mammoth": "^1.4.20"
   },
   "devDependencies": {
