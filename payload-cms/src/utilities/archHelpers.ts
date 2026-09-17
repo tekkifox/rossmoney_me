@@ -459,7 +459,12 @@ export function extractDockerImages(payload: AnyObject | null | undefined): Arra
         },
       ]
     })
-    .filter((image: any, index: number, list: any[]) => image.name && list.findIndex((entry) => entry.name === image.name) === index)
+    // Keep distinct image entries by name+tag so different tags of the same repo are shown separately
+    .filter((image: any, index: number, list: any[]) => {
+      if (!image || !image.name) return false
+      const key = `${image.name}::${image.tag ?? ''}`
+      return list.findIndex((entry) => `${entry.name}::${entry.tag ?? ''}` === key) === index
+    })
 
   return out
 }
