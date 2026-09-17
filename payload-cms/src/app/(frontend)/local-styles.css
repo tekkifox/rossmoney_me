@@ -146,6 +146,3 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
 .mt-2{margin-top:8px}
 
 pre{white-space:pre-wrap;word-break:break-word}
-
-/* CV styling reverted; DOCX conversion will be handled by the new converter (mammoth) and
-   any consumer-specific styles should be added separately to avoid layout regressions. */
