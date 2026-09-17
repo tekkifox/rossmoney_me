@@ -7,6 +7,7 @@ export default function CVViewer() {
 
   useEffect(() => {
     let cancelled = false
+
     async function renderDoc() {
       try {
         // Try to fetch CV file from CMS pages api (expecting a 'cv' page with cvFile relation)
@@ -49,10 +50,10 @@ export default function CVViewer() {
         container.innerHTML = html
         // Ensure a small wrapper class remains for optional styling
         container.classList.add('docx')
-      } catch (err: any) {
+      } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('CV render failed', err)
-        if (!cancelled) setError(String(err?.message || err))
+        if (!cancelled) setError(String((err as any)?.message ?? String(err)))
       }
     }
 
@@ -76,32 +77,4 @@ export default function CVViewer() {
       )}
     </div>
   )
-}
-      } catch (err: any) {
-        // eslint-disable-next-line no-console
-        console.warn('CV render failed', err)
-        if (!cancelled) setError(String(err?.message || err))
-      }
-    }
-
-    void renderDoc()
-    return () => { cancelled = true }
-  }, [])
-
-    return (
-      <div>
-      {error ? (
-        <article className="card" style={{ padding: 20 }}>
-          <h2>Curriculum Vitae</h2>
-          <p className="text-muted">Unable to render DOCX: {error}</p>
-          <p><a href="/media/rossmoney_cv.docx">Download CV</a></p>
-        </article>
-      ) : (
-        <div className="card" style={{ padding: 12 }}>
-          <div ref={containerRef} />
-          {/* viewer */}
-        </div>
-      )}
-      </div>
-    )
 }
