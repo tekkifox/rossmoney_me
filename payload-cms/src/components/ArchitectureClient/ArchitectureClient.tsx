@@ -119,16 +119,16 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const memEl = document.getElementById('architecture-metric-memory')
         const loadEl = document.getElementById('architecture-metric-load')
         if (cpuEl) cpuEl.textContent = telemetry && telemetry.cpuAvg !== null && telemetry.cpuAvg !== undefined ? `${Number(telemetry.cpuAvg)}%` : 'N/A'
-        if (memEl) {
-          if (telemetry && telemetry.memoryUsedBytes !== null && telemetry.memoryTotalBytes !== null) {
-            const usedMB = (Number(telemetry.memoryUsedBytes) / (1024 * 1024)).toFixed(1)
-            const totalMB = (Number(telemetry.memoryTotalBytes) / (1024 * 1024)).toFixed(1)
-            const pct = telemetry.memoryPercent !== null && telemetry.memoryPercent !== undefined ? ` (${telemetry.memoryPercent}%)` : ''
-            memEl.textContent = `${usedMB} MB / ${totalMB} MB${pct}`
-          } else {
-            memEl.textContent = 'N/A'
+          if (memEl) {
+            if (telemetry && telemetry.memoryUsedBytes !== null && telemetry.memoryTotalBytes !== null) {
+              const usedGB = (Number(telemetry.memoryUsedBytes) / (1024 * 1024 * 1024)).toFixed(2)
+              const totalGB = (Number(telemetry.memoryTotalBytes) / (1024 * 1024 * 1024)).toFixed(2)
+              const pct = telemetry.memoryPercent !== null && telemetry.memoryPercent !== undefined ? ` (${telemetry.memoryPercent}%)` : ''
+              memEl.textContent = `${usedGB} GB / ${totalGB} GB${pct}`
+            } else {
+              memEl.textContent = 'N/A'
+            }
           }
-        }
         if (loadEl) loadEl.textContent = telemetry && (telemetry.loadSample || telemetry.loadAvg) ? String(telemetry.loadSample || telemetry.loadAvg) : 'N/A'
 
         // Populate additional metric placeholders: disk, hosts count, top OS
@@ -138,16 +138,16 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         try {
           // Only use telemetry from API for these cards
           const metricsFull = telemetry
-          if (diskEl) {
-            if (metricsFull && metricsFull.diskUsedBytes !== null && metricsFull.diskTotalBytes !== null) {
-              const usedMB = (Number(metricsFull.diskUsedBytes) / (1024 * 1024)).toFixed(1)
-              const totalMB = (Number(metricsFull.diskTotalBytes) / (1024 * 1024)).toFixed(1)
-              const pct = metricsFull.diskPercent !== null && metricsFull.diskPercent !== undefined ? ` (${metricsFull.diskPercent}%)` : ''
-              diskEl.textContent = `${usedMB} MB / ${totalMB} MB${pct}`
-            } else {
-              diskEl.textContent = 'N/A'
+            if (diskEl) {
+              if (metricsFull && metricsFull.diskUsedBytes !== null && metricsFull.diskTotalBytes !== null) {
+                const usedGB = (Number(metricsFull.diskUsedBytes) / (1024 * 1024 * 1024)).toFixed(2)
+                const totalGB = (Number(metricsFull.diskTotalBytes) / (1024 * 1024 * 1024)).toFixed(2)
+                const pct = metricsFull.diskPercent !== null && metricsFull.diskPercent !== undefined ? ` (${metricsFull.diskPercent}%)` : ''
+                diskEl.textContent = `${usedGB} GB / ${totalGB} GB${pct}`
+              } else {
+                diskEl.textContent = 'N/A'
+              }
             }
-          }
           if (hostsCountEl) hostsCountEl.textContent = metricsFull && metricsFull.hostCount ? String(metricsFull.hostCount) : '0'
           if (osEl) osEl.textContent = metricsFull && metricsFull.topOS ? String(metricsFull.topOS) : 'N/A'
           const netEl = document.getElementById('architecture-metric-network')
@@ -161,19 +161,19 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
               netEl.textContent = 'N/A'
             }
           }
-          if (swapEl) {
-            if (metricsFull && metricsFull.swapTotalBytes !== null && metricsFull.swapFreeBytes !== null) {
-              const total = Number(metricsFull.swapTotalBytes)
-              const free = Number(metricsFull.swapFreeBytes)
-              const used = total - free
-              const usedMB = (used / (1024 * 1024)).toFixed(1)
-              const totalMB = (total / (1024 * 1024)).toFixed(1)
-              const pct = metricsFull.swapPercent !== null && metricsFull.swapPercent !== undefined ? ` (${Number(metricsFull.swapPercent)}%)` : ''
-              swapEl.textContent = `${usedMB} MB / ${totalMB} MB${pct}`
-            } else {
-              swapEl.textContent = 'N/A'
-            }
-          }
+           if (swapEl) {
+             if (metricsFull && metricsFull.swapTotalBytes !== null && metricsFull.swapFreeBytes !== null) {
+               const total = Number(metricsFull.swapTotalBytes)
+               const free = Number(metricsFull.swapFreeBytes)
+               const used = total - free
+               const usedGB = (used / (1024 * 1024 * 1024)).toFixed(2)
+               const totalGB = (total / (1024 * 1024 * 1024)).toFixed(2)
+               const pct = metricsFull.swapPercent !== null && metricsFull.swapPercent !== undefined ? ` (${Number(metricsFull.swapPercent)}%)` : ''
+               swapEl.textContent = `${usedGB} GB / ${totalGB} GB${pct}`
+             } else {
+               swapEl.textContent = 'N/A'
+             }
+           }
           const processEl = document.getElementById('architecture-metric-processes')
           if (processEl) {
             if (metricsFull && (metricsFull.processCount !== null && metricsFull.processCount !== undefined)) {
