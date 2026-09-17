@@ -134,9 +134,9 @@ export default buildConfig({
             navItems: [
               { link: { type: 'custom', label: 'Work', url: '/#work' } },
               { link: { type: 'custom', label: 'Travelling', url: '/travelling' } },
+              { link: { type: 'custom', label: 'Game Servers', url: '/game-servers' } },
               { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
               { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
-              { link: { type: 'custom', label: 'Commits', url: '/#commits' } },
               { link: { type: 'custom', label: 'CV', url: '/cv' } },
               { link: { type: 'custom', label: 'Contact', url: '/#contact' } },
             ],

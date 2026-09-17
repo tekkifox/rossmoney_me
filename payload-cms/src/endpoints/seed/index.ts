@@ -14,6 +14,7 @@ import { post2 } from './post-2'
 import { post3 } from './post-3'
 import { work } from './work-page'
 import { travelling } from './travelling-page'
+import { gameservers } from './game-servers-page'
 import { cv } from './cv-page'
 
 const collections: CollectionSlug[] = [
@@ -239,11 +240,16 @@ export const seed = async ({
 		  depth: 0,
 		  data: work,
 		}),
+    		payload.create({
+		  collection: 'pages',
+		  depth: 0,
+		  data: experiencePage,
+		}),
 		payload.create({
 		  collection: 'pages',
 		  depth: 0,
-                data: experiencePage,
-            }),
+		  data: gameservers,
+		}),
             payload.create({
               collection: 'pages',
               depth: 0,

@@ -122,7 +122,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           ))}
         </div>
       </section>
-      <ArchitectureClient />
+      <ArchitectureClient project="rossmoney_me" />
 
       <section className="section container" id="experience">
         <div className="section-heading">
