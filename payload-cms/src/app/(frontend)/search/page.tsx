@@ -82,7 +82,8 @@ export default async function Page({ searchParams: searchParamsPromise }: Args) 
 }
 
 export function generateMetadata(): Metadata {
+  const siteName = 'Ross Money - Developer & DevOps Portfolio'
   return {
-    title: `Payload Website Template Search`,
+    title: `Search | ${siteName}`,
   }
 }
