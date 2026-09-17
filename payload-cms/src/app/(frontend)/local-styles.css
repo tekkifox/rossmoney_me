@@ -189,3 +189,17 @@ pre{white-space:pre-wrap;word-break:break-word}
   .docx { font-size: 0.9rem }
   .docx table th, .docx table td { font-size: 0.85rem; padding: 4px 6px }
 }
+
+/* Key/value (two-column) table conversion styles */
+.docx dl.kv-table { margin: 8px 0 12px; padding: 0; }
+.docx dl.kv-table dt { font-weight: 700; color: var(--text); margin-top: 8px; }
+.docx dl.kv-table dd { margin: 0 0 8px 0; color: var(--muted); padding-left: 0 }
+
+/* Collapsible table wrapper */
+.docx details.table-details { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0; background: var(--card-bg); }
+.docx details.table-details summary { cursor: pointer; padding: 8px 12px; display: block; font-weight: 700; background: rgba(0,0,0,0.02); border-bottom: 1px solid var(--border); }
+.docx details.table-details table { margin: 0; width: 100%; overflow: auto; }
+.docx details.table-details[open] summary { border-bottom: none }
+
+/* Prevent outer viewport horizontal scroll caused by docx content */
+.docx { -webkit-overflow-scrolling: touch; }
