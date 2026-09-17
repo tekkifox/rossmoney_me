@@ -59,18 +59,20 @@ export default function CVViewer() {
           renderEndnotes: true,
         })
 
-        // Post-process the rendered HTML to improve mobile friendliness:
-        // - Convert 2-column tables into key/value (dl) lists
-        // - Collapse wide tables into <details> blocks on small screens
-        // - Ensure code/pre blocks wrap
+        // Post-process the rendered HTML to improve mobile friendliness and avoid clipping:
+        // Strategy:
+        // - On small screens (<=720px) convert tables to a responsive stacked representation so no
+        //   horizontal scroll is required and all content remains visible.
+        // - On larger screens, convert simple 2-column tables to dl key/value lists and collapse
+        //   very wide tables into details so they don't force the outer page to scroll.
         try {
           const postProcessDoc = (root: HTMLElement) => {
             const tables = Array.from(root.querySelectorAll('table')) as HTMLTableElement[]
+            const smallScreen = window.innerWidth <= 720
             for (const table of tables) {
-              // Skip already processed tables
-              if (table.closest('.table-details')) continue
+              // Avoid reprocessing the same table
+              if (table.closest('.table-details') || table.closest('.kv-table') || table.closest('.responsive-table')) continue
 
-              // Determine max columns in table
               const rows = Array.from(table.querySelectorAll('tr'))
               let maxCols = 0
               for (const r of rows) {
@@ -78,7 +80,55 @@ export default function CVViewer() {
                 if (cells.length > maxCols) maxCols = cells.length
               }
 
-              // If table looks like a 2-column key/value table, convert to dl
+              // On small screens, convert any table into a stacked responsive view so nothing is hidden
+              if (smallScreen) {
+                const headers: string[] = []
+                // prefer thead headers
+                const thead = table.querySelector('thead')
+                if (thead) {
+                  const ths = Array.from(thead.querySelectorAll('th'))
+                  if (ths.length) headers.push(...ths.map(h => (h.textContent || '').trim()))
+                }
+                // fallback to first row as header
+                if (headers.length === 0 && rows.length > 0) {
+                  const firstCells = Array.from(rows[0].querySelectorAll('th,td'))
+                  if (firstCells.length && rows.length > 1) {
+                    headers.push(...firstCells.map(h => (h.textContent || '').trim()))
+                    rows.shift() // treat remainder as body rows
+                  }
+                }
+                if (headers.length === 0) {
+                  for (let i = 0; i < maxCols; i++) headers.push('Column ' + (i + 1))
+                }
+
+                const wrap = document.createElement('div')
+                wrap.className = 'responsive-table'
+                for (const r of rows) {
+                  const cells = Array.from(r.querySelectorAll('th,td'))
+                  const rowWrap = document.createElement('div')
+                  rowWrap.className = 'responsive-row'
+                  for (let i = 0; i < headers.length; i++) {
+                    const label = headers[i] || ('Column ' + (i + 1))
+                    const cell = cells[i]
+                    const item = document.createElement('div')
+                    item.className = 'responsive-item'
+                    const key = document.createElement('div')
+                    key.className = 'responsive-key'
+                    key.innerHTML = label
+                    const val = document.createElement('div')
+                    val.className = 'responsive-val'
+                    val.innerHTML = cell ? cell.innerHTML : ''
+                    item.appendChild(key)
+                    item.appendChild(val)
+                    rowWrap.appendChild(item)
+                  }
+                  wrap.appendChild(rowWrap)
+                }
+                table.replaceWith(wrap)
+                continue
+              }
+
+              // Not small screen: handle two-column tables as dl for compactness
               if (maxCols === 2) {
                 const dl = document.createElement('dl')
                 dl.className = 'kv-table'
@@ -96,26 +146,24 @@ export default function CVViewer() {
                 continue
               }
 
-              // For wider tables, collapse into details on small screens or when table is wider than container
+              // For larger screens, collapse very wide or many-column tables into details
               const containerWidth = root.clientWidth || window.innerWidth
               const tableWidth = table.scrollWidth || (table.getBoundingClientRect && table.getBoundingClientRect().width) || 0
-              const shouldCollapse = tableWidth > containerWidth - 8 || maxCols > 4 || window.innerWidth <= 520
+              const shouldCollapse = tableWidth > containerWidth - 24 || maxCols > 6
               if (shouldCollapse) {
                 const details = document.createElement('details')
                 details.className = 'table-details'
                 const summary = document.createElement('summary')
                 summary.textContent = `Show table (${maxCols} columns)`
-                // Insert details before the table and move the table inside it
                 table.parentNode?.insertBefore(details, table)
                 details.appendChild(summary)
                 details.appendChild(table)
-                // let the table be scrollable when expanded
                 table.style.width = '100%'
-                table.style.overflow = 'auto'
+                table.style.overflowX = 'auto'
                 continue
               }
 
-              // Otherwise enforce wrapping rules
+              // Otherwise enforce wrapping rules to avoid overflow
               table.style.tableLayout = 'fixed'
               table.style.wordBreak = 'break-word'
             }
