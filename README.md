@@ -107,3 +107,22 @@ Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions rede
 ## Notes
 
 The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is still a separate Go service backed by Docker and accessible at port 8080.
+
+## Robots and SEO
+
+Robots are generated during the site build by next-sitemap (see `payload-cms/next-sitemap.config.cjs`). By default the generator blocks admin and API endpoints and allows public media. If you prefer a static file, copy `payload-cms/public/robots-template.txt` to `payload-cms/public/robots.txt` and update the Sitemap line with your production domain.
+
+During builds the sitemap and robots.txt are produced automatically when `next-sitemap` runs as part of `pnpm build`.
+
+## CV Viewer
+
+The site now renders the DOCX CV in-browser using mammoth.js. The viewer inserts the converted HTML and applies light normalization for two-column blocks so content stacks cleanly on narrow viewports. A download link for the original DOCX is shown at the top-right of the viewer on desktop (falls back to an inline link on mobile).
+
+If you prefer server-side conversion (avoid bundling mammoth in the browser), the server can convert the DOCX to HTML and serve it pre-rendered — ask and I will add a server endpoint.
+
+## ArchView / telemetry
+
+- The ArchView telemetry service (the Go project) now filters out exited containers and anonymous/digest-only images from snapshots returned to the frontend. This keeps the UI focused on active services and human-readable images.
+- Project-scoped image selection was improved so images referenced by project containers (including different tags) are included rather than being deduped by name alone.
+
+When troubleshooting missing images or unexpected filtering, request the `/api/architecture?project=...` JSON snapshot so we can inspect the raw payload.
