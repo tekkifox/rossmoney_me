@@ -9,9 +9,6 @@ import { imageHero1 } from './image-hero-1'
 import { architecture } from './architecture-page'
 import { commits } from './commits-page'
 import { experiencePage } from './experience-page'
-import { post1 } from './post-1'
-import { post2 } from './post-2'
-import { post3 } from './post-3'
 import { work } from './work-page'
 import { travelling } from './travelling-page'
 import { gameservers } from './game-servers-page'
@@ -21,10 +18,8 @@ const collections: CollectionSlug[] = [
   'categories',
   'media',
   'pages',
-  'posts',
   'forms',
   'form-submissions',
-  'search',
 ]
 
 const globals: GlobalSlug[] = ['header', 'footer']
@@ -145,59 +140,7 @@ export const seed = async ({
     ),
   ])
 
-  payload.logger.info(`— Seeding posts...`)
-
-  // Do not create posts with `Promise.all` because we want the posts to be created in order
-  // This way we can sort them by `createdAt` or `publishedAt` and they will be in the expected order
-  const post1Doc = await payload.create({
-    collection: 'posts',
-    depth: 0,
-    context: {
-      disableRevalidate: true,
-    },
-    data: post1({ heroImage: image1Doc, blockImage: image2Doc, author: demoAuthor }),
-  })
-
-  const post2Doc = await payload.create({
-    collection: 'posts',
-    depth: 0,
-    context: {
-      disableRevalidate: true,
-    },
-    data: post2({ heroImage: image2Doc, blockImage: image3Doc, author: demoAuthor }),
-  })
-
-  const post3Doc = await payload.create({
-    collection: 'posts',
-    depth: 0,
-    context: {
-      disableRevalidate: true,
-    },
-    data: post3({ heroImage: image3Doc, blockImage: image1Doc, author: demoAuthor }),
-  })
-
-  // update each post with related posts
-  await payload.update({
-    id: post1Doc.id,
-    collection: 'posts',
-    data: {
-      relatedPosts: [post2Doc.id, post3Doc.id],
-    },
-  })
-  await payload.update({
-    id: post2Doc.id,
-    collection: 'posts',
-    data: {
-      relatedPosts: [post1Doc.id, post3Doc.id],
-    },
-  })
-  await payload.update({
-    id: post3Doc.id,
-    collection: 'posts',
-    data: {
-      relatedPosts: [post1Doc.id, post2Doc.id],
-    },
-  })
+  // posts are no longer seeded by default
 
   payload.logger.info(`— Seeding contact form...`)
 
@@ -260,17 +203,10 @@ export const seed = async ({
   payload.logger.info(`— Seeding globals...`)
 
   await Promise.all([
-    payload.updateGlobal({
+      payload.updateGlobal({
       slug: 'header',
       data: {
         navItems: [
-          {
-            link: {
-              type: 'custom',
-              label: 'Posts',
-              url: '/posts',
-            },
-          },
           {
             link: {
               type: 'reference',
