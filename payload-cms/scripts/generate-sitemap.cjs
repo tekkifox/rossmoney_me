@@ -12,7 +12,9 @@ function getSiteUrl() {
 }
 
 function findSlugs() {
-  const files = fs.readdirSync(seedDir).filter((f) => f.endsWith('.ts') || f.endsWith('.js'))
+  const files = fs
+    .readdirSync(seedDir)
+    .filter((f) => (f.endsWith('.ts') || f.endsWith('.js')) && !f.startsWith('post-'))
   const slugs = new Set()
   for (const file of files) {
     const text = fs.readFileSync(path.join(seedDir, file), 'utf8')
