@@ -14,6 +14,25 @@ const NEXT_PUBLIC_SERVER_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
 const nextConfig: NextConfig = {
   // Temporarily required on Windows until Next.js fixes Turbopack Sass resolution.
   // See: https://github.com/vercel/next.js/issues/86431
+    async headers() {
+    return [
+      {
+        // Apply these headers to all routes in your application
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY', // Use 'SAMEORIGIN' if you need your own iframes
+          },
+          {
+            key: 'Content-Security-Policy',
+            // frame-ancestors 'none' blocks all framing (modern standard)
+            value: "frame-ancestors 'none';", 
+          },
+        ],
+      },
+    ];
+  },
   sassOptions: {
     loadPaths: ['./node_modules/@payloadcms/ui/dist/scss/'],
   },
