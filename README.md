@@ -7,7 +7,7 @@ This workspace contains a static portfolio site for a developer with a DevOps fo
 - A bold single-page portfolio with hero, work, experience, and contact sections.
 - A dedicated `/travelling` page with a travel project summary and architecture snapshot.
 - A live architecture panel that fetches JSON from a host-provided Go service.
-- A Decap CMS admin at `/admin/` backed by MongoDB for editable page content.
+- A Payload CMS admin at `/admin/` backed by MongoDB for editable page content.
 - A fallback rendering path so the page still shows useful state when the feed is unavailable.
 
 ## Architecture feed
@@ -113,6 +113,16 @@ The CMS (Payload Next app) now serves the frontend and pages directly. The telem
 Robots are generated during the site build by next-sitemap (see `payload-cms/next-sitemap.config.cjs`). By default the generator blocks admin and API endpoints and allows public media. If you prefer a static file, copy `payload-cms/public/robots-template.txt` to `payload-cms/public/robots.txt` and update the Sitemap line with your production domain.
 
 During builds the sitemap and robots.txt are produced automatically when `next-sitemap` runs as part of `pnpm build`.
+
+If you want to generate a static sitemap and robots.txt locally (useful for testing static deployments), run the helper script included in the project. From the repo root:
+
+```bash
+cd payload-cms
+pnpm install
+pnpm generate:sitemap
+```
+
+This writes `payload-cms/public/sitemap.xml` and `payload-cms/public/robots.txt` based on the seeded pages in `payload-cms/src/endpoints/seed`. These files are ignored by git by default (environment-specific), so copy or publish them as needed for your deployment.
 
 ## CV Viewer
 
