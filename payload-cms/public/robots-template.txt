@@ -1,0 +1,13 @@
+# robots-template.txt
+# Copy this file to payload-cms/public/robots.txt for a static robots file, or rely on next-sitemap
+# which generates robots.txt automatically during the build using next-sitemap.config.cjs.
+
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /payload/
+Allow: /media/
+
+# Sitemap: replace with your canonical site URL when deploying
+# Example: Sitemap: https://rossmoney.me/sitemap.xml
+Sitemap: https://<your-site-domain>/sitemap.xml
