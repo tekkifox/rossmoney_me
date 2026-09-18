@@ -10,4 +10,4 @@ Allow: /media/
 
 # Sitemap: replace with your canonical site URL when deploying
 # Example: Sitemap: https://rossmoney.me/sitemap.xml
-Sitemap: https://<your-site-domain>/sitemap.xml
+Sitemap: https://www.rossmoney.me/sitemap.xml

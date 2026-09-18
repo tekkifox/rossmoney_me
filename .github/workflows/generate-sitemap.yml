@@ -2,7 +2,11 @@ name: Generate sitemap
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main
+    paths:
+      - 'payload-cms/**'
+      - '.github/workflows/generate-sitemap.yml'
   pull_request:
     branches: [ main ]
 

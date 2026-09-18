@@ -7,7 +7,7 @@ const publicDir = path.join(__dirname, '..', 'public')
 
 function getSiteUrl() {
   return (
-    process.env.NEXT_PUBLIC_SERVER_URL || process.env.SERVER_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || 'https://example.com'
+    process.env.NEXT_PUBLIC_SERVER_URL || process.env.SERVER_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || 'https://www.rossmoney.me'
   ).replace(/\/$/, '')
 }
 
