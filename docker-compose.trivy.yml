@@ -103,13 +103,20 @@ services:
       DOCKER_HOST_SOCK: unix:///var/run/docker.sock
       SEVERITY: ${TRIVY_SCAN_SEVERITY:-HIGH,CRITICAL}
       IGNORE_UNFIXED: ${TRIVY_SCAN_IGNORE_UNFIXED:-true}
-      # Space-separated host paths to skip during the OS scan, e.g. large media mounts.
-      SKIP_DIRS: ${TRIVY_SKIP_DIRS:-}
+      # Space-separated host paths to skip during the OS scan, e.g. large media
+      # mounts. Defaults skip the Docker root (overlayfs snapshots are unreadable
+      # from a bind mount), pseudo-filesystems and other non-scannable trees.
+      SKIP_DIRS: ${TRIVY_SKIP_DIRS:-/host/var/lib/docker /host/proc /host/sys /host/dev /host/run /host/mnt/media /host/mnt/hbrr/media}
       # Optional extra images for per-image HTML reports, on top of whatever the
       # daemon already reports.
       IMAGES: ${TRIVY_SCAN_IMAGES:-}
+      # Also emit CycloneDX and SPDX SBOMs alongside the vulnerability reports.
+      SBOM: ${TRIVY_SCAN_SBOM:-true}
     volumes:
-      - ./trivy-db:/root/.cache/trivy
+      # Separate cache from the trivy server: Trivy takes an exclusive lock on
+      # its cache dir, so a scan job sharing ./trivy-db with a running server
+      # fails with "Failed to acquire cache or database lock".
+      - ./trivy-db-scan:/root/.cache/trivy
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/host:ro
       - ./trivy-reports:/reports
@@ -134,10 +141,15 @@ services:
         echo "IGNORE_UNFIXED=$$IGNORE_UNFIXED"
         echo "SKIP_DIRS=$$SKIP_DIRS"
         echo "IMAGES=$$IMAGES"
+        echo "SBOM=$$SBOM"
 
         mkdir -p "$$REPORT_DIR" || echo "FATAL: cannot create $$REPORT_DIR"
         echo "Report dir contents before scan:"
         ls -la "$$REPORT_DIR" || true
+
+        # The trivy image ships without curl, and busybox wget cannot speak the
+        # unix socket, so install curl to enumerate images via the Engine API.
+        command -v curl >/dev/null 2>&1 || apk add --no-cache curl >/dev/null 2>&1 || true
 
         if [ "$$IGNORE_UNFIXED" = "true" ]; then
           flags="--ignore-unfixed"
@@ -163,6 +175,22 @@ services:
           --scanners vuln,secret \
           --format json \
           --output "$$REPORT_DIR/os-report.json" /host || echo "WARN: os json scan failed"
+
+        if [ "$$SBOM" = "true" ]; then
+          set -x
+          trivy rootfs $$skips \
+            --scanners "" \
+            --list-all-pkgs \
+            --format cyclonedx \
+            --output "$$REPORT_DIR/sbom-os.cdx.json" /host \
+            || echo "WARN: os sbom failed"
+          trivy rootfs $$skips \
+            --scanners "" \
+            --format spdx-json \
+            --output "$$REPORT_DIR/sbom-os.spdx.json" /host \
+            || echo "WARN: os spdx sbom failed"
+          set +x
+        fi
         set +x
 
         # 2. Image list straight from the Docker Engine API over the socket, so
@@ -176,7 +204,8 @@ services:
             | tr -d '"' | tr ',' '\n' \
             | grep -v '^<none>' | grep -v '^$$' | sort -u || true)"
         else
-          echo "WARN: curl not present; scanning only the IMAGES list"
+          echo "ERROR: curl is still unavailable after apk add; set TRIVY_SCAN_IMAGES"
+          echo "ERROR: to scan specific images manually."
           images=""
         fi
         echo "Images discovered:"
@@ -184,7 +213,7 @@ services:
 
         count=0
         for image in $$images $$IMAGES; do
-          slug="$$(printf '%s' "$image" | tr '/:' '__')"
+          slug="$$(printf '%s' "$$image" | tr '/:' '__')"
           echo "==> scanning $$image"
           set -x
           trivy image $$flags \
@@ -193,6 +222,23 @@ services:
             --format template --template '@/contrib/html.tpl' \
             --output "$$REPORT_DIR/image-$$slug.html" "$$image" || echo "WARN: failed $$image"
           set +x
+
+          if [ "$$SBOM" = "true" ]; then
+            set -x
+            trivy image \
+              --scanners "" \
+              --list-all-pkgs \
+              --format cyclonedx \
+              --output "$$REPORT_DIR/sbom-image-$$slug.cdx.json" "$$image" \
+              || echo "WARN: sbom failed $$image"
+            trivy image \
+              --scanners "" \
+              --format spdx-json \
+              --output "$$REPORT_DIR/sbom-image-$$slug.spdx.json" "$$image" \
+              || echo "WARN: spdx sbom failed $$image"
+            set +x
+          fi
+
           count=$$((count + 1))
         done
         echo "Scanned $$count image(s)"
