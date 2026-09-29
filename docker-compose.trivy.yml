@@ -1,0 +1,221 @@
+version: "3.8"
+
+# Standalone Trivy scanning stack. Not part of the site stack.
+#
+#   docker compose -f docker-compose.trivy.yml up -d
+#
+# No host ports are published. The dashboard joins the external `proxy` network so
+# the reverse proxy can reach it by service name; Trivy stays on the internal
+# `trivy` network only:
+#   dashboard  http://dashboard:8083   (autoindex of ./trivy-reports)
+#   trivy API  http://trivy:8080 (internal)
+#   reports    ./trivy-reports on the host
+#
+# One-shot full sweep (host OS + every image on the daemon). This is a job, not
+# a service: it runs to completion and exits, so it has no profiles and no ports.
+#   docker compose -f docker-compose.trivy.yml run --rm scan
+#
+# On-demand scans:
+#   docker compose -f docker-compose.trivy.yml run --rm trivy image ghcr.io/tekkifox/rossmoney_me-cms:latest
+#   docker compose -f docker-compose.trivy.yml run --rm trivy rootfs /host
+#
+# The Trivy API can enumerate and scan local images exposed through
+# /var/run/docker.sock, e.g. POST /scan {"target":"ghcr.io/tekkifox/archview:latest"}.
+
+services:
+  # No separate DB sidecar: aquasec/trivy-db is scratch-based and has no /bin/sh,
+  # so it cannot run an entrypoint script. The Trivy server and the scan job share
+  # one bind-mounted cache and download/update trivy-db themselves.
+  #
+  # Server/client split: the server holds the warm cache, so on-demand API scans
+  # reuse downloaded vulnerability data instead of re-fetching it.
+  trivy:
+    image: aquasec/trivy:latest
+    command:
+      - server
+      - --listen=0.0.0.0:8080
+      - --cache-dir=/root/.cache/trivy
+      # Note: `trivy server` has no --scanners flag; scanners are chosen by the
+      # client. --no-progress/--quiet keep the container log clean.
+      - --no-progress
+      - --quiet
+    environment:
+      TRIVY_CACHE_DIR: /root/.cache/trivy
+    volumes:
+      - ./trivy-db:/root/.cache/trivy
+      # Lets Trivy (and the report dashboard) enumerate and scan local images
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host filesystem, used for OS package and secret scanning
+      - /:/host:ro
+      - ./trivy-reports:/reports
+    expose:
+      - "8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "trivy", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - trivy
+
+  # Report dashboard. Upstream aquasecurity/trivy-dashboard is unpublished, and the
+  # community alternatives only read Kubernetes Trivy Operator CRDs, so this serves
+  # the HTML reports written by the `scan` service instead.
+  dashboard:
+    image: nginx:1.27-alpine
+    volumes:
+      # No config bind mount: the server config is inlined via `configs` below so
+      # this stack has no host-path prerequisites beyond ./trivy-reports.
+      - ./trivy-reports:/usr/share/nginx/html:ro
+    configs:
+      - source: nginx_dashboard
+        target: /etc/nginx/conf.d/default.conf
+    expose:
+      - "8083"
+    networks:
+      trivy:
+      proxy:
+        ipv4_address: 172.18.0.22
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8083/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Full sweep: host OS packages, secrets on disk, and every image the Docker
+  # daemon reports. One-shot job, not a long-running service:
+  #   docker compose -f docker-compose.trivy.yml run --rm scan
+  scan:
+    image: aquasec/trivy:latest
+    environment:
+      TRIVY_CACHE_DIR: /root/.cache/trivy
+      REPORT_DIR: /reports
+      DOCKER_HOST_SOCK: unix:///var/run/docker.sock
+      SEVERITY: ${TRIVY_SCAN_SEVERITY:-HIGH,CRITICAL}
+      IGNORE_UNFIXED: ${TRIVY_SCAN_IGNORE_UNFIXED:-true}
+      # Optional extra images for per-image HTML reports, on top of whatever the
+      # daemon already reports.
+      IMAGES: ${TRIVY_SCAN_IMAGES:-}
+    volumes:
+      - ./trivy-db:/root/.cache/trivy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/host:ro
+      - ./trivy-reports:/reports
+    networks:
+      - trivy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        # NOTE: every shell variable below is written $$var so Compose does not
+        # interpolate it away at parse time.
+        mkdir -p "$$REPORT_DIR"
+
+        if [ "$$IGNORE_UNFIXED" = "true" ]; then
+          flags="--ignore-unfixed"
+        else
+          flags=""
+        fi
+
+        # Large media trees are mounted under /host; skip them so the OS scan
+        # does not walk terabytes of media files.
+        skips="--skip-dirs /host/mnt/media --skip-dirs /host/mnt/hbrr/media"
+
+        # 1. Host OS packages (deb/rpm/apk) + secrets across the host filesystem.
+        trivy rootfs $$flags $$skips \
+          --scanners vuln,secret \
+          --format template --template '@/contrib/html.tpl' \
+          --output "$$REPORT_DIR/os-report.html" /host || echo "WARN: os html scan failed"
+        trivy rootfs $$flags $$skips \
+          --scanners vuln,secret \
+          --format json \
+          --output "$$REPORT_DIR/os-report.json" /host || echo "WARN: os json scan failed"
+
+        # 2. Image list straight from the Docker Engine API over the socket, so
+        #    newly pulled images need no config change.
+        if command -v curl >/dev/null 2>&1; then
+          images="$$(curl -s --unix-socket /var/run/docker.sock \
+            -H "Accept: application/json" \
+            "http://localhost/v1.44/images/json" \
+            | tr ',' '\n' \
+            | sed -n 's/.*"RepoTags":\[\(.*\)\]/\1/p' \
+            | tr -d '"' | tr ',' '\n' \
+            | grep -v '^<none>' | grep -v '^$$' | sort -u || true)"
+        else
+          echo "WARN: curl not present; scanning only the IMAGES list"
+          images=""
+        fi
+
+        count=0
+        for image in $$images $$IMAGES; do
+          slug="$$(printf '%s' "$$image" | tr '/:' '__')"
+          echo "==> scanning $$image"
+          trivy image $$flags \
+            --scanners vuln,secret \
+            --docker-host "$$DOCKER_HOST_SOCK" \
+            --format template --template '@/contrib/html.tpl' \
+            --output "$$REPORT_DIR/image-$$slug.html" "$$image" || echo "WARN: failed $$image"
+          count=$$((count + 1))
+        done
+        echo "Scanned $$count image(s)"
+
+        # 3. Console summary of HIGH/CRITICAL across the host OS
+        trivy rootfs $$flags $$skips --scanners vuln --severity "$$SEVERITY" /host || true
+
+        echo "Reports written to $$REPORT_DIR:"
+        ls -1 "$$REPORT_DIR"
+
+configs:
+  nginx_dashboard:
+    content: |
+      server {
+          listen 8083;
+          server_name _;
+
+          root /usr/share/nginx/html;
+
+          # The reverse proxy reaches this container on 172.18.0.22:8083 but the
+          # browser must stay on the public host. Without these, nginx rewrites its
+          # directory redirects (autoindex links, missing trailing slash) to an
+          # absolute URL carrying its own :8083 and the browser is bounced out to
+          # the unexposed container port.
+          absolute_redirect off;
+          port_in_redirect off;
+          server_tokens off;
+
+          charset utf-8;
+          autoindex on;
+          autoindex_exact_size off;
+          autoindex_localtime on;
+
+          # Reports are regenerated on every sweep; never let them cache.
+          add_header Cache-Control "no-store, must-revalidate" always;
+          add_header X-Content-Type-Options "nosniff" always;
+          add_header X-Frame-Options "DENY" always;
+
+          # Static file serving only. `try_files $uri $uri/` is deliberately NOT
+          # used: for `GET /` it resolves to `//`, which nginx normalises with a
+          # 301 back to an absolute URL carrying its own :8083. Plain root +
+          # autoindex serves files and lists directories with no redirect at all.
+          location / {
+              autoindex on;
+          }
+
+          location = /healthz {
+              access_log off;
+              default_type text/plain;
+              return 200 "ok\n";
+          }
+      }
+
+networks:
+  # External network created by the reverse proxy stack. The subnet is defined
+  # there, so a static address can be assigned here.
+  proxy:
+    external: true
+    name: proxy
+  trivy:
+    driver: bridge

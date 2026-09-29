@@ -1,3 +1,5 @@
 .env
 stack.env
 node_modules
+trivy-reports
+trivy-db
