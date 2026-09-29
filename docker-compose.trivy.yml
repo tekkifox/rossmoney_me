@@ -50,6 +50,13 @@ services:
       - ./trivy-reports:/reports
     expose:
       - "8080"
+    # Hard cap; honoured by Compose v2 without swarm. Keeps an on-demand API
+    # scan from saturating the host.
+    deploy:
+      resources:
+        limits:
+          cpus: "${TRIVY_CPUS:-2.0}"
+          memory: ${TRIVY_MEMORY:-2G}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "trivy", "--version"]
@@ -96,6 +103,8 @@ services:
       DOCKER_HOST_SOCK: unix:///var/run/docker.sock
       SEVERITY: ${TRIVY_SCAN_SEVERITY:-HIGH,CRITICAL}
       IGNORE_UNFIXED: ${TRIVY_SCAN_IGNORE_UNFIXED:-true}
+      # Space-separated host paths to skip during the OS scan, e.g. large media mounts.
+      SKIP_DIRS: ${TRIVY_SKIP_DIRS:-}
       # Optional extra images for per-image HTML reports, on top of whatever the
       # daemon already reports.
       IMAGES: ${TRIVY_SCAN_IMAGES:-}
@@ -106,13 +115,29 @@ services:
       - ./trivy-reports:/reports
     networks:
       - trivy
+    # The full sweep is the heaviest step, so it gets its own cap. Scans are
+    # largely I/O bound on the DB, so this slows wall time rather than results.
+    deploy:
+      resources:
+        limits:
+          cpus: "${TRIVY_SCAN_CPUS:-2.0}"
+          memory: ${TRIVY_SCAN_MEMORY:-2G}
     entrypoint:
       - /bin/sh
       - -c
       - |
         # NOTE: every shell variable below is written $$var so Compose does not
         # interpolate it away at parse time.
-        mkdir -p "$$REPORT_DIR"
+        echo "REPORT_DIR=$$REPORT_DIR"
+        echo "DOCKER_HOST_SOCK=$$DOCKER_HOST_SOCK"
+        echo "SEVERITY=$$SEVERITY"
+        echo "IGNORE_UNFIXED=$$IGNORE_UNFIXED"
+        echo "SKIP_DIRS=$$SKIP_DIRS"
+        echo "IMAGES=$$IMAGES"
+
+        mkdir -p "$$REPORT_DIR" || echo "FATAL: cannot create $$REPORT_DIR"
+        echo "Report dir contents before scan:"
+        ls -la "$$REPORT_DIR" || true
 
         if [ "$$IGNORE_UNFIXED" = "true" ]; then
           flags="--ignore-unfixed"
@@ -121,10 +146,15 @@ services:
         fi
 
         # Large media trees are mounted under /host; skip them so the OS scan
-        # does not walk terabytes of media files.
-        skips="--skip-dirs /host/mnt/media --skip-dirs /host/mnt/hbrr/media"
+        # does not walk terabytes of media files. Paths are as seen inside this
+        # container, i.e. under /host.
+        skips=""
+        for dir in $$SKIP_DIRS; do
+          skips="$$skips --skip-dirs $$dir"
+        done
 
         # 1. Host OS packages (deb/rpm/apk) + secrets across the host filesystem.
+        set -x
         trivy rootfs $$flags $$skips \
           --scanners vuln,secret \
           --format template --template '@/contrib/html.tpl' \
@@ -133,6 +163,7 @@ services:
           --scanners vuln,secret \
           --format json \
           --output "$$REPORT_DIR/os-report.json" /host || echo "WARN: os json scan failed"
+        set +x
 
         # 2. Image list straight from the Docker Engine API over the socket, so
         #    newly pulled images need no config change.
@@ -148,25 +179,31 @@ services:
           echo "WARN: curl not present; scanning only the IMAGES list"
           images=""
         fi
+        echo "Images discovered:"
+        echo "$$images"
 
         count=0
         for image in $$images $$IMAGES; do
-          slug="$$(printf '%s' "$$image" | tr '/:' '__')"
+          slug="$$(printf '%s' "$image" | tr '/:' '__')"
           echo "==> scanning $$image"
+          set -x
           trivy image $$flags \
             --scanners vuln,secret \
             --docker-host "$$DOCKER_HOST_SOCK" \
             --format template --template '@/contrib/html.tpl' \
             --output "$$REPORT_DIR/image-$$slug.html" "$$image" || echo "WARN: failed $$image"
+          set +x
           count=$$((count + 1))
         done
         echo "Scanned $$count image(s)"
 
         # 3. Console summary of HIGH/CRITICAL across the host OS
+        set -x
         trivy rootfs $$flags $$skips --scanners vuln --severity "$$SEVERITY" /host || true
+        set +x
 
         echo "Reports written to $$REPORT_DIR:"
-        ls -1 "$$REPORT_DIR"
+        ls -la "$$REPORT_DIR"
 
 configs:
   nginx_dashboard:
