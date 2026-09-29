@@ -3,3 +3,4 @@ stack.env
 node_modules
 trivy-reports
 trivy-db
+trivy-db-scan

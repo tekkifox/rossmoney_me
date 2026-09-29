@@ -113,7 +113,10 @@ services:
       # Also emit CycloneDX and SPDX SBOMs alongside the vulnerability reports.
       SBOM: ${TRIVY_SCAN_SBOM:-true}
     volumes:
-      - ./trivy-db:/root/.cache/trivy
+      # Separate cache from the trivy server: Trivy takes an exclusive lock on
+      # its cache dir, so a scan job sharing ./trivy-db with a running server
+      # fails with "Failed to acquire cache or database lock".
+      - ./trivy-db-scan:/root/.cache/trivy
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/host:ro
       - ./trivy-reports:/reports
@@ -210,7 +213,7 @@ services:
 
         count=0
         for image in $$images $$IMAGES; do
-          slug="$$(printf '%s' "$image" | tr '/:' '__')"
+          slug="$$(printf '%s' "$$image" | tr '/:' '__')"
           echo "==> scanning $$image"
           set -x
           trivy image $$flags \
