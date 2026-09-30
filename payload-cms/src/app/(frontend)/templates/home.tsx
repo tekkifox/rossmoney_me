@@ -49,7 +49,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
       homepageCommitsText = ['$ git log --oneline -n 5', ...commits.map((c: any) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
     }
   } catch (err) {
-    // ignore
+    console.warn('Failed to load GitHub commits for rossmoney_me', err)
   }
 
   return (
