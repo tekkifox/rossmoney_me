@@ -1,11 +1,19 @@
-# Host Lynis audit -> rossmoney_monitoring-reports volume, readable by nginx workers.
+# Host Lynis audit -> rossmoney_monitoring-reports volume, plus HTML conversion.
 # Install with: sudo crontab lynis/lynis.cron
 #
 # The volume's host mountpoint is resolved at run time because Docker assigns it.
 # Reports land in the volume that docker-compose.monitoring.yml serves, so no bind
 # mount is needed. All paths are absolute: cron has a minimal PATH.
 #
-# The umask is set explicitly and the files are chmod'ed afterwards, because nginx
-# workers run as uid 101 and root crontabs often default to a 077 umask, leaving
-# reports mode 600 and unservable.
-30 4 * * * /bin/sh -c 'umask 022; set -e; R=$(/usr/bin/docker volume inspect --format "{{ .Mountpoint }}" rossmoney_monitoring-reports); /usr/sbin/lynis audit system --quick --no-colors --report-file "$R/lynis-report.json" --log-file "$R/lynis.log"; /usr/local/bin/lynis-html "$R/lynis.log" "$R/lynis-report.html" "Lynis audit $(/bin/hostname)"; chmod 644 "$R"/lynis-report.json "$R"/lynis-report.html "$R"/lynis.log' >> /var/log/lynis-scan.log 2>&1
+# The umask is set explicitly and the files are chmod'ed afterwards, because
+# nginx workers run as uid 101 and root crontabs often default to a 077 umask,
+# leaving reports mode 600 and unservable.
+#
+# lynis-report.dat is Lynis' key/value report, which lynis-report-converter turns
+# into lynis-report.html. The .dat extension is significant: the converter parses
+# key=value lines, not JSON.
+#
+# The converter runs in a container (the monitoring stack) because it needs Perl
+# and the upstream dependency chain. `up --no-deps` keeps it from starting the
+# dashboard, nginx or the other report jobs a second time.
+30 4 * * * /bin/sh -c 'umask 022; set -e; R=$(/usr/bin/docker volume inspect --format "{{ .Mountpoint }}" rossmoney_monitoring-reports); /usr/sbin/lynis audit system --quick --no-colors --report-file "$R/lynis-report.dat" --log-file "$R/lynis.log"; chmod 644 "$R"/lynis-report.dat "$R"/lynis.log; /usr/bin/docker compose -f /home/ross/stacks/monitoring/compose.yaml up --no-deps --build --force-recreate --exit-code-from lynis-converter lynis-converter' >> /var/log/lynis-scan.log 2>&1
