@@ -19,8 +19,8 @@ version: "3.8"
 #   docker compose -f docker-compose.trivy.yml run --rm trivy image ghcr.io/tekkifox/rossmoney_me-cms:latest
 #   docker compose -f docker-compose.trivy.yml run --rm trivy rootfs /host
 #
-# The Trivy API can enumerate and scan local images exposed through
-# /var/run/docker.sock, e.g. POST /scan {"target":"ghcr.io/tekkifox/archview:latest"}.
+# The Trivy API can enumerate and scan local images exposed through the
+# read-only socket proxy, e.g. POST /scan {"target":"ghcr.io/tekkifox/archview:latest"}.
 
 services:
   # No separate DB sidecar: aquasec/trivy-db is scratch-based and has no /bin/sh,
@@ -29,6 +29,50 @@ services:
   #
   # Server/client split: the server holds the warm cache, so on-demand API scans
   # reuse downloaded vulnerability data instead of re-fetching it.
+  # Read-only TCP proxy in front of the Docker socket. The scanner talks to this
+  # over the internal network instead of mounting docker.sock, which would be
+  # root-equivalent on the host. CONTAINERS restricts the API to read-only calls
+  # that image listing and inspection need; post/delete and exec are refused.
+  docker-api:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: trivy-docker-api
+    environment:
+      # No CONTAINERS=1 restriction: the scanner must see every image on the host.
+      # PING=1 is used for the healthcheck below.
+      PING: "1"
+      VERSION: "1"
+      INFO: "1"
+      IMAGES: "1"
+      CONTAINERS: "1"
+      POST: "0"
+      NETWORKS: "1"
+      VOLUMES: "0"
+      SERVICES: "0"
+      TASKS: "0"
+      SECRETS: "0"
+      CONFIGS: "0"
+      NODES: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      EXEC: "0"
+      PLUGINS: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    networks:
+      - trivy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2375/_ping | grep -q OK"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
   trivy:
     build:
       context: ./trivy
@@ -49,8 +93,6 @@ services:
       TRIVY_CACHE_DIR: /var/cache/trivy
     volumes:
       - trivy-db:/var/cache/trivy
-      # Lets Trivy (and the report dashboard) enumerate and scan local images
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       # Host filesystem, used for OS package and secret scanning
       - /:/host:ro
       - monitoring-reports:/reports
@@ -70,6 +112,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+    depends_on:
+      docker-api:
+        condition: service_healthy
     networks:
       - trivy
 
@@ -86,7 +131,9 @@ services:
       HOME: /tmp
       TRIVY_CACHE_DIR: /var/cache/trivy
       REPORT_DIR: /reports
-      DOCKER_HOST_SOCK: unix:///var/run/docker.sock
+      # Read-only Docker API via the socket proxy, not the raw socket. The proxy
+      # denies POST/EXEC, so a compromised scanner cannot mutate the host.
+      DOCKER_API: http://docker-api:2375
       SEVERITY: ${TRIVY_SCAN_SEVERITY:-HIGH,CRITICAL}
       IGNORE_UNFIXED: ${TRIVY_SCAN_IGNORE_UNFIXED:-true}
       # Space-separated host paths to skip during the OS scan, e.g. large media
@@ -103,9 +150,11 @@ services:
       # its cache dir, so a scan job sharing the server's volume fails with
       # "Failed to acquire cache or database lock".
       - trivy-db-scan:/var/cache/trivy
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/host:ro
       - monitoring-reports:/reports
+    depends_on:
+      docker-api:
+        condition: service_healthy
     networks:
       - trivy
     # The full sweep is the heaviest step, so it gets its own cap. Scans are
@@ -122,7 +171,7 @@ services:
         # NOTE: every shell variable below is written $$var so Compose does not
         # interpolate it away at parse time.
         echo "REPORT_DIR=$$REPORT_DIR"
-        echo "DOCKER_HOST_SOCK=$$DOCKER_HOST_SOCK"
+        echo "DOCKER_API=$$DOCKER_API"
         echo "SEVERITY=$$SEVERITY"
         echo "IGNORE_UNFIXED=$$IGNORE_UNFIXED"
         echo "SKIP_DIRS=$$SKIP_DIRS"
@@ -158,7 +207,54 @@ services:
         # backslash silently breaks the continuation.
         warn() { echo "WARN: $$1"; }
 
-        # 1. Host OS packages (deb/rpm/apk) + secrets across the host filesystem.
+        # 1. Enumerate images up front, before the long OS scan, so the list is
+        #    visible in the first second and an API problem surfaces immediately
+        #    rather than after several minutes of rootfs scanning.
+        #
+        #    Parse the array before splitting on commas. Splitting first breaks any
+        #    image with more than one tag, because the later tags no longer sit on
+        #    a line containing "RepoTags":[ and the per-line match silently misses
+        #    them.
+        if command -v curl >/dev/null 2>&1; then
+          # -f and -S so an HTTP error is not parsed as an empty list. Every
+          # failure mode below otherwise looks like an empty daemon and silently
+          # produces zero image reports.
+          if ! raw="$$(curl -fsS --connect-timeout 10 \
+            -H "Accept: application/json" \
+            "$$DOCKER_API/v1.44/images/json")"; then
+            echo "ERROR: cannot list images via $$DOCKER_API"
+            echo "ERROR: check the proxy is up and reachable:"
+            echo "ERROR:   docker compose -f docker-compose.trivy.yml ps docker-api"
+            echo "ERROR:   docker compose -f docker-compose.trivy.yml logs docker-api"
+            echo "ERROR: and that the scan service shares its network:"
+            echo "ERROR:   docker compose -f docker-compose.trivy.yml run --rm scan"
+            echo "ERROR: A 403 here means the proxy denied IMAGES/CONTAINERS."
+            raw=""
+          fi
+          images="$$(printf '%s' "$$raw" \
+            | grep -o '"RepoTags":\[[^]]*\]' \
+            | sed 's/^"RepoTags":\[//; s/\]$//' \
+            | tr ',' '\n' \
+            | tr -d '"' \
+            | grep -v '^<none>' \
+            | grep -v '^$$' \
+            | sort -u)"
+        else
+          echo "ERROR: curl unavailable; set TRIVY_SCAN_IMAGES to scan specific"
+          echo "ERROR: images manually."
+          images=""
+        fi
+
+        # Deduplicate: an image passed via TRIVY_SCAN_IMAGES is often already in the
+        # daemon list, and scanning it twice writes the same report twice.
+        targets="$$(printf '%s\n' $$images $$IMAGES | grep -v '^$$' | sort -u)"
+
+        echo
+        echo "=== Images to scan: $$(printf '%s\n' "$$targets" | grep -c .) ==="
+        printf '%s\n' "$$targets" | grep -v '^$$' | nl -w4 -s'. ' || true
+        echo
+
+        # 2. Host OS packages (deb/rpm/apk) + secrets across the host filesystem.
         set -x
         if ! trivy rootfs $$flags $$skips --scanners vuln,secret \
              --format template --template '@/contrib/html.tpl' \
@@ -184,39 +280,14 @@ services:
         fi
         set +x
 
-        # 2. Image list straight from the Docker Engine API over the socket, so
-        #    newly pulled images need no config change.
-        #
-        # Parse the array before splitting on commas. Splitting first breaks any
-        # image with more than one tag, because the later tags no longer sit on a
-        # line containing "RepoTags":[ and the per-line match silently misses them.
-        if command -v curl >/dev/null 2>&1; then
-          raw="$$(curl -s --unix-socket /var/run/docker.sock \
-            -H "Accept: application/json" \
-            "http://localhost/v1.44/images/json" || true)"
-          images="$$(printf '%s' "$$raw" \
-            | grep -o '"RepoTags":\[[^]]*\]' \
-            | sed 's/^"RepoTags":\[//; s/\]$//' \
-            | tr ',' '\n' \
-            | tr -d '"' \
-            | grep -v '^<none>' \
-            | grep -v '^$$' \
-            | sort -u)"
-        else
-          echo "ERROR: curl unavailable; set TRIVY_SCAN_IMAGES to scan specific"
-          echo "ERROR: images manually."
-          images=""
-        fi
-        echo "Images discovered:"
-        echo "$$images"
-
+        # 3. Per-image reports: HTML vulnerability report plus SBOMs.
         count=0
-        for image in $$images $$IMAGES; do
+        for image in $$targets; do
           slug="$$(printf '%s' "$$image" | tr '/:' '__')"
           echo "==> scanning $$image"
           set -x
           if ! trivy image $$flags --scanners vuln,secret \
-               --docker-host "$$DOCKER_HOST_SOCK" \
+               --docker-host "$$DOCKER_API" \
                --format template --template '@/contrib/html.tpl' \
                --output "$$REPORT_DIR/image-$$slug.html" "$$image"; then
             warn "failed $$image"
@@ -224,12 +295,12 @@ services:
 
           if [ "$$SBOM" = "true" ]; then
             if ! trivy image --scanners "" --list-all-pkgs --format cyclonedx \
-                 --docker-host "$$DOCKER_HOST_SOCK" \
+                 --docker-host "$$DOCKER_API" \
                  --output "$$REPORT_DIR/sbom-image-$$slug.cdx.json" "$$image"; then
               warn "sbom failed $$image"
             fi
             if ! trivy image --scanners "" --format spdx-json \
-                 --docker-host "$$DOCKER_HOST_SOCK" \
+                 --docker-host "$$DOCKER_API" \
                  --output "$$REPORT_DIR/sbom-image-$$slug.spdx.json" "$$image"; then
               warn "spdx sbom failed $$image"
             fi
@@ -240,7 +311,7 @@ services:
         done
         echo "Scanned $$count image(s)"
 
-        # 3. Console summary of HIGH/CRITICAL across the host OS
+        # 4. Console summary of HIGH/CRITICAL across the host OS
         set -x
         trivy rootfs $$flags $$skips --scanners vuln --severity "$$SEVERITY" /host || true
         set +x
