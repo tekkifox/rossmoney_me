@@ -186,15 +186,19 @@ services:
 
         # 2. Image list straight from the Docker Engine API over the socket, so
         #    newly pulled images need no config change.
+        #
+        # Parse the array before splitting on commas. Splitting first breaks any
+        # image with more than one tag, because the later tags no longer sit on a
+        # line containing "RepoTags":[ and the per-line match silently misses them.
         if command -v curl >/dev/null 2>&1; then
           raw="$$(curl -s --unix-socket /var/run/docker.sock \
             -H "Accept: application/json" \
             "http://localhost/v1.44/images/json" || true)"
           images="$$(printf '%s' "$$raw" \
+            | grep -o '"RepoTags":\[[^]]*\]' \
+            | sed 's/^"RepoTags":\[//; s/\]$//' \
             | tr ',' '\n' \
-            | sed -n 's/.*"RepoTags":\[\(.*\)\]/\1/p' \
             | tr -d '"' \
-            | tr ',' '\n' \
             | grep -v '^<none>' \
             | grep -v '^$$' \
             | sort -u)"
@@ -220,10 +224,12 @@ services:
 
           if [ "$$SBOM" = "true" ]; then
             if ! trivy image --scanners "" --list-all-pkgs --format cyclonedx \
+                 --docker-host "$$DOCKER_HOST_SOCK" \
                  --output "$$REPORT_DIR/sbom-image-$$slug.cdx.json" "$$image"; then
               warn "sbom failed $$image"
             fi
             if ! trivy image --scanners "" --format spdx-json \
+                 --docker-host "$$DOCKER_HOST_SOCK" \
                  --output "$$REPORT_DIR/sbom-image-$$slug.spdx.json" "$$image"; then
               warn "spdx sbom failed $$image"
             fi
