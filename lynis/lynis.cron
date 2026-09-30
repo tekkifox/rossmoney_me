@@ -8,4 +8,4 @@
 # The umask is set explicitly and the files are chmod'ed afterwards, because nginx
 # workers run as uid 101 and root crontabs often default to a 077 umask, leaving
 # reports mode 600 and unservable.
-30 4 * * * /bin/sh -c 'umask 022; set -e; R=$(/usr/bin/docker volume inspect --format "{{ .Mountpoint }}" rossmoney_monitoring-reports); /usr/bin/lynis audit system --quick --no-colors --report-file "$R/lynis-report.json" --log-file "$R/lynis.log"; /usr/local/bin/lynis-html "$R/lynis.log" "$R/lynis-report.html" "Lynis audit $(/bin/hostname)"; chmod 644 "$R"/lynis-report.json "$R"/lynis-report.html "$R"/lynis.log' >> /var/log/lynis-scan.log 2>&1
+30 4 * * * /bin/sh -c 'umask 022; set -e; R=$(/usr/bin/docker volume inspect --format "{{ .Mountpoint }}" rossmoney_monitoring-reports); /usr/sbin/lynis audit system --quick --no-colors --report-file "$R/lynis-report.json" --log-file "$R/lynis.log"; /usr/local/bin/lynis-html "$R/lynis.log" "$R/lynis-report.html" "Lynis audit $(/bin/hostname)"; chmod 644 "$R"/lynis-report.json "$R"/lynis-report.html "$R"/lynis.log' >> /var/log/lynis-scan.log 2>&1
