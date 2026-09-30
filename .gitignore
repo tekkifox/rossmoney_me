@@ -1,6 +1,7 @@
 .env
 stack.env
 node_modules
-trivy-reports
-trivy-db
-trivy-db-scan
+# Report and cache trees are Docker named volumes, not host paths, so nothing
+# needs ignoring here. Kept for the bind-mount fallback described in the compose
+# files, where reports land in a directory next to them.
+monitoring-reports
