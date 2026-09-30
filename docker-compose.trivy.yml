@@ -1,44 +1,19 @@
 version: "3.8"
 
-# Standalone Trivy scanning stack. Not part of the site stack.
+# Trivy scanning stack. See trivy/README.md.
 #
 #   docker compose -f docker-compose.trivy.yml up -d
-#
-# No host ports are published. Trivy stays on the internal `trivy` network only;
-# the report dashboard lives in docker-compose.monitoring.yml and reads the same
-# shared report volume:
-#   trivy API  http://trivy:8080 (internal, this file)
-#   dashboard  http://172.18.0.22:8083 (docker-compose.monitoring.yml)
-#   reports    volume rossmoney_monitoring-reports
-#
-# One-shot full sweep (host OS + every image on the daemon). This is a job, not
-# a service: it runs to completion and exits, so it has no profiles and no ports.
 #   docker compose -f docker-compose.trivy.yml run --rm scan
 #
-# On-demand scans:
-#   docker compose -f docker-compose.trivy.yml run --rm trivy image ghcr.io/tekkifox/rossmoney_me-cms:latest
-#   docker compose -f docker-compose.trivy.yml run --rm trivy rootfs /host
-#
-# The Trivy API can enumerate and scan local images exposed through the
-# read-only socket proxy, e.g. POST /scan {"target":"ghcr.io/tekkifox/archview:latest"}.
+# No host ports are published. Reports go to the rossmoney_monitoring-reports
+# volume, served by docker-compose.monitoring.yml.
 
 services:
-  # No separate DB sidecar: aquasec/trivy-db is scratch-based and has no /bin/sh,
-  # so it cannot run an entrypoint script. The Trivy server and the scan job share
-  # one bind-mounted cache and download/update trivy-db themselves.
-  #
-  # Server/client split: the server holds the warm cache, so on-demand API scans
-  # reuse downloaded vulnerability data instead of re-fetching it.
-  # Read-only TCP proxy in front of the Docker socket. The scanner talks to this
-  # over the internal network instead of mounting docker.sock, which would be
-  # root-equivalent on the host. CONTAINERS restricts the API to read-only calls
-  # that image listing and inspection need; post/delete and exec are refused.
+  # Read-only Docker API proxy. The only service that mounts docker.sock.
   docker-api:
     image: lscr.io/linuxserver/socket-proxy:latest
     container_name: trivy-docker-api
     environment:
-      # No CONTAINERS=1 restriction: the scanner must see every image on the host.
-      # PING=1 is used for the healthcheck below.
       PING: "1"
       VERSION: "1"
       INFO: "1"
@@ -73,19 +48,18 @@ services:
       retries: 12
       start_period: 10s
 
+  # Long-running server, holds the warm vuln DB. No --scanners flag: server mode
+  # takes that from the client.
   trivy:
     build:
       context: ./trivy
       dockerfile: Dockerfile
     image: rossmoney-trivy:latest
-    # Non-root. Built into the image, since the upstream default user is root.
     user: "1001:1001"
     command:
       - server
       - --listen=0.0.0.0:8080
       - --cache-dir=/var/cache/trivy
-      # Note: `trivy server` has no --scanners flag; scanners are chosen by the
-      # client. --no-progress/--quiet keep the container log clean.
       - --no-progress
       - --quiet
     environment:
@@ -93,13 +67,10 @@ services:
       TRIVY_CACHE_DIR: /var/cache/trivy
     volumes:
       - trivy-db:/var/cache/trivy
-      # Host filesystem, used for OS package and secret scanning
       - /:/host:ro
       - monitoring-reports:/reports
     expose:
       - "8080"
-    # Hard cap; honoured by Compose v2 without swarm. Keeps an on-demand API
-    # scan from saturating the host.
     deploy:
       resources:
         limits:
@@ -118,9 +89,7 @@ services:
     networks:
       - trivy
 
-  # Full sweep: host OS packages, secrets on disk, and every image the Docker
-  # daemon reports. One-shot job, not a long-running service:
-  #   docker compose -f docker-compose.trivy.yml run --rm scan
+  # One-shot full sweep of the host OS and every local image.
   scan:
     build:
       context: ./trivy
@@ -131,24 +100,14 @@ services:
       HOME: /tmp
       TRIVY_CACHE_DIR: /var/cache/trivy
       REPORT_DIR: /reports
-      # Read-only Docker API via the socket proxy, not the raw socket. The proxy
-      # denies POST/EXEC, so a compromised scanner cannot mutate the host.
       DOCKER_API: http://docker-api:2375
       SEVERITY: ${TRIVY_SCAN_SEVERITY:-HIGH,CRITICAL}
       IGNORE_UNFIXED: ${TRIVY_SCAN_IGNORE_UNFIXED:-true}
-      # Space-separated host paths to skip during the OS scan, e.g. large media
-      # mounts. Defaults skip the Docker root (overlayfs snapshots are unreadable
-      # from a bind mount), pseudo-filesystems and other non-scannable trees.
       SKIP_DIRS: ${TRIVY_SKIP_DIRS:-/host/var/lib/docker /host/proc /host/sys /host/dev /host/run /host/mnt/media /host/mnt/hbrr/media}
-      # Optional extra images for per-image HTML reports, on top of whatever the
-      # daemon already reports.
       IMAGES: ${TRIVY_SCAN_IMAGES:-}
-      # Also emit CycloneDX and SPDX SBOMs alongside the vulnerability reports.
       SBOM: ${TRIVY_SCAN_SBOM:-true}
     volumes:
-      # Separate cache from the trivy server: Trivy takes an exclusive lock on
-      # its cache dir, so a scan job sharing the server's volume fails with
-      # "Failed to acquire cache or database lock".
+      # Separate cache from the server: Trivy locks its cache dir exclusively.
       - trivy-db-scan:/var/cache/trivy
       - /:/host:ro
       - monitoring-reports:/reports
@@ -157,8 +116,6 @@ services:
         condition: service_healthy
     networks:
       - trivy
-    # The full sweep is the heaviest step, so it gets its own cap. Scans are
-    # largely I/O bound on the DB, so this slows wall time rather than results.
     deploy:
       resources:
         limits:
@@ -169,7 +126,8 @@ services:
       - -c
       - |
         # NOTE: every shell variable below is written $$var so Compose does not
-        # interpolate it away at parse time.
+        # interpolate it away at parse time. See trivy/README.md for the shell
+        # quoting rules and the gotchas behind this script.
         echo "REPORT_DIR=$$REPORT_DIR"
         echo "DOCKER_API=$$DOCKER_API"
         echo "SEVERITY=$$SEVERITY"
@@ -182,8 +140,6 @@ services:
         echo "Report dir contents before scan:"
         ls -la "$$REPORT_DIR" || true
 
-        # curl is baked into the image; the container runs as uid 1001 so it
-        # cannot apk add at runtime.
         if ! command -v curl >/dev/null 2>&1; then
           echo "ERROR: curl missing from image; cannot enumerate images"
         fi
@@ -194,31 +150,16 @@ services:
           flags=""
         fi
 
-        # Large media trees are mounted under /host; skip them so the OS scan
-        # does not walk terabytes of media files. Paths are as seen inside this
-        # container, i.e. under /host.
         skips=""
         for dir in $$SKIP_DIRS; do
           skips="$$skips --skip-dirs $$dir"
         done
 
-        # Warns instead of failing, and avoids `cmd \` + `||` continuations, which
-        # are the fragile part of this script: any trailing whitespace after a
-        # backslash silently breaks the continuation.
         warn() { echo "WARN: $$1"; }
 
-        # 1. Enumerate images up front, before the long OS scan, so the list is
-        #    visible in the first second and an API problem surfaces immediately
-        #    rather than after several minutes of rootfs scanning.
-        #
-        #    Parse the array before splitting on commas. Splitting first breaks any
-        #    image with more than one tag, because the later tags no longer sit on
-        #    a line containing "RepoTags":[ and the per-line match silently misses
-        #    them.
+        # 1. Enumerate images up front, so the list is visible in the first second
+        #    and an API problem surfaces before the long OS scan.
         if command -v curl >/dev/null 2>&1; then
-          # -f and -S so an HTTP error is not parsed as an empty list. Every
-          # failure mode below otherwise looks like an empty daemon and silently
-          # produces zero image reports.
           if ! raw="$$(curl -fsS --connect-timeout 10 \
             -H "Accept: application/json" \
             "$$DOCKER_API/v1.44/images/json")"; then
@@ -226,8 +167,6 @@ services:
             echo "ERROR: check the proxy is up and reachable:"
             echo "ERROR:   docker compose -f docker-compose.trivy.yml ps docker-api"
             echo "ERROR:   docker compose -f docker-compose.trivy.yml logs docker-api"
-            echo "ERROR: and that the scan service shares its network:"
-            echo "ERROR:   docker compose -f docker-compose.trivy.yml run --rm scan"
             echo "ERROR: A 403 here means the proxy denied IMAGES/CONTAINERS."
             raw=""
           fi
@@ -245,8 +184,6 @@ services:
           images=""
         fi
 
-        # Deduplicate: an image passed via TRIVY_SCAN_IMAGES is often already in the
-        # daemon list, and scanning it twice writes the same report twice.
         targets="$$(printf '%s\n' $$images $$IMAGES | grep -v '^$$' | sort -u)"
 
         echo
@@ -324,18 +261,13 @@ networks:
     driver: bridge
 
 volumes:
-  # Named volumes, with explicit names so docker-compose.monitoring.yml can
-  # attach to them as external. Named volumes are chowned to the image's
-  # runtime user, so uid 1001 can write without depending on host bind-mount
-  # ownership.
-  #
-  # Trivy takes an exclusive lock on its cache dir, so the server and the scan
-  # job must not share one.
+  # Explicit names so docker-compose.monitoring.yml can attach as external.
+  # Named volumes are chowned to the image's runtime user on first mount.
   trivy-db:
     name: rossmoney_trivy-db
+  # Kept separate from trivy-db: Trivy locks its cache dir exclusively.
   trivy-db-scan:
     name: rossmoney_trivy-db-scan
-  # Report tree, served by docker-compose.monitoring.yml at /trivy/.
   monitoring-reports:
     external: true
     name: rossmoney_monitoring-reports

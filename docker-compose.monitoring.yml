@@ -1,25 +1,58 @@
 version: "3.8"
 
-# Report dashboard for the security scanning stacks. Not part of the site stack.
+# Report dashboard. See monitoring/README.md.
 #
 #   docker compose -f docker-compose.monitoring.yml up -d
 #
-# No host ports are published. The dashboard joins the external `proxy` network
-# at 172.18.0.22:8083 so the reverse proxy can reach it by IP or service name.
-#
-# This is a plain nginx serving report files. Upstream aquasecurity/trivy-dashboard
-# is unpublished, and the community alternatives only read Kubernetes Trivy
-# Operator CRDs, so there is no interactive UI here — just the HTML, JSON and
-# SBOM files written by the scanner stacks.
-#
-# Reports come from the monitoring-reports volume, which the trivy stack writes
-# to as uid 1001 and the host Lynis cron writes to as root. reports-init sets the
-# volume root to 1001:1001 so both can write and nginx workers can read.
+# No host ports are published; the dashboard is on the external `proxy` network
+# at 172.18.0.22:8083. Reports come from the rossmoney_monitoring-reports volume,
+# written by the trivy stack as uid 1001 and the host Lynis cron as root.
 
 services:
-  # One-shot volume initialiser. Docker creates a named volume root-owned, but the
-  # trivy stack writes as uid 1001, so the tree is chowned recursively before
-  # anything else starts. Runs to completion and exits; the dashboard waits on it.
+  # Renders lynis-report.dat into HTML. One-shot; the host cron re-runs it daily.
+  lynis-converter:
+    build:
+      context: ./lynis
+      dockerfile: converter.Dockerfile
+    image: rossmoney-lynis-converter:latest
+    user: "1001:1001"
+    volumes:
+      - monitoring-reports:/reports
+    depends_on:
+      reports-init:
+        condition: service_completed_successfully
+    networks:
+      - monitor
+    # Exits 0 when no report exists, so a fresh volume does not block the dashboard.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -u
+        report=/reports/lynis-report.dat
+
+        if [ ! -f "$$report" ]; then
+          echo "SKIP: $$report not present yet."
+          echo "SKIP: Generate one with the host cron, or run Lynis directly:"
+          echo "SKIP:   lynis audit system --quick --report-file $$report"
+          exit 0
+        fi
+
+        echo "Converting $$report"
+        set -x
+        if lynis-report-converter --input "$$report" \
+             --output /reports/lynis-report.html; then
+          chmod 644 /reports/lynis-report.html
+          echo "Wrote /reports/lynis-report.html"
+        else
+          echo "ERROR: conversion failed; is lynis-report.html stale?"
+          exit 1
+        fi
+        set +x
+    restart: "no"
+
+  # Chowns the report volume to 1001:1001. Docker creates named volumes
+  # root-owned, so this must run before the scanner writes or nginx reads.
   reports-init:
     image: alpine:3.22
     user: "0:0"
@@ -30,34 +63,22 @@ services:
       - -c
       - |
         set -eu
-        # Legacy cleanup: earlier versions mounted the volume at
-        # /usr/share/nginx/html, so Docker seeded it with nginx's stock
-        # index.html. That file is already gone for new volumes, since the
-        # dashboard now serves from /reports, but it persists in existing ones.
+        # rm is legacy cleanup: earlier revisions mounted the volume over
+        # /usr/share/nginx/html, which seeded it with nginx's stock index.html.
         rm -f /reports/index.html
 
-        # Recursive: the volume root plus every report already in it. Files
-        # written by the host Lynis cron are root-owned, and files from an earlier
-        # scanner run may predate a uid change, so the whole tree is normalised
-        # rather than just the mountpoint. -R on chmod covers nested subdirs too.
         chown -R ${REPORT_UID:-1001}:${REPORT_GID:-1001} /reports
         chmod -R a+rX /reports
         echo "monitoring-reports set to $(stat -c '%u:%g %a' /reports), $(find /reports -type f | wc -l) file(s)"
     restart: "no"
 
-  # nginx reads reports owned by 1001:1001 as the `nginx` user (uid 101), which is
-  # a member of group 1001 only if the image is told. Setting the container user
-  # to 1001:1001 makes master and workers match the report ownership, so group-read
-  # bits are sufficient and world-readable reports are not required.
+  # nginx runs as 1001:1001 to match the report ownership, so group-read bits
+  # suffice. Port 8083 is unprivileged; tmpfs covers the paths nginx writes to.
   dashboard:
     build:
       context: ./monitoring
       dockerfile: Dockerfile
     image: rossmoney-monitoring-dashboard:latest
-    # Port 8083 is unprivileged, so a non-root master can bind it. Nginx writes its
-    # pid, temp bodies and cache under /var/cache/nginx and /var/run, which are
-    # owned by 1001 in the image but overlaid here so restarts never inherit stale
-    # state from a previous run.
     user: "1001:1001"
     tmpfs:
       - /var/cache/nginx:uid=1001,gid=1001,mode=0700
@@ -66,10 +87,9 @@ services:
     depends_on:
       reports-init:
         condition: service_completed_successfully
+      lynis-converter:
+        condition: service_completed_successfully
     volumes:
-      # Named volume, so ownership does not depend on host bind-mount uid. Lynis
-      # is excluded: it runs on the host for a complete audit, and writes its
-      # reports straight into the volume from there.
       - monitoring-reports:/reports:ro
     expose:
       - "8083"
@@ -84,14 +104,14 @@ services:
       retries: 3
 
 networks:
-  # External network created by the reverse proxy stack. The subnet is defined
-  # there, so a static address can be assigned here.
+  monitor:
+    driver: bridge
+  # Created by the reverse proxy stack, which owns the subnet.
   proxy:
     external: true
     name: proxy
 
 volumes:
-  # Created by whichever writer runs first, then chowned to REPORT_UID by the
-  # reports-init job above. nginx only ever reads.
+  # Created by whichever writer runs first, then chowned by reports-init.
   monitoring-reports:
     name: rossmoney_monitoring-reports
