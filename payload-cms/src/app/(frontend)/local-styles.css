@@ -40,6 +40,7 @@ a:hover{color:var(--primary-hover)}
 .topnav a{padding:8px 12px;border-radius:8px;color:var(--muted);background:transparent}
 .topnav a:hover{background:var(--border);color:var(--text)}
 .topnav .cmslink{padding:8px 12px;border-radius:8px;color:var(--muted);background:transparent}
+.nav-toggle{display:none}
 
 .card, .glass-card, .feature-card, .architecture-summary, .architecture-diagram, .contact-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 6px 18px rgba(33,37,41,0.04);padding:20px}
 .card h2, .card h3, .card h4{margin:0 0 8px}
@@ -137,9 +138,12 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
   .btn{width:100%}
 
   /* Topbar and menu tweaks for small screens */
-  .topbar { padding-left: 8px; padding-right: 8px; flex-wrap:wrap; gap:8px; align-items:center }
-  .topnav { display:flex; gap:8px; flex-wrap:wrap; overflow-x:visible; justify-content:flex-end }
-  .topnav a, .topnav .cmslink { white-space:normal; display:inline-flex }
+  .topbar { padding:12px 8px; flex-wrap:wrap; gap:8px; align-items:center }
+  .topnav-wrap { display:contents }
+  .nav-toggle { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:8px; border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:1.25rem; cursor:pointer }
+  .topnav { display:none; flex-basis:100%; flex-direction:column; align-items:stretch; gap:4px }
+  .topnav[data-open="true"] { display:flex }
+  .topnav a, .topnav .cmslink { display:flex; align-items:center; justify-content:flex-start; min-height:44px; white-space:normal }
 }
 
 .text-muted{color:var(--muted)}
