@@ -74,8 +74,10 @@ const emailAdapter = smtpHost && smtpUser && smtpPass
           user: smtpUser,
         },
         host: smtpHost,
+        logger: true,
         port: smtpPort,
         secure: smtpSecure,
+        debug: true,
       },
     })
   : undefined;
