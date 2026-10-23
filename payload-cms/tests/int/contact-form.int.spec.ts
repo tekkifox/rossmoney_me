@@ -50,6 +50,15 @@ describe('Contact form', () => {
 
     expect(required).toEqual(expect.arrayContaining(['full-name', 'email', 'message']))
     expect(required).not.toContain('phone')
+
+    expect(form.emails).toEqual([
+      expect.objectContaining({
+        emailFrom: 'dev@rossmoney.me',
+        emailTo: 'dev@rossmoney.me',
+        replyTo: '{{email}}',
+        subject: 'New contact form submission from {{full-name}}',
+      }),
+    ])
   })
 
   it('accepts an unauthenticated submission with every field', async () => {
