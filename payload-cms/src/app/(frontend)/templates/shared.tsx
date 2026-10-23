@@ -34,9 +34,9 @@ export async function loadCollections() {
   }
 }
 
-export function Section({ eyebrow, title, lead, children }: { eyebrow?: string; title: string; lead?: string; children?: React.ReactNode }) {
+export function Section({ eyebrow, title, lead, children, className }: { eyebrow?: string; title: string; lead?: string; children?: React.ReactNode; className?: string }) {
   return (
-    <section className="container space-y-8 py-12 sm:py-16">
+    <section className={`container space-y-8 py-12 sm:py-16${className ? ` ${className}` : ''}`}>
       <div className="section-heading max-w-3xl">
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">{title}</h2>
