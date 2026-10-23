@@ -25,7 +25,7 @@
   "dependencies": {
     "@payloadcms/admin-bar": "3.88.0",
     "@payloadcms/db-mongodb": "3.88.0",
-    "@payloadcms/email-nodemailer": "3.88.0",
+    "@payloadcms/email-resend": "3.88.0",
     "@payloadcms/live-preview-react": "3.88.0",
     "@payloadcms/next": "3.88.0",
     "@payloadcms/plugin-form-builder": "3.88.0",
@@ -49,7 +49,6 @@
     "mammoth": "^1.4.20",
     "next": "16.3.3",
     "next-sitemap": "^4.2.3",
-    "nodemailer": "^9.1.1",
     "payload": "3.88.0",
     "prism-react-renderer": "^2.3.1",
     "react": "19.2.6",
