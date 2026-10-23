@@ -66,6 +66,43 @@ export const contactForm: RequiredDataFromCollectionSlug<'forms'> = {
       width: 100,
     },
   ],
+  emails: [
+    {
+      emailFrom: 'dev@rossmoney.me',
+      emailTo: 'dev@rossmoney.me',
+      message: {
+        root: {
+          type: 'root',
+          children: [
+            {
+              type: 'paragraph',
+              children: [
+                {
+                  detail: 0,
+                  format: 0,
+                  mode: 'normal',
+                  style: '',
+                  text: '{{*:table}}',
+                  type: 'text',
+                  version: 1,
+                },
+              ],
+              direction: 'ltr',
+              format: '',
+              indent: 0,
+              version: 1,
+            },
+          ],
+          direction: 'ltr',
+          format: '',
+          indent: 0,
+          version: 1,
+        },
+      },
+      replyTo: '{{email}}',
+      subject: 'New contact form submission from {{full-name}}',
+    },
+  ],
   redirect: undefined,
   submitButtonLabel: 'Submit',
   title: 'Contact Form',

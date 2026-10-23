@@ -9,6 +9,7 @@ import { Footer } from './Footer/config'
 import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
 import { contactForm as contactFormData } from './endpoints/seed/contact-form';
 import { home } from './endpoints/seed/home';
@@ -55,6 +56,30 @@ const noopDb = {
 
 const useNoopDb = process.env.SKIP_DB === 'true' || process.env.NEXT_PHASE === 'phase-production-build';
 
+const smtpHost = process.env.SMTP_HOST;
+const smtpPort = Number(process.env.SMTP_PORT || 587);
+const smtpUser = process.env.SMTP_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+const smtpFromAddress = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'dev@rossmoney.me';
+const smtpFromName = process.env.SMTP_FROM_NAME || 'Ross Money';
+const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+
+const emailAdapter = smtpHost && smtpUser && smtpPass
+  ? nodemailerAdapter({
+      defaultFromAddress: smtpFromAddress,
+      defaultFromName: smtpFromName,
+      transportOptions: {
+        auth: {
+          pass: smtpPass,
+          user: smtpUser,
+        },
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+      },
+    })
+  : undefined;
+
 export default buildConfig({
   serverURL: process.env.SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8082',
   editor: lexicalEditor(),
@@ -97,6 +122,7 @@ export default buildConfig({
   collections: [Users, Pages, Posts, Categories, Projects, Experience, Media],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
+  email: emailAdapter,
   globals: [Header, Footer],
   plugins,
   db: useNoopDb
@@ -143,7 +169,7 @@ export default buildConfig({
               { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
               { link: { type: 'custom', label: 'CV', url: '/cv' } },
               { link: { type: 'custom', label: 'Services', url: '/services' } },
-              { link: { type: 'custom', label: 'Contact', url: '/#contact' } },
+              { link: { type: 'custom', label: 'Contact', url: '/contact' } },
             ],
           };
 
@@ -154,6 +180,18 @@ export default buildConfig({
           } else if (!Array.isArray((currentHeader as any).navItems) || (currentHeader as any).navItems.length === 0 || process.env.PAYLOAD_SEED === 'true') {
             await pClient.db.updateGlobal({ slug: 'header', data: headerData });
             payload.logger.info('Header global updated and seeded successfully.');
+          } else {
+            const navItems = (currentHeader as any).navItems;
+            const correctedNavItems = navItems.map((item: any) => {
+              if (item?.link?.label === 'Contact' && item.link.url === '/#contact') {
+                return { ...item, link: { ...item.link, url: '/contact' } };
+              }
+              return item;
+            });
+            if (JSON.stringify(correctedNavItems) !== JSON.stringify(navItems)) {
+              await pClient.db.updateGlobal({ slug: 'header', data: { navItems: correctedNavItems } });
+              payload.logger.info('Corrected header Contact link to /contact');
+            }
           }
         } catch (err) {
           payload.logger.warn(`Header global seed note: ${err}`);
@@ -244,6 +282,32 @@ export default buildConfig({
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           payload.logger.error(`Failed to seed contact form "${contactFormData.title}": ${message}`);
+        }
+      } else {
+        const existingForm = existingContactForm.docs[0] as any;
+        const desiredEmails = contactFormData.emails || [];
+        const normalizeEmails = (emails: any[]) => emails.map((email) => ({
+          emailFrom: email.emailFrom,
+          emailTo: email.emailTo,
+          message: email.message,
+          replyTo: email.replyTo,
+          subject: email.subject,
+          ...(email.cc !== undefined ? { cc: email.cc } : {}),
+          ...(email.bcc !== undefined ? { bcc: email.bcc } : {}),
+        }));
+        if (JSON.stringify(normalizeEmails(existingForm.emails || [])) !== JSON.stringify(desiredEmails)) {
+          try {
+            await pClient.update({
+              collection: 'forms',
+              id: existingForm.id,
+              data: { emails: desiredEmails },
+              depth: 0,
+            });
+            payload.logger.info(`Updated contact form email delivery: ${contactFormData.title}`);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            payload.logger.error(`Failed to update contact form email delivery: ${message}`);
+          }
         }
       }
 
