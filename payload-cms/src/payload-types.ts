@@ -77,7 +77,6 @@ export interface Config {
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
-    search: Search;
     'payload-kv': PayloadKv;
     'payload-jobs': PayloadJob;
     'payload-folders': FolderInterface;
@@ -101,7 +100,6 @@ export interface Config {
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
-    search: SearchSelect<false> | SearchSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-folders': PayloadFoldersSelect<false> | PayloadFoldersSelect<true>;
@@ -160,7 +158,6 @@ export interface UserAuthOperations {
  * via the `definition` "users".
  */
 export interface User {
-  id: string;
   name?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -186,7 +183,6 @@ export interface User {
  * via the `definition` "pages".
  */
 export interface Page {
-  id: string;
   title: string;
   eyebrow?: string | null;
   lead?: string | null;
@@ -199,6 +195,18 @@ export interface Page {
     | number
     | boolean
     | null;
+  focus?: {
+    kicker?: string | null;
+    title?: string | null;
+    status?: string | null;
+    items?:
+      | {
+          label?: string | null;
+          value?: string | null;
+          id?: string | null;
+        }[]
+      | null;
+  };
   hero: {
     type: 'none' | 'highImpact' | 'mediumImpact' | 'lowImpact';
     richText?: {
@@ -224,11 +232,11 @@ export interface Page {
             reference?:
               | ({
                   relationTo: 'pages';
-                  value: string | Page;
+                  value: number | Page;
                 } | null)
               | ({
                   relationTo: 'posts';
-                  value: string | Post;
+                  value: number | Post;
                 } | null);
             url?: string | null;
             label: string;
@@ -240,28 +248,42 @@ export interface Page {
           id?: string | null;
         }[]
       | null;
-    media?: (string | null) | Media;
+    media?: (number | null) | Media;
   };
-  layout: (
-    | CallToActionBlock
-    | ContentBlock
-    | MediaBlock
-    | {
-        title?: string | null;
-        id?: string | null;
-        blockName?: string | null;
-        blockType: 'archive';
-      }
-    | FormBlock
-  )[];
+  layout?:
+    | (
+        | CallToActionBlock
+        | ContentBlock
+        | MediaBlock
+        | {
+            title?: string | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'archive';
+          }
+        | FormBlock
+      )[]
+    | null;
   meta?: {
     title?: string | null;
     /**
      * Maximum upload file size: 12MB. Recommended file size for images is <500KB.
      */
-    image?: (string | null) | Media;
+    image?: (number | null) | Media;
     description?: string | null;
   };
+  /**
+   * Upload a .docx CV file here
+   */
+  cvFile?: (number | null) | Media;
+  /**
+   * URL to an external live site for this page (e.g. travelling site). Include protocol (https://) or it will be assumed.
+   */
+  liveUrl?: string | null;
+  /**
+   * Optional: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk).
+   */
+  archviewUrl?: string | null;
   publishedAt?: string | null;
   /**
    * When enabled, the slug will auto-generate from the title field on save and autosave.
@@ -277,16 +299,15 @@ export interface Page {
  * via the `definition` "posts".
  */
 export interface Post {
-  id: string;
   title: string;
   slug?: string | null;
   meta?: {
     title?: string | null;
     description?: string | null;
-    image?: (string | null) | Media;
+    image?: (number | null) | Media;
   };
-  categories?: (string | Category)[] | null;
-  heroImage?: (string | null) | Media;
+  categories?: (number | Category)[] | null;
+  heroImage?: (number | null) | Media;
   populatedAuthors?:
     | {
         [k: string]: unknown;
@@ -297,7 +318,7 @@ export interface Post {
     | boolean
     | null;
   publishedAt?: string | null;
-  relatedPosts?: (string | Post)[] | null;
+  relatedPosts?: (number | Post)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -306,7 +327,6 @@ export interface Post {
  * via the `definition` "media".
  */
 export interface Media {
-  id: string;
   alt?: string | null;
   caption?: {
     root: {
@@ -323,7 +343,7 @@ export interface Media {
     };
     [k: string]: unknown;
   } | null;
-  folder?: (string | null) | FolderInterface;
+  folder?: (number | null) | FolderInterface;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -399,18 +419,17 @@ export interface Media {
  * via the `definition` "payload-folders".
  */
 export interface FolderInterface {
-  id: string;
   name: string;
-  folder?: (string | null) | FolderInterface;
+  folder?: (number | null) | FolderInterface;
   documentsAndFolders?: {
     docs?: (
       | {
           relationTo?: 'payload-folders';
-          value: string | FolderInterface;
+          value: number | FolderInterface;
         }
       | {
           relationTo?: 'media';
-          value: string | Media;
+          value: number | Media;
         }
     )[];
     hasNextPage?: boolean;
@@ -425,13 +444,12 @@ export interface FolderInterface {
  * via the `definition` "categories".
  */
 export interface Category {
-  id: string;
   title: string;
   slug?: string | null;
-  parent?: (string | null) | Category;
+  parent?: (number | null) | Category;
   breadcrumbs?:
     | {
-        doc?: (string | null) | Category;
+        doc?: (number | null) | Category;
         url?: string | null;
         label?: string | null;
         id?: string | null;
@@ -468,11 +486,11 @@ export interface CallToActionBlock {
           reference?:
             | ({
                 relationTo: 'pages';
-                value: string | Page;
+                value: number | Page;
               } | null)
             | ({
                 relationTo: 'posts';
-                value: string | Post;
+                value: number | Post;
               } | null);
           url?: string | null;
           label: string;
@@ -518,11 +536,11 @@ export interface ContentBlock {
           reference?:
             | ({
                 relationTo: 'pages';
-                value: string | Page;
+                value: number | Page;
               } | null)
             | ({
                 relationTo: 'posts';
-                value: string | Post;
+                value: number | Post;
               } | null);
           url?: string | null;
           label: string;
@@ -543,7 +561,7 @@ export interface ContentBlock {
  * via the `definition` "MediaBlock".
  */
 export interface MediaBlock {
-  media: string | Media;
+  media: number | Media;
   id?: string | null;
   blockName?: string | null;
   blockType: 'mediaBlock';
@@ -553,7 +571,7 @@ export interface MediaBlock {
  * via the `definition` "FormBlock".
  */
 export interface FormBlock {
-  form: string | Form;
+  form: number | Form;
   enableIntro?: boolean | null;
   introContent?: {
     root: {
@@ -579,7 +597,6 @@ export interface FormBlock {
  * via the `definition` "forms".
  */
 export interface Form {
-  id: string;
   title: string;
   fields?:
     | (
@@ -744,7 +761,6 @@ export interface Form {
  * via the `definition` "projects".
  */
 export interface Project {
-  id: string;
   title: string;
   role?: string | null;
   summary?: string | null;
@@ -763,7 +779,6 @@ export interface Project {
  * via the `definition` "experience".
  */
 export interface Experience {
-  id: string;
   year?: string | null;
   title: string;
   organization?: string | null;
@@ -783,7 +798,6 @@ export interface Experience {
  * via the `definition` "redirects".
  */
 export interface Redirect {
-  id: string;
   /**
    * You will need to rebuild the website when changing this field.
    */
@@ -793,11 +807,11 @@ export interface Redirect {
     reference?:
       | ({
           relationTo: 'pages';
-          value: string | Page;
+          value: number | Page;
         } | null)
       | ({
           relationTo: 'posts';
-          value: string | Post;
+          value: number | Post;
         } | null);
     url?: string | null;
   };
@@ -809,8 +823,7 @@ export interface Redirect {
  * via the `definition` "form-submissions".
  */
 export interface FormSubmission {
-  id: string;
-  form: string | Form;
+  form: number | Form;
   submissionData?:
     | {
         field: string;
@@ -822,42 +835,10 @@ export interface FormSubmission {
   createdAt: string;
 }
 /**
- * This is a collection of automatically created search results. These results are used by the global site search and will be updated automatically as documents in the CMS are created or updated.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "search".
- */
-export interface Search {
-  id: string;
-  title?: string | null;
-  priority?: number | null;
-  doc: {
-    relationTo: 'posts';
-    value: string | Post;
-  };
-  slug?: string | null;
-  meta?: {
-    title?: string | null;
-    description?: string | null;
-    image?: (string | null) | Media;
-  };
-  categories?:
-    | {
-        relationTo?: string | null;
-        categoryID?: string | null;
-        title?: string | null;
-        id?: string | null;
-      }[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
-  id: string;
   key: string;
   data:
     | {
@@ -874,7 +855,6 @@ export interface PayloadKv {
  * via the `definition` "payload-jobs".
  */
 export interface PayloadJob {
-  id: string;
   /**
    * Input data provided to the job
    */
@@ -966,60 +946,55 @@ export interface PayloadJob {
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
-  id: string;
   document?:
     | ({
         relationTo: 'users';
-        value: string | User;
+        value: number | User;
       } | null)
     | ({
         relationTo: 'pages';
-        value: string | Page;
+        value: number | Page;
       } | null)
     | ({
         relationTo: 'posts';
-        value: string | Post;
+        value: number | Post;
       } | null)
     | ({
         relationTo: 'categories';
-        value: string | Category;
+        value: number | Category;
       } | null)
     | ({
         relationTo: 'projects';
-        value: string | Project;
+        value: number | Project;
       } | null)
     | ({
         relationTo: 'experience';
-        value: string | Experience;
+        value: number | Experience;
       } | null)
     | ({
         relationTo: 'media';
-        value: string | Media;
+        value: number | Media;
       } | null)
     | ({
         relationTo: 'redirects';
-        value: string | Redirect;
+        value: number | Redirect;
       } | null)
     | ({
         relationTo: 'forms';
-        value: string | Form;
+        value: number | Form;
       } | null)
     | ({
         relationTo: 'form-submissions';
-        value: string | FormSubmission;
-      } | null)
-    | ({
-        relationTo: 'search';
-        value: string | Search;
+        value: number | FormSubmission;
       } | null)
     | ({
         relationTo: 'payload-folders';
-        value: string | FolderInterface;
+        value: number | FolderInterface;
       } | null);
   globalSlug?: string | null;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   updatedAt: string;
   createdAt: string;
@@ -1029,10 +1004,9 @@ export interface PayloadLockedDocument {
  * via the `definition` "payload-preferences".
  */
 export interface PayloadPreference {
-  id: string;
   user: {
     relationTo: 'users';
-    value: string | User;
+    value: number | User;
   };
   key?: string | null;
   value?:
@@ -1052,7 +1026,6 @@ export interface PayloadPreference {
  * via the `definition` "payload-migrations".
  */
 export interface PayloadMigration {
-  id: string;
   name?: string | null;
   batch?: number | null;
   updatedAt: string;
@@ -1090,6 +1063,20 @@ export interface PagesSelect<T extends boolean = true> {
   eyebrow?: T;
   lead?: T;
   data?: T;
+  focus?:
+    | T
+    | {
+        kicker?: T;
+        title?: T;
+        status?: T;
+        items?:
+          | T
+          | {
+              label?: T;
+              value?: T;
+              id?: T;
+            };
+      };
   hero?:
     | T
     | {
@@ -1134,6 +1121,9 @@ export interface PagesSelect<T extends boolean = true> {
         image?: T;
         description?: T;
       };
+  cvFile?: T;
+  liveUrl?: T;
+  archviewUrl?: T;
   publishedAt?: T;
   generateSlug?: T;
   slug?: T;
@@ -1550,33 +1540,6 @@ export interface FormSubmissionsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "search_select".
- */
-export interface SearchSelect<T extends boolean = true> {
-  title?: T;
-  priority?: T;
-  doc?: T;
-  slug?: T;
-  meta?:
-    | T
-    | {
-        title?: T;
-        description?: T;
-        image?: T;
-      };
-  categories?:
-    | T
-    | {
-        relationTo?: T;
-        categoryID?: T;
-        title?: T;
-        id?: T;
-      };
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -1663,7 +1626,6 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
  * via the `definition` "header".
  */
 export interface Header {
-  id: string;
   navItems?:
     | {
         link: {
@@ -1672,11 +1634,11 @@ export interface Header {
           reference?:
             | ({
                 relationTo: 'pages';
-                value: string | Page;
+                value: number | Page;
               } | null)
             | ({
                 relationTo: 'posts';
-                value: string | Post;
+                value: number | Post;
               } | null);
           url?: string | null;
           label: string;
@@ -1692,7 +1654,6 @@ export interface Header {
  * via the `definition` "footer".
  */
 export interface Footer {
-  id: string;
   navItems?:
     | {
         link: {
@@ -1701,11 +1662,11 @@ export interface Footer {
           reference?:
             | ({
                 relationTo: 'pages';
-                value: string | Page;
+                value: number | Page;
               } | null)
             | ({
                 relationTo: 'posts';
-                value: string | Post;
+                value: number | Post;
               } | null);
           url?: string | null;
           label: string;
@@ -1782,10 +1743,10 @@ export interface TaskSchedulePublish {
     locale?: string | null;
     doc?: {
       relationTo: 'pages';
-      value: string | Page;
+      value: number | Page;
     } | null;
     global?: string | null;
-    user?: (string | null) | User;
+    user?: (number | null) | User;
   };
   output?: unknown;
 }
