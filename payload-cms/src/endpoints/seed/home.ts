@@ -73,7 +73,7 @@ export const home = {
     ],
   },
   data: {
-    primaryButton: { label: 'Start a conversation', href: '#contact' },
+    primaryButton: { label: 'Start a conversation', href: '/contact' },
     secondaryButton: { label: 'Inspect live architecture', href: '#architecture' },
     metrics: [
       { value: '99.95%', label: 'availability target' },

@@ -10,6 +10,7 @@ import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
+import { contactForm as contactFormData } from './endpoints/seed/contact-form';
 import { home } from './endpoints/seed/home';
 import { Pages } from './collections/Pages';
 import { Users } from './collections/Users';
@@ -199,10 +200,50 @@ export default buildConfig({
               context: seedContext,
             });
             payload.logger.info(`Seeded default page: ${pageData.slug}`);
+          } else if (found.slug === 'home') {
+            // Narrow, idempotent correction: older databases still store the
+            // homepage button as the retired in-page anchor. Only rewrite that
+            // exact value so editor changes to the page are preserved.
+            const data = found.data && typeof found.data === 'object' ? found.data : {};
+            const primaryButton = (data as any).primaryButton;
+            if (primaryButton?.href === '#contact') {
+              await pClient.update({
+                collection: 'pages',
+                id: found.id,
+                data: {
+                  data: {
+                    ...(data as Record<string, unknown>),
+                    primaryButton: { ...primaryButton, href: '/contact' },
+                  },
+                },
+                context: seedContext,
+              });
+              payload.logger.info('Corrected home page primary button link to /contact');
+            }
           }
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           payload.logger.error(`Failed to seed page "${pageData.slug}": ${message}`);
+        }
+      }
+
+      const existingContactForm = await pClient.find({
+        collection: 'forms',
+        where: { title: { equals: contactFormData.title } },
+        limit: 1,
+        depth: 0,
+      });
+      if (existingContactForm.docs.length === 0) {
+        try {
+          await pClient.create({
+            collection: 'forms',
+            data: contactFormData,
+            depth: 0,
+          });
+          payload.logger.info(`Seeded default contact form: ${contactFormData.title}`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed contact form "${contactFormData.title}": ${message}`);
         }
       }
 
