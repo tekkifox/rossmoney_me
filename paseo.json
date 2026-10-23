@@ -1,0 +1,17 @@
+{
+  "worktree": {
+    "setup": "npm install",
+    "teardown": "docker compose down"
+  },
+  "metadataGeneration": {
+    "branchName": {
+      "instructions": "Prefix branches with feat/ or fix/, mb/ for personal branches"
+    },
+    "commitMessage": {
+      "instructions": "Use conventional commits with a scope"
+    },
+    "pullRequest": {
+      "instructions": "Lead with a one-paragraph summary, include a Test plan section"
+    }
+  }
+}
