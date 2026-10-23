@@ -180,47 +180,61 @@ export default buildConfig({
               collection: 'pages',
               id: found.id,
               data: pageData,
+              context: seedContext,
             });
-          } else {
+          } else if (!found) {
             await pClient.create({
               collection: 'pages',
               data: pageData,
+              context: seedContext,
             });
+            payload.logger.info(`Seeded default page: ${pageData.slug}`);
           }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed page "${pageData.slug}": ${message}`);
         }
+      }
 
-        const defaultProjects = [
-          { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
-          { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
-          { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
-        ];
+      const defaultProjects = [
+        { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
+        { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
+        { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
+      ];
 
-        const existingProjects = await pClient.find({ collection: 'projects', limit: 10 });
-        for (const proj of defaultProjects) {
-          const found = existingProjects.docs.find((p: any) => p.title === proj.title);
-          if (found) {
+      const existingProjects = await pClient.find({ collection: 'projects', limit: 100 });
+      for (const proj of defaultProjects) {
+        const found = existingProjects.docs.find((p: any) => p.title === proj.title);
+        try {
+          if (found && forceSeed) {
             await pClient.update({ collection: 'projects', id: found.id, data: proj });
-          } else {
+          } else if (!found) {
             await pClient.create({ collection: 'projects', data: proj });
           }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed project "${proj.title}": ${message}`);
         }
+      }
 
-        const defaultExperience = [
-          { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
-          { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
-        ];
+      const defaultExperience = [
+        { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
+        { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
+      ];
 
-        const existingExp = await pClient.find({ collection: 'experience', limit: 10 });
-        for (const exp of defaultExperience) {
-          const found = existingExp.docs.find((e: any) => e.title === exp.title);
-          if (found) {
+      const existingExp = await pClient.find({ collection: 'experience', limit: 100 });
+      for (const exp of defaultExperience) {
+        const found = existingExp.docs.find((e: any) => e.title === exp.title);
+        try {
+          if (found && forceSeed) {
             await pClient.update({ collection: 'experience', id: found.id, data: exp });
-          } else {
+          } else if (!found) {
             await pClient.create({ collection: 'experience', data: exp });
           }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed experience "${exp.title}": ${message}`);
         }
-
-        payload.logger.info('Default Payload CMS documents seeded/synced successfully.');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
