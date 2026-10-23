@@ -11,6 +11,8 @@ import type { DefaultTypedEditorState } from '@payloadcms/richtext-lexical'
 import { fields } from './fields'
 import { getClientSideURL } from '@/utilities/getURL'
 
+const honeypotFieldName = 'website'
+
 export type FormBlockType = {
   blockName?: string
   blockType?: 'formBlock'
@@ -149,6 +151,17 @@ export const FormBlock: React.FC<
                     }
                     return null
                   })}
+              </div>
+
+              <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                <label htmlFor={`${formID}-${honeypotFieldName}`}>Website</label>
+                <input
+                  {...register(honeypotFieldName as never)}
+                  autoComplete="off"
+                  id={`${formID}-${honeypotFieldName}`}
+                  tabIndex={-1}
+                  type="text"
+                />
               </div>
 
               <Button form={formID} type="submit" variant="default">

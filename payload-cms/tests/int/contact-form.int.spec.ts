@@ -71,6 +71,7 @@ describe('Contact form', () => {
           { field: 'email', value: 'ada@example.com' },
           { field: 'phone', value: '01234567890' },
           { field: 'message', value: 'I would like to discuss a website build.' },
+          { field: 'website', value: '' },
         ],
       },
       depth: 0,
@@ -121,6 +122,41 @@ describe('Contact form', () => {
     expect(submission.submissionData).toEqual(
       expect.not.arrayContaining([expect.objectContaining({ field: 'phone' })]),
     )
+  })
+
+  it('rejects a submission that fills the honeypot field', async () => {
+    const before = await payload.find({
+      collection: 'form-submissions',
+      where: { form: { equals: formID } },
+      limit: 0,
+      depth: 0,
+    })
+
+    await expect(
+      payload.create({
+        collection: 'form-submissions',
+        data: {
+          form: formID,
+          submissionData: [
+            { field: 'full-name', value: 'Automated Bot' },
+            { field: 'email', value: 'bot@example.com' },
+            { field: 'message', value: 'Spam submission' },
+            { field: 'website', value: 'https://example.com' },
+          ],
+        },
+        depth: 0,
+        overrideAccess: false,
+      }),
+    ).rejects.toThrow('Invalid form submission')
+
+    const after = await payload.find({
+      collection: 'form-submissions',
+      where: { form: { equals: formID } },
+      limit: 0,
+      depth: 0,
+    })
+
+    expect(after.totalDocs).toBe(before.totalDocs)
   })
 
   it('rejects a submission without a form reference', async () => {
