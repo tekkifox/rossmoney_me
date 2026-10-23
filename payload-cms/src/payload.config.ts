@@ -9,7 +9,7 @@ import { Footer } from './Footer/config'
 import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
-import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
+import { resendAdapter } from '@payloadcms/email-resend'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
 import { contactForm as contactFormData } from './endpoints/seed/contact-form';
 import { home } from './endpoints/seed/home';
@@ -56,31 +56,14 @@ const noopDb = {
 
 const useNoopDb = process.env.SKIP_DB === 'true' || process.env.NEXT_PHASE === 'phase-production-build';
 
-const smtpHost = process.env.SMTP_HOST;
-const smtpPort = Number(process.env.SMTP_PORT || 587);
-const smtpUser = process.env.SMTP_USER;
-const smtpPass = process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
-const smtpFromAddress = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'dev@rossmoney.me';
-const smtpFromName = process.env.SMTP_FROM_NAME || 'Ross Money';
-const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+const emailFromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'dev@rossmoney.me';
+const emailFromName = process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Ross Money';
 
-const emailAdapter = smtpHost && smtpUser && smtpPass
-  ? nodemailerAdapter({
-      defaultFromAddress: smtpFromAddress,
-      defaultFromName: smtpFromName,
-      transportOptions: {
-        auth: {
-          pass: smtpPass,
-          user: smtpUser,
-        },
-        host: smtpHost,
-        logger: true,
-        port: smtpPort,
-        secure: smtpSecure,
-        debug: true,
-      },
-    })
-  : undefined;
+const emailAdapter = resendAdapter({
+  apiKey: process.env.RESEND_API_KEY || '',
+  defaultFromAddress: emailFromAddress,
+  defaultFromName: emailFromName,
+});
 
 export default buildConfig({
   serverURL: process.env.SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8082',
