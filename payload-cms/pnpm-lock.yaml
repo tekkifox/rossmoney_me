@@ -14,6 +14,9 @@ importers:
       '@payloadcms/db-mongodb':
         specifier: 3.88.0
         version: 3.88.0(payload@3.88.0(graphql@16.14.2)(typescript@5.7.3))
+      '@payloadcms/email-resend':
+        specifier: 3.88.0
+        version: 3.88.0(payload@3.88.0(graphql@16.14.2)(typescript@5.7.3))
       '@payloadcms/live-preview-react':
         specifier: 3.88.0
         version: 3.88.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -1146,6 +1149,12 @@ packages:
 
   '@payloadcms/db-mongodb@3.88.0':
     resolution: {integrity: sha512-bjXWm7DvUQYLCTe3zJ9Pr57gEX5pQOtH+SgAhJBhh2fMYy/bE7pLf0DJG8z1E6N9Z8b1EX3kWkE1bhTYnR5Gxg==}
+    peerDependencies:
+      payload: 3.88.0
+
+  '@payloadcms/email-resend@3.88.0':
+    resolution: {integrity: sha512-0iuTVkzCY6vpHSHHlDegrAeHQLj7MrvfONGgwyXSy92vwTeQ57aWq2iR2xyHeenLGI3To4DJpKzU1ydVBPJK4Q==}
+    engines: {node: ^18.20.2 || >=20.9.0}
     peerDependencies:
       payload: 3.88.0
 
@@ -5741,6 +5750,10 @@ snapshots:
       - snappy
       - socks
       - supports-color
+
+  '@payloadcms/email-resend@3.88.0(payload@3.88.0(graphql@16.14.2)(typescript@5.7.3))':
+    dependencies:
+      payload: 3.88.0(graphql@16.14.2)(typescript@5.7.3)
 
   '@payloadcms/graphql@3.88.0(graphql@16.14.2)(payload@3.88.0(graphql@16.14.2)(typescript@5.7.3))(typescript@5.7.3)':
     dependencies:

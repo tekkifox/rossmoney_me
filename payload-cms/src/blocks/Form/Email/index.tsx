@@ -26,10 +26,15 @@ export const Email: React.FC<
         )}
       </Label>
       <Input
+        aria-describedby={errors[name] ? `${name}-error` : undefined}
+        aria-invalid={Boolean(errors[name])}
         defaultValue={defaultValue}
         id={name}
-        type="text"
-        {...register(name, { pattern: /^\S[^\s@]*@\S+$/, required })}
+        type="email"
+        {...register(name, {
+          pattern: { message: 'Enter a valid email address.', value: /^\S[^\s@]*@\S+$/ },
+          required: required ? 'Email is required.' : false,
+        })}
       />
 
       {errors[name] && <Error name={name} />}

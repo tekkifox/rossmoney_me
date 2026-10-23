@@ -1,15 +1,18 @@
 'use client'
-import type { FormFieldBlock, Form as FormType } from '@payloadcms/plugin-form-builder/types'
+import type { Form as FormType } from '@payloadcms/plugin-form-builder/types'
 
 import { useRouter } from 'next/navigation'
 import React, { useCallback, useState } from 'react'
-import { useForm, FormProvider } from 'react-hook-form'
+import { useForm, FormProvider, type FieldValues } from 'react-hook-form'
 import RichText from '@/components/RichText'
 import { Button } from '@/components/ui/button'
 import type { DefaultTypedEditorState } from '@payloadcms/richtext-lexical'
 
 import { fields } from './fields'
 import { getClientSideURL } from '@/utilities/getURL'
+import { getRecaptchaToken } from '@/utilities/getRecaptchaToken'
+
+const honeypotFieldName = 'website'
 
 export type FormBlockType = {
   blockName?: string
@@ -31,7 +34,7 @@ export const FormBlock: React.FC<
     introContent,
   } = props
 
-  const formMethods = useForm({
+  const formMethods = useForm<FieldValues>({
     defaultValues: formFromProps.fields,
   })
   const {
@@ -47,22 +50,23 @@ export const FormBlock: React.FC<
   const router = useRouter()
 
   const onSubmit = useCallback(
-    (data: FormFieldBlock[]) => {
+    (data: FieldValues) => {
       let loadingTimerID: ReturnType<typeof setTimeout>
       const submitForm = async () => {
         setError(undefined)
 
-        const dataToSend = Object.entries(data).map(([name, value]) => ({
-          field: name,
-          value,
-        }))
-
-        // delay loading indicator by 1s
-        loadingTimerID = setTimeout(() => {
-          setIsLoading(true)
-        }, 1000)
-
         try {
+          const recaptchaToken = await getRecaptchaToken()
+          const dataToSend = [
+            ...Object.entries(data).map(([name, value]) => ({ field: name, value })),
+            { field: 'recaptcha-token', value: recaptchaToken },
+          ]
+
+          // delay loading indicator by 1s
+          loadingTimerID = setTimeout(() => {
+            setIsLoading(true)
+          }, 1000)
+
           const req = await fetch(`${getClientSideURL()}/api/form-submissions`, {
             body: JSON.stringify({
               form: formID,
@@ -101,9 +105,10 @@ export const FormBlock: React.FC<
           }
         } catch (err) {
           console.warn(err)
+          if (loadingTimerID) clearTimeout(loadingTimerID)
           setIsLoading(false)
           setError({
-            message: 'Something went wrong.',
+            message: err instanceof Error ? err.message : 'Something went wrong.',
           })
         }
       }
@@ -124,7 +129,7 @@ export const FormBlock: React.FC<
             <RichText data={confirmationMessage} />
           )}
           {isLoading && !hasSubmitted && <p>Loading, please wait...</p>}
-          {error && <div>{`${error.status || '500'}: ${error.message || ''}`}</div>}
+          {error && <div>{`${error.status ? `${error.status}: ` : ''}${error.message || ''}`}</div>}
           {!hasSubmitted && (
             <form id={formID} onSubmit={handleSubmit(onSubmit)}>
               <div className="mb-4 last:mb-0">
@@ -149,6 +154,17 @@ export const FormBlock: React.FC<
                     }
                     return null
                   })}
+              </div>
+
+              <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                <label htmlFor={`${formID}-${honeypotFieldName}`}>Website</label>
+                <input
+                  {...register(honeypotFieldName as never)}
+                  autoComplete="off"
+                  id={`${formID}-${honeypotFieldName}`}
+                  tabIndex={-1}
+                  type="text"
+                />
               </div>
 
               <Button form={formID} type="submit" variant="default">
