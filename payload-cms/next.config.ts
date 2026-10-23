@@ -81,7 +81,11 @@ const nextConfig: NextConfig = {
     return webpackConfig
   },
   reactStrictMode: true,
-  output: 'standalone',
+  // Vercel builds with its own adapter and does not need a standalone server.
+  // Next.js 16.3 leaves out `.next/next-server.js.nft.json` when an adapter and
+  // `output: 'standalone'` are combined (vercel/next.js#96646), which fails the
+  // deploy in onBuildComplete. Keep standalone for the Docker/Portainer images.
+  output: process.env.VERCEL ? undefined : 'standalone',
   redirects,
   turbopack: {
     root: path.resolve(dirname),
