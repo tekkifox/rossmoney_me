@@ -29,7 +29,9 @@ export default async function ContactTemplate({ page }: { page: PageDoc }) {
         </div>
 
         {contactForm ? (
-          <FormBlock form={contactForm as any} enableIntro={false} />
+          <div className="rounded-3xl border border-border bg-card p-6 md:p-8">
+            <FormBlock form={contactForm as any} enableIntro={true} />
+          </div>
         ) : (
           <div className="rounded-3xl border border-border bg-card p-6">
             <p>The contact form is unavailable right now.</p>
