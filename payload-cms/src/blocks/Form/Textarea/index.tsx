@@ -28,10 +28,12 @@ export const Textarea: React.FC<
       </Label>
 
       <TextAreaComponent
+        aria-describedby={errors[name] ? `${name}-error` : undefined}
+        aria-invalid={Boolean(errors[name])}
         defaultValue={defaultValue}
         id={name}
         rows={rows}
-        {...register(name, { required: required })}
+        {...register(name, { required: required ? `${label} is required.` : false })}
       />
 
       {errors[name] && <Error name={name} />}

@@ -1,7 +1,11 @@
 import { getPayload, Payload } from 'payload'
 import config from '@/payload.config'
 
-import { describe, it, beforeAll, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, afterAll, expect, vi } from 'vitest'
+
+vi.mock('@/utilities/verifyRecaptcha', () => ({
+  verifyRecaptchaToken: vi.fn(async () => true),
+}))
 
 import { contactForm as contactFormData } from '@/endpoints/seed/contact-form'
 
@@ -72,6 +76,7 @@ describe('Contact form', () => {
           { field: 'phone', value: '01234567890' },
           { field: 'message', value: 'I would like to discuss a website build.' },
           { field: 'website', value: '' },
+          { field: 'recaptcha-token', value: 'verified-token' },
         ],
       },
       depth: 0,
@@ -111,6 +116,7 @@ describe('Contact form', () => {
           { field: 'full-name', value: 'Grace Hopper' },
           { field: 'email', value: 'grace@example.com' },
           { field: 'message', value: 'Please send a day rate for a CMS integration.' },
+          { field: 'recaptcha-token', value: 'verified-token' },
         ],
       },
       depth: 0,
@@ -122,6 +128,62 @@ describe('Contact form', () => {
     expect(submission.submissionData).toEqual(
       expect.not.arrayContaining([expect.objectContaining({ field: 'phone' })]),
     )
+  })
+
+  it('rejects invalid email and phone values before persistence', async () => {
+    await expect(
+      payload.create({
+        collection: 'form-submissions',
+        data: {
+          form: formID,
+          submissionData: [
+            { field: 'full-name', value: 'Invalid Contact' },
+            { field: 'email', value: 'not-an-email' },
+            { field: 'phone', value: 'abc' },
+            { field: 'message', value: 'Invalid data' },
+            { field: 'recaptcha-token', value: 'verified-token' },
+          ],
+        },
+        depth: 0,
+        overrideAccess: false,
+      }),
+    ).rejects.toThrow('Please provide a valid email address.')
+
+    await expect(
+      payload.create({
+        collection: 'form-submissions',
+        data: {
+          form: formID,
+          submissionData: [
+            { field: 'full-name', value: 'Invalid Contact' },
+            { field: 'email', value: 'valid@example.com' },
+            { field: 'phone', value: 'abc' },
+            { field: 'message', value: 'Invalid data' },
+            { field: 'recaptcha-token', value: 'verified-token' },
+          ],
+        },
+        depth: 0,
+        overrideAccess: false,
+      }),
+    ).rejects.toThrow('Please provide a valid phone number.')
+  })
+
+  it('rejects a contact submission without a verified reCAPTCHA token', async () => {
+    await expect(
+      payload.create({
+        collection: 'form-submissions',
+        data: {
+          form: formID,
+          submissionData: [
+            { field: 'full-name', value: 'Missing Token' },
+            { field: 'email', value: 'valid@example.com' },
+            { field: 'message', value: 'Missing token' },
+          ],
+        },
+        depth: 0,
+        overrideAccess: false,
+      }),
+    ).rejects.toThrow('reCAPTCHA verification failed.')
   })
 
   it('rejects a submission that fills the honeypot field', async () => {

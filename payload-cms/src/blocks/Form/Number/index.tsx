@@ -25,10 +25,18 @@ export const Number: React.FC<
         )}
       </Label>
       <Input
+        aria-describedby={errors[name] ? `${name}-error` : undefined}
+        aria-invalid={Boolean(errors[name])}
         defaultValue={defaultValue}
         id={name}
-        type="number"
-        {...register(name, { required })}
+        type={name === 'phone' ? 'tel' : 'number'}
+        {...register(name, {
+          pattern:
+            name === 'phone'
+              ? { message: 'Enter a valid phone number.', value: /^\+?[0-9][0-9 ()-]{6,19}$/ }
+              : undefined,
+          required: required ? `${label} is required.` : false,
+        })}
       />
       {errors[name] && <Error name={name} />}
     </Width>
