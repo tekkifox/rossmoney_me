@@ -12,7 +12,6 @@ import { experiencePage } from './experience-page'
 import { work } from './work-page'
 import { travelling } from './travelling-page'
 import { gameservers } from './game-servers-page'
-import { services } from './services-page'
 import { cv } from './cv-page'
 
 const collections: CollectionSlug[] = [
@@ -153,7 +152,7 @@ export const seed = async ({
 
   payload.logger.info(`— Seeding pages...`)
 
-    const [_, contactPage, servicesPage] = await Promise.all([
+    const [_, contactPage] = await Promise.all([
     payload.create({
       collection: 'pages',
       depth: 0,
@@ -163,11 +162,6 @@ export const seed = async ({
       collection: 'pages',
       depth: 0,
       data: contactPageData,
-    }),
-    payload.create({
-      collection: 'pages',
-      depth: 0,
-      data: services,
     }),
     payload.create({
       collection: 'pages',
@@ -213,16 +207,6 @@ export const seed = async ({
       slug: 'header',
       data: {
         navItems: [
-          {
-            link: {
-              type: 'reference',
-              label: 'Services',
-              reference: {
-                relationTo: 'pages',
-                value: servicesPage.id,
-              },
-            },
-          },
           {
             link: {
               type: 'reference',
