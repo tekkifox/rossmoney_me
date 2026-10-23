@@ -23,15 +23,12 @@ describe('Contact form', () => {
       depth: 0,
     })
 
-    const form =
-      existing.docs[0] ||
-      (await payload.create({
-        collection: 'forms',
-        data: contactFormData,
-        depth: 0,
-      }))
+    // payload.config.ts `onInit` seeds the form on a fresh database.
+    if (!existing.docs.length) {
+      throw new Error(`Expected startup seeding to create "${contactFormData.title}"`)
+    }
 
-    formID = form.id
+    formID = existing.docs[0].id
   }, 120_000)
 
   afterAll(async () => {
