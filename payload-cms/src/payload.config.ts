@@ -10,6 +10,7 @@ import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
+import { contactForm as contactFormData } from './endpoints/seed/contact-form';
 import { home } from './endpoints/seed/home';
 import { Pages } from './collections/Pages';
 import { Users } from './collections/Users';
@@ -24,8 +25,6 @@ import { experiencePage } from './endpoints/seed/experience-page';
 import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
-import { gameservers } from './endpoints/seed/game-servers-page';
-import { cv } from './endpoints/seed/cv-page';
 import fs from 'fs'
 import os from 'os'
 import { fileURLToPath as fURL } from 'url'
@@ -158,93 +157,83 @@ export default buildConfig({
           payload.logger.warn(`Header global seed note: ${err}`);
         }
 
-      // Default documents are created on an empty database, and any that are
-      // missing are added on later startups. Existing documents are only
-      // overwritten when PAYLOAD_SEED=true so editor changes are preserved.
-      const forceSeed = process.env.PAYLOAD_SEED === 'true';
-      // Cache revalidation needs a Next.js request context. `onInit` runs at
-      // server start, so tell the collection hooks to skip revalidation.
-      const seedContext = { disableRevalidate: true };
+      const existingPages = await pClient.find({ collection: 'pages', limit: 10 });
+      const shouldSeed = existingPages.totalDocs === 0 || process.env.PAYLOAD_SEED === 'true';
 
-      payload.logger.info('Ensuring default Payload CMS documents exist...');
+      // Make sure the contact page always has a form to render, including on
+      // instances that were bootstrapped without running the full destructive seed.
+      const existingForms = await pClient.find({ collection: 'forms', limit: 10 });
+      const hasContactForm = existingForms.docs.some(
+        (form: any) => form.title === contactFormData.title,
+      );
 
-      const defaultPages = [
-        home,
-        contactPageData,
-        travellingPage,
-        architecture,
-        commits,
-        work,
-        experiencePage,
-        servicesPage,
-        gameservers,
-        cv,
-      ];
+      if (!hasContactForm) {
+        await pClient.create({ collection: 'forms', data: contactFormData });
+        payload.logger.info('Contact form created successfully.');
+      }
 
-      const existingPages = await pClient.find({ collection: 'pages', limit: 1000 });
-      for (const pageData of defaultPages) {
-        const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
-        try {
-          if (found && forceSeed) {
+      if (shouldSeed) {
+        payload.logger.info('Seeding/syncing default Payload CMS documents...');
+
+        const defaultPages = [
+          home,
+          contactPageData,
+          travellingPage,
+          architecture,
+          commits,
+          work,
+          experiencePage,
+          servicesPage,
+        ];
+
+        for (const pageData of defaultPages) {
+          const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
+          if (found) {
             await pClient.update({
               collection: 'pages',
               id: found.id,
               data: pageData,
-              context: seedContext,
             });
-          } else if (!found) {
+          } else {
             await pClient.create({
               collection: 'pages',
               data: pageData,
-              context: seedContext,
             });
-            payload.logger.info(`Seeded default page: ${pageData.slug}`);
           }
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          payload.logger.error(`Failed to seed page "${pageData.slug}": ${message}`);
         }
-      }
 
-      const defaultProjects = [
-        { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
-        { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
-        { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
-      ];
+        const defaultProjects = [
+          { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
+          { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
+          { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
+        ];
 
-      const existingProjects = await pClient.find({ collection: 'projects', limit: 100 });
-      for (const proj of defaultProjects) {
-        const found = existingProjects.docs.find((p: any) => p.title === proj.title);
-        try {
-          if (found && forceSeed) {
+        const existingProjects = await pClient.find({ collection: 'projects', limit: 10 });
+        for (const proj of defaultProjects) {
+          const found = existingProjects.docs.find((p: any) => p.title === proj.title);
+          if (found) {
             await pClient.update({ collection: 'projects', id: found.id, data: proj });
-          } else if (!found) {
+          } else {
             await pClient.create({ collection: 'projects', data: proj });
           }
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          payload.logger.error(`Failed to seed project "${proj.title}": ${message}`);
         }
-      }
 
-      const defaultExperience = [
-        { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
-        { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
-      ];
+        const defaultExperience = [
+          { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
+          { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
+        ];
 
-      const existingExp = await pClient.find({ collection: 'experience', limit: 100 });
-      for (const exp of defaultExperience) {
-        const found = existingExp.docs.find((e: any) => e.title === exp.title);
-        try {
-          if (found && forceSeed) {
+        const existingExp = await pClient.find({ collection: 'experience', limit: 10 });
+        for (const exp of defaultExperience) {
+          const found = existingExp.docs.find((e: any) => e.title === exp.title);
+          if (found) {
             await pClient.update({ collection: 'experience', id: found.id, data: exp });
-          } else if (!found) {
+          } else {
             await pClient.create({ collection: 'experience', data: exp });
           }
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          payload.logger.error(`Failed to seed experience "${exp.title}": ${message}`);
         }
+
+        payload.logger.info('Default Payload CMS documents seeded/synced successfully.');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

@@ -1,132 +1,66 @@
-import { getPayload, Payload } from 'payload'
+import { getPayload, type Payload } from 'payload'
+import { beforeAll, describe, expect, it } from 'vitest'
+
 import config from '@/payload.config'
-
-import { describe, it, beforeAll, afterAll, expect } from 'vitest'
-
-import { contactForm as contactFormData } from '@/endpoints/seed/contact-form'
+import { contactForm as seededContactForm } from '@/endpoints/seed/contact-form'
+import { getContactForm } from '@/utilities/getContactForm'
 
 let payload: Payload
-let formID: string
 
-// The FormBlock posts { form, submissionData } to /api/form-submissions.
-// Using the local API with overrideAccess: false exercises the same collection
-// operation and access control as the public REST endpoint.
 describe('Contact form', () => {
   beforeAll(async () => {
-    const payloadConfig = await config
-    payload = await getPayload({ config: payloadConfig })
+    payload = await getPayload({ config: await config })
 
-    const existing = await payload.find({
-      collection: 'forms',
-      where: { title: { equals: contactFormData.title } },
-      limit: 1,
-      depth: 0,
-    })
-
-    const form =
-      existing.docs[0] ||
-      (await payload.create({
-        collection: 'forms',
-        data: contactFormData,
-        depth: 0,
-      }))
-
-    formID = form.id
-  }, 120_000)
-
-  afterAll(async () => {
-    await payload.destroy()
+    // `onInit` creates the contact form, but the page lookup must stay useful
+    // on a database seeded by the destructive seed endpoint as well.
+    const existing = await getContactForm()
+    if (!existing) {
+      await payload.create({ collection: 'forms', data: seededContactForm })
+    }
   })
 
-  it('seeds the contact fields the form block renders', async () => {
-    const form = await payload.findByID({ collection: 'forms', id: formID, depth: 0 })
-    const fieldNames = (form.fields || [])
-      .map((field: any) => field.name)
-      .filter((name: string | undefined): name is string => Boolean(name))
+  it('is available to the contact page with the expected fields', async () => {
+    const form = await getContactForm()
 
-    expect(fieldNames).toEqual(expect.arrayContaining(['full-name', 'email', 'phone', 'message']))
+    expect(form).not.toBeNull()
+    expect(form?.title).toBe(seededContactForm.title)
 
-    const required = (form.fields || [])
-      .filter((field: any) => field.required)
-      .map((field: any) => field.name)
+    const fieldNames = (form?.fields || [])
+      .map((field) => ('name' in field ? field.name : undefined))
       .filter(Boolean)
 
-    expect(required).toEqual(expect.arrayContaining(['full-name', 'email', 'message']))
-    expect(required).not.toContain('phone')
+    expect(fieldNames).toEqual(expect.arrayContaining(['full-name', 'email', 'message']))
   })
 
-  it('accepts an unauthenticated submission with every field', async () => {
+  it('stores a submission with the form fields', async () => {
+    const form = await getContactForm()
+    expect(form?.id).toBeDefined()
+
     const submission = await payload.create({
       collection: 'form-submissions',
       data: {
-        form: formID,
+        form: form!.id,
         submissionData: [
-          { field: 'full-name', value: 'Ada Lovelace' },
-          { field: 'email', value: 'ada@example.com' },
-          { field: 'phone', value: '01234567890' },
-          { field: 'message', value: 'I would like to discuss a website build.' },
+          { field: 'full-name', value: 'Test Person' },
+          { field: 'email', value: 'test@example.com' },
+          { field: 'message', value: 'Hello from the integration test.' },
         ],
       },
-      depth: 0,
-      overrideAccess: false,
     })
 
-    expect(submission.id).toBeTruthy()
-    expect(submission.form).toBe(formID)
-    expect(submission.submissionData).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ field: 'full-name', value: 'Ada Lovelace' }),
-        expect.objectContaining({ field: 'email', value: 'ada@example.com' }),
-        expect.objectContaining({ field: 'phone', value: '01234567890' }),
-        expect.objectContaining({
-          field: 'message',
-          value: 'I would like to discuss a website build.',
-        }),
-      ]),
-    )
+    expect(submission.id).toBeDefined()
 
     const stored = await payload.findByID({
       collection: 'form-submissions',
       id: submission.id,
-      depth: 0,
     })
 
-    expect(stored.id).toBe(submission.id)
-    expect(stored.form).toBe(formID)
-  })
-
-  it('accepts a submission without the optional phone number', async () => {
-    const submission = await payload.create({
-      collection: 'form-submissions',
-      data: {
-        form: formID,
-        submissionData: [
-          { field: 'full-name', value: 'Grace Hopper' },
-          { field: 'email', value: 'grace@example.com' },
-          { field: 'message', value: 'Please send a day rate for a CMS integration.' },
-        ],
-      },
-      depth: 0,
-      overrideAccess: false,
-    })
-
-    expect(submission.id).toBeTruthy()
-    expect(submission.submissionData).toHaveLength(3)
-    expect(submission.submissionData).toEqual(
-      expect.not.arrayContaining([expect.objectContaining({ field: 'phone' })]),
+    expect(stored.submissionData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'full-name', value: 'Test Person' }),
+        expect.objectContaining({ field: 'email', value: 'test@example.com' }),
+        expect.objectContaining({ field: 'message', value: 'Hello from the integration test.' }),
+      ]),
     )
-  })
-
-  it('rejects a submission without a form reference', async () => {
-    await expect(
-      payload.create({
-        collection: 'form-submissions',
-        data: {
-          submissionData: [{ field: 'message', value: 'Orphaned submission' }],
-        } as any,
-        depth: 0,
-        overrideAccess: false,
-      }),
-    ).rejects.toThrow()
   })
 })

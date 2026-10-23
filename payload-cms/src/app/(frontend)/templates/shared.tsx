@@ -1,4 +1,5 @@
 import type { RequiredDataFromCollectionSlug } from 'payload'
+import Link from 'next/link'
 import React from 'react'
 
 import { RenderBlocks } from '@/blocks/RenderBlocks'
@@ -64,6 +65,9 @@ export function ContactPanel({ contact }: { contact?: any }) {
           {links.map((l: any, i: number) => (
             <a key={i} href={l?.href || '#'} className="text-muted small" rel="noreferrer">{l?.label || l?.href || 'Contact'}</a>
           ))}
+          <Link href="/contact#contact-form" className="btn btn-primary mt-4 inline-flex">
+            Send a message
+          </Link>
         </div>
       </div>
     </section>

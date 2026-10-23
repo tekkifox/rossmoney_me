@@ -63,9 +63,15 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
 
           <div className="hero-actions">
             {homeData.primaryButton?.label && homeData.primaryButton?.href ? (
-              <Link id="hero-primary-button" className="btn btn-primary" href={homeData.primaryButton.href}>{homeData.primaryButton.label}</Link>
+              <Link
+                id="hero-primary-button"
+                className="btn btn-primary"
+                href={homeData.primaryButton.href === '#contact' ? '/contact#contact-form' : homeData.primaryButton.href}
+              >
+                {homeData.primaryButton.label}
+              </Link>
             ) : (
-              <Link id="hero-primary-button" className="btn btn-primary" href="/contact">Start a conversation</Link>
+              <Link id="hero-primary-button" className="btn btn-primary" href="/contact#contact-form">Start a conversation</Link>
             )}
 
             {homeData.secondaryButton?.label && homeData.secondaryButton?.href ? (
@@ -250,5 +256,3 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
     </main>
   )
 }
-
-// Add link to contact form in hero if not present
