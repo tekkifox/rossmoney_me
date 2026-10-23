@@ -24,6 +24,8 @@ import { experiencePage } from './endpoints/seed/experience-page';
 import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
+import { gameservers } from './endpoints/seed/game-servers-page';
+import { cv } from './endpoints/seed/cv-page';
 import fs from 'fs'
 import os from 'os'
 import { fileURLToPath as fURL } from 'url'
@@ -156,26 +158,34 @@ export default buildConfig({
           payload.logger.warn(`Header global seed note: ${err}`);
         }
 
-      const existingPages = await pClient.find({ collection: 'pages', limit: 10 });
-      const shouldSeed = existingPages.totalDocs === 0 || process.env.PAYLOAD_SEED === 'true';
+      // Default documents are created on an empty database, and any that are
+      // missing are added on later startups. Existing documents are only
+      // overwritten when PAYLOAD_SEED=true so editor changes are preserved.
+      const forceSeed = process.env.PAYLOAD_SEED === 'true';
+      // Cache revalidation needs a Next.js request context. `onInit` runs at
+      // server start, so tell the collection hooks to skip revalidation.
+      const seedContext = { disableRevalidate: true };
 
-      if (shouldSeed) {
-        payload.logger.info('Seeding/syncing default Payload CMS documents...');
+      payload.logger.info('Ensuring default Payload CMS documents exist...');
 
-        const defaultPages = [
-          home,
-          contactPageData,
-          travellingPage,
-          architecture,
-          commits,
-          work,
-          experiencePage,
-          servicesPage,
-        ];
+      const defaultPages = [
+        home,
+        contactPageData,
+        travellingPage,
+        architecture,
+        commits,
+        work,
+        experiencePage,
+        servicesPage,
+        gameservers,
+        cv,
+      ];
 
-        for (const pageData of defaultPages) {
-          const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
-          if (found) {
+      const existingPages = await pClient.find({ collection: 'pages', limit: 1000 });
+      for (const pageData of defaultPages) {
+        const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
+        try {
+          if (found && forceSeed) {
             await pClient.update({
               collection: 'pages',
               id: found.id,
