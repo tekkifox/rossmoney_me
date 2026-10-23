@@ -86,7 +86,7 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border-radius:8px;border:1px solid transparent;font-weight:600;cursor:pointer}
 .btn-primary{background:var(--primary);color:#fff}
-.btn-primary:hover{background:var(--primary-hover)}
+.btn-primary:hover{background:var(--primary-hover);color:#fff}
 .btn-secondary{background:#fff;border:1px solid var(--border);color:var(--text)}
 
 .hero-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;align-items:stretch}
@@ -128,6 +128,7 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
 
 .section{margin-top:20px}
 .section-heading{margin-bottom:10px}
+.services-section{margin-top:0;padding-top:40px;padding-bottom:40px}
 .contact-card{display:flex;gap:16px;align-items:flex-start}
 .contact-links a{display:block;margin-bottom:8px}
 

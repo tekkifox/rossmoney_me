@@ -115,7 +115,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
   const range = rateBounds(services)
 
   return (
-    <main>
+    <main className="services-page">
       <PageMeta page={page} />
 
       <section className="hero container">
@@ -156,6 +156,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
 
       <div id="services">
         <Section
+          className="services-section"
           eyebrow={data.servicesSection?.eyebrow}
           title={data.servicesSection?.title || ''}
           lead={data.servicesSection?.lead}
@@ -173,7 +174,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
         </Section>
       </div>
 
-      <Section eyebrow={pricingTable.eyebrow} title={pricingTable.title || ''} lead={pricingTable.lead}>
+      <Section className="services-section" eyebrow={pricingTable.eyebrow} title={pricingTable.title || ''} lead={pricingTable.lead}>
         <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
@@ -236,7 +237,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
         )}
       </Section>
 
-      <Section eyebrow={accordion.eyebrow} title={accordion.title || ''} lead={accordion.lead}>
+      <Section className="services-section" eyebrow={accordion.eyebrow} title={accordion.title || ''} lead={accordion.lead}>
         <div className="space-y-3">
           {services.map((service, index) => (
             <details
@@ -275,7 +276,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
         </div>
       </Section>
 
-      <Section eyebrow={engagement.eyebrow} title={engagement.title || ''} lead={engagement.lead}>
+      <Section className="services-section" eyebrow={engagement.eyebrow} title={engagement.title || ''} lead={engagement.lead}>
         <div className="grid gap-4 md:grid-cols-2">
           {Array.isArray(engagement.items) &&
             engagement.items.map((item: { label?: string; value?: string }, index: number) => (
@@ -295,7 +296,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
       </Section>
 
       {cta.title && (
-        <section className="section container">
+        <section className="section container services-section">
           <div className="rounded-3xl border border-border bg-primary p-8 text-primary-foreground shadow-sm sm:p-10">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
               <div className="max-w-2xl">
