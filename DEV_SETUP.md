@@ -1,0 +1,1 @@
+# Dev branch setup for crewmates\n\nDev branch is available at origin/dev and checked out locally in /workspace/rossmoney_me-dev.\n\nTo test locally:\n\n\nMongoDB test helper is available on dev branch for testing.

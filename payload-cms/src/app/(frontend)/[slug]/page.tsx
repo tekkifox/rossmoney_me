@@ -100,7 +100,7 @@ export default async function Page({ params: paramsPromise }: Args) {
         {page.slug === 'architecture' && <ArchitectureTemplate page={page} />}
         {page.slug === 'commits' && <CommitsTemplate page={page} />}
         {page.slug === 'work' && <WorkTemplate page={page} projects={collections?.projects || []} />}
-        {page.slug === 'experience' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
+        {page.slug === 'experience-page' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
         {page.slug === 'navigation' && <NavigationTemplate page={page} />}
         {page.slug === 'cv' && <CVTemplate page={page} />}
         {page.slug === 'services' && <ServicesTemplate page={page} />}

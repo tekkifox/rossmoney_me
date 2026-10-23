@@ -180,6 +180,10 @@ Although Next.js includes a robust set of caching strategies out of the box, Pay
 
 To spin up this example locally, follow the [Quick Start](#quick-start). Then [Seed](#seed) the database with a few pages, posts, and projects.
 
+### Tests
+
+`pnpm test:int` provisions its own disposable MongoDB for the run, so no database needs to be running. Setting `MONGODB_URI` (or `DATABASE_URL`) overrides that and uses your database untouched.
+
 ### Working with Postgres
 
 Postgres and other SQL-based databases follow a strict schema for managing your data. In comparison to our MongoDB adapter, this means that there's a few extra steps to working with Postgres.
