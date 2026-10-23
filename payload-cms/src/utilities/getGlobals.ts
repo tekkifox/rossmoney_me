@@ -19,7 +19,31 @@ async function getGlobal<T extends Global>(slug: T, depth = 0): Promise<DataFrom
 /**
  * Returns a unstable_cache function mapped with the cache tag for the slug
  */
-export const getCachedGlobal = <T extends Global>(slug: T, depth = 0) =>
-  unstable_cache(async () => getGlobal<T>(slug, depth), [slug], {
-    tags: [`global_${slug}`],
-  })
+export const getCachedGlobal = <T extends Global>(slug: T, depth = 0) => {
+  const cached = unstable_cache(
+    async () => {
+      const result = await getGlobal<T>(slug, depth)
+
+      // Never cache empty/fallback global reads - they indicate an outage/stub
+      if (!result || typeof result !== 'object' || Object.keys(result).length === 0) {
+        throw new Error('EMPTY_GLOBAL')
+      }
+
+      return result
+    },
+    [slug],
+    {
+      tags: [`global_${slug}`],
+      revalidate: 60,
+    },
+  )
+
+  return async () => {
+    try {
+      return await cached()
+    } catch {
+      // Bypass cache on empty/stub reads
+      return getGlobal<T>(slug, depth)
+    }
+  }
+}
