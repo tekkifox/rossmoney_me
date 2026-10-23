@@ -82,6 +82,8 @@ MONGODB_URI=mongodb://mongo:27017/rossmoney_me
 PAYLOAD_SECRET=rossmoney_payload_secret_key_change_me
 SERVER_URL=https://www.rossmoney.me
 PAYLOAD_SEED=true
+NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
+RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key
 
 DOCKER_API_VERSION=v1.44
 DOCKER_HOST=tcp://socket-proxy:2375
@@ -98,7 +100,7 @@ VERSION=1
 LOG_LEVEL=info
 ```
 
-The first block is for the CMS and telemetry services; the remaining socket-proxy variables are passed through to the Docker API proxy.
+The first block is for the CMS and telemetry services; the remaining socket-proxy variables are passed through to the Docker API proxy. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side.
 
 ## Portainer webhook
 

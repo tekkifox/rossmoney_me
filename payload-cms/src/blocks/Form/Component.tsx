@@ -2,7 +2,6 @@
 import type { Form as FormType } from '@payloadcms/plugin-form-builder/types'
 
 import { useRouter } from 'next/navigation'
-import Script from 'next/script'
 import React, { useCallback, useState } from 'react'
 import { useForm, FormProvider, type FieldValues } from 'react-hook-form'
 import RichText from '@/components/RichText'
@@ -121,13 +120,6 @@ export const FormBlock: React.FC<
 
   return (
     <div className="container lg:max-w-[48rem]">
-      {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && (
-        <Script
-          async
-          defer
-          src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
-        />
-      )}
       {enableIntro && introContent && !hasSubmitted && (
         <RichText className="mb-8 lg:mb-12" data={introContent} enableGutter={false} />
       )}
@@ -137,7 +129,7 @@ export const FormBlock: React.FC<
             <RichText data={confirmationMessage} />
           )}
           {isLoading && !hasSubmitted && <p>Loading, please wait...</p>}
-          {error && <div>{`${error.status || '500'}: ${error.message || ''}`}</div>}
+          {error && <div>{`${error.status ? `${error.status}: ` : ''}${error.message || ''}`}</div>}
           {!hasSubmitted && (
             <form id={formID} onSubmit={handleSubmit(onSubmit)}>
               <div className="mb-4 last:mb-0">
