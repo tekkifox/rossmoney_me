@@ -23,7 +23,6 @@ import { commits } from './endpoints/seed/commits-page';
 import { experiencePage } from './endpoints/seed/experience-page';
 import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
-import { services as servicesPage } from './endpoints/seed/services-page';
 import fs from 'fs'
 import os from 'os'
 import { fileURLToPath as fURL } from 'url'
@@ -139,7 +138,6 @@ export default buildConfig({
               { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
               { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
               { link: { type: 'custom', label: 'CV', url: '/cv' } },
-              { link: { type: 'custom', label: 'Services', url: '/services' } },
               { link: { type: 'custom', label: 'Contact', url: '/#contact' } },
             ],
           };
@@ -170,7 +168,6 @@ export default buildConfig({
           commits,
           work,
           experiencePage,
-          servicesPage,
         ];
 
         for (const pageData of defaultPages) {

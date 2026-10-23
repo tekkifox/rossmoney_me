@@ -20,7 +20,6 @@ import ExperiencePageTemplate from '../templates/experience-page'
 import NavigationTemplate from '../templates/navigation'
 import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
-import ServicesTemplate from '../templates/services'
 import { loadCollections, PageMeta } from '../templates/shared'
 
 // This page intentionally uses dynamic data from internal APIs (architecture, commits)
@@ -103,7 +102,6 @@ export default async function Page({ params: paramsPromise }: Args) {
         {page.slug === 'experience' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
         {page.slug === 'navigation' && <NavigationTemplate page={page} />}
         {page.slug === 'cv' && <CVTemplate page={page} />}
-        {page.slug === 'services' && <ServicesTemplate page={page} />}
         {(page.slug === 'game-servers' || page.slug === 'gameservers') && <GameServersTemplate page={page} />}
       </article>
     )
