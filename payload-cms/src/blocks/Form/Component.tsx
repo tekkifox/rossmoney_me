@@ -1,15 +1,17 @@
 'use client'
-import type { FormFieldBlock, Form as FormType } from '@payloadcms/plugin-form-builder/types'
+import type { Form as FormType } from '@payloadcms/plugin-form-builder/types'
 
 import { useRouter } from 'next/navigation'
+import Script from 'next/script'
 import React, { useCallback, useState } from 'react'
-import { useForm, FormProvider } from 'react-hook-form'
+import { useForm, FormProvider, type FieldValues } from 'react-hook-form'
 import RichText from '@/components/RichText'
 import { Button } from '@/components/ui/button'
 import type { DefaultTypedEditorState } from '@payloadcms/richtext-lexical'
 
 import { fields } from './fields'
 import { getClientSideURL } from '@/utilities/getURL'
+import { getRecaptchaToken } from '@/utilities/getRecaptchaToken'
 
 const honeypotFieldName = 'website'
 
@@ -33,7 +35,7 @@ export const FormBlock: React.FC<
     introContent,
   } = props
 
-  const formMethods = useForm({
+  const formMethods = useForm<FieldValues>({
     defaultValues: formFromProps.fields,
   })
   const {
@@ -49,22 +51,23 @@ export const FormBlock: React.FC<
   const router = useRouter()
 
   const onSubmit = useCallback(
-    (data: FormFieldBlock[]) => {
+    (data: FieldValues) => {
       let loadingTimerID: ReturnType<typeof setTimeout>
       const submitForm = async () => {
         setError(undefined)
 
-        const dataToSend = Object.entries(data).map(([name, value]) => ({
-          field: name,
-          value,
-        }))
-
-        // delay loading indicator by 1s
-        loadingTimerID = setTimeout(() => {
-          setIsLoading(true)
-        }, 1000)
-
         try {
+          const recaptchaToken = await getRecaptchaToken()
+          const dataToSend = [
+            ...Object.entries(data).map(([name, value]) => ({ field: name, value })),
+            { field: 'recaptcha-token', value: recaptchaToken },
+          ]
+
+          // delay loading indicator by 1s
+          loadingTimerID = setTimeout(() => {
+            setIsLoading(true)
+          }, 1000)
+
           const req = await fetch(`${getClientSideURL()}/api/form-submissions`, {
             body: JSON.stringify({
               form: formID,
@@ -103,9 +106,10 @@ export const FormBlock: React.FC<
           }
         } catch (err) {
           console.warn(err)
+          if (loadingTimerID) clearTimeout(loadingTimerID)
           setIsLoading(false)
           setError({
-            message: 'Something went wrong.',
+            message: err instanceof Error ? err.message : 'Something went wrong.',
           })
         }
       }
@@ -117,6 +121,13 @@ export const FormBlock: React.FC<
 
   return (
     <div className="container lg:max-w-[48rem]">
+      {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && (
+        <Script
+          async
+          defer
+          src={`https://www.google.com/recaptcha/api.js?render=${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`}
+        />
+      )}
       {enableIntro && introContent && !hasSubmitted && (
         <RichText className="mb-8 lg:mb-12" data={introContent} enableGutter={false} />
       )}
