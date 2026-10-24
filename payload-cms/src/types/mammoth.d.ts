@@ -6,9 +6,11 @@ declare module 'mammoth' {
 
   export interface MammothRun extends MammothElement {
     type: 'run'
+    font: string | undefined
     fontSize: number | null
     styleId: string | null
     styleName: string | null
+    isBold: boolean
     isUnderline: boolean
   }
 
@@ -26,7 +28,10 @@ declare module 'mammoth' {
    * Convert a DOCX (ArrayBuffer or object) to HTML.
    * The real mammoth API returns an object with `value` (string HTML) and `messages` (array).
    */
-  export function convertToHtml(input: any, options?: MammothOptions): Promise<{ value: string; messages?: any[] }>
+  export function convertToHtml(
+    input: any,
+    options?: MammothOptions,
+  ): Promise<{ value: string; messages?: any[] }>
 
   const mammoth: {
     convertToHtml: typeof convertToHtml
@@ -34,4 +39,17 @@ declare module 'mammoth' {
   }
 
   export default mammoth
+}
+
+declare module 'mammoth/lib/unzip' {
+  export interface MammothZip {
+    read(path: string, encoding?: string): Promise<string>
+    write(path: string, contents: string): void
+    toArrayBuffer(): Promise<ArrayBuffer>
+  }
+
+  export function openZip(options: {
+    arrayBuffer: ArrayBuffer
+    buffer: ArrayBuffer
+  }): Promise<MammothZip>
 }
