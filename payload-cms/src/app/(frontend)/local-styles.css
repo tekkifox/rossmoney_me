@@ -194,7 +194,16 @@ pre{white-space:pre-wrap;word-break:break-word}
 }
 
 /* CV (docx) presentation tweaks: restore bullet points and section padding */
-.docx { color: var(--text); font-family: inherit }
+.docx { color: #555; font-family: Arial, sans-serif; line-height: 1.4 }
+.docx .docx-font-size-9 { font-size: 9pt }
+.docx .docx-font-size-9-5 { font-size: 9.5pt }
+.docx .docx-font-size-10 { font-size: 10pt }
+.docx .docx-font-size-10-5 { font-size: 10.5pt }
+.docx .docx-font-size-11 { font-size: 11pt }
+.docx .docx-font-size-11-5 { font-size: 11.5pt }
+.docx .docx-font-size-13-5 { font-size: 13.5pt; color: #111 }
+.docx .docx-font-size-14 { font-size: 14pt; color: #2386f5 }
+.docx .docx-font-size-22 { font-size: 22pt; color: #111 }
 .docx p { margin: 0 0 0.75rem }
 .docx h1, .docx h2, .docx h3, .docx h4 { margin-top: 0.5rem; margin-bottom: 0.4rem }
 .docx ul, .docx ol { margin: 0 0 0.75rem 1.25rem; padding-left: 1rem; list-style-position: outside }
