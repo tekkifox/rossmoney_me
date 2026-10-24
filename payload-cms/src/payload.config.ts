@@ -9,7 +9,9 @@ import { Footer } from './Footer/config'
 import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
+import { resendAdapter } from '@payloadcms/email-resend'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
+import { contactForm as contactFormData } from './endpoints/seed/contact-form';
 import { home } from './endpoints/seed/home';
 import { Pages } from './collections/Pages';
 import { Users } from './collections/Users';
@@ -23,6 +25,9 @@ import { commits } from './endpoints/seed/commits-page';
 import { experiencePage } from './endpoints/seed/experience-page';
 import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
+import { services as servicesPage } from './endpoints/seed/services-page';
+import { gameservers } from './endpoints/seed/game-servers-page';
+import { cv } from './endpoints/seed/cv-page';
 import fs from 'fs'
 import os from 'os'
 import { fileURLToPath as fURL } from 'url'
@@ -50,6 +55,15 @@ const noopDb = {
 } as any;
 
 const useNoopDb = process.env.SKIP_DB === 'true' || process.env.NEXT_PHASE === 'phase-production-build';
+
+const emailFromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || 'dev@rossmoney.me';
+const emailFromName = process.env.EMAIL_FROM_NAME || process.env.SMTP_FROM_NAME || 'Ross Money';
+
+const emailAdapter = resendAdapter({
+  apiKey: process.env.RESEND_API_KEY || '',
+  defaultFromAddress: emailFromAddress,
+  defaultFromName: emailFromName,
+});
 
 export default buildConfig({
   serverURL: process.env.SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8082',
@@ -93,6 +107,7 @@ export default buildConfig({
   collections: [Users, Pages, Posts, Categories, Projects, Experience, Media],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
+  email: emailAdapter,
   globals: [Header, Footer],
   plugins,
   db: useNoopDb
@@ -138,7 +153,8 @@ export default buildConfig({
               { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
               { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
               { link: { type: 'custom', label: 'CV', url: '/cv' } },
-              { link: { type: 'custom', label: 'Contact', url: '/#contact' } },
+              { link: { type: 'custom', label: 'Services', url: '/services' } },
+              { link: { type: 'custom', label: 'Contact', url: '/contact' } },
             ],
           };
 
@@ -149,75 +165,176 @@ export default buildConfig({
           } else if (!Array.isArray((currentHeader as any).navItems) || (currentHeader as any).navItems.length === 0 || process.env.PAYLOAD_SEED === 'true') {
             await pClient.db.updateGlobal({ slug: 'header', data: headerData });
             payload.logger.info('Header global updated and seeded successfully.');
+          } else {
+            const navItems = (currentHeader as any).navItems;
+            const correctedNavItems = navItems.map((item: any) => {
+              if (item?.link?.label === 'Contact' && item.link.url === '/#contact') {
+                return { ...item, link: { ...item.link, url: '/contact' } };
+              }
+              return item;
+            });
+            if (JSON.stringify(correctedNavItems) !== JSON.stringify(navItems)) {
+              await pClient.db.updateGlobal({ slug: 'header', data: { navItems: correctedNavItems } });
+              payload.logger.info('Corrected header Contact link to /contact');
+            }
           }
         } catch (err) {
           payload.logger.warn(`Header global seed note: ${err}`);
         }
 
-      const existingPages = await pClient.find({ collection: 'pages', limit: 10 });
-      const shouldSeed = existingPages.totalDocs === 0 || process.env.PAYLOAD_SEED === 'true';
+      // Default documents are created on an empty database, and any that are
+      // missing are added on later startups. Existing documents are only
+      // overwritten when PAYLOAD_SEED=true so editor changes are preserved.
+      const forceSeed = process.env.PAYLOAD_SEED === 'true';
+      // Cache revalidation needs a Next.js request context. `onInit` runs at
+      // server start, so tell the collection hooks to skip revalidation.
+      const seedContext = { disableRevalidate: true };
 
-      if (shouldSeed) {
-        payload.logger.info('Seeding/syncing default Payload CMS documents...');
+      payload.logger.info('Ensuring default Payload CMS documents exist...');
 
-        const defaultPages = [
-          home,
-          contactPageData,
-          travellingPage,
-          architecture,
-          commits,
-          work,
-          experiencePage,
-        ];
+      const defaultPages = [
+        home,
+        contactPageData,
+        travellingPage,
+        architecture,
+        commits,
+        work,
+        experiencePage,
+        servicesPage,
+        gameservers,
+        cv,
+      ];
 
-        for (const pageData of defaultPages) {
-          const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
-          if (found) {
+      const existingPages = await pClient.find({ collection: 'pages', limit: 1000 });
+      for (const pageData of defaultPages) {
+        const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
+        try {
+          if (found && forceSeed) {
             await pClient.update({
               collection: 'pages',
               id: found.id,
               data: pageData,
+              context: seedContext,
             });
-          } else {
+          } else if (!found) {
             await pClient.create({
               collection: 'pages',
               data: pageData,
+              context: seedContext,
             });
+            payload.logger.info(`Seeded default page: ${pageData.slug}`);
+          } else if (found.slug === 'home') {
+            // Narrow, idempotent correction: older databases still store the
+            // homepage button as the retired in-page anchor. Only rewrite that
+            // exact value so editor changes to the page are preserved.
+            const data = found.data && typeof found.data === 'object' ? found.data : {};
+            const primaryButton = (data as any).primaryButton;
+            if (primaryButton?.href === '#contact') {
+              await pClient.update({
+                collection: 'pages',
+                id: found.id,
+                data: {
+                  data: {
+                    ...(data as Record<string, unknown>),
+                    primaryButton: { ...primaryButton, href: '/contact' },
+                  },
+                },
+                context: seedContext,
+              });
+              payload.logger.info('Corrected home page primary button link to /contact');
+            }
+          }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed page "${pageData.slug}": ${message}`);
+        }
+      }
+
+      const existingContactForm = await pClient.find({
+        collection: 'forms',
+        where: { title: { equals: contactFormData.title } },
+        limit: 1,
+        depth: 0,
+      });
+      if (existingContactForm.docs.length === 0) {
+        try {
+          await pClient.create({
+            collection: 'forms',
+            data: contactFormData,
+            depth: 0,
+          });
+          payload.logger.info(`Seeded default contact form: ${contactFormData.title}`);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed contact form "${contactFormData.title}": ${message}`);
+        }
+      } else {
+        const existingForm = existingContactForm.docs[0] as any;
+        const desiredEmails = contactFormData.emails || [];
+        const normalizeEmails = (emails: any[]) => emails.map((email) => ({
+          emailFrom: email.emailFrom,
+          emailTo: email.emailTo,
+          message: email.message,
+          replyTo: email.replyTo,
+          subject: email.subject,
+          ...(email.cc !== undefined ? { cc: email.cc } : {}),
+          ...(email.bcc !== undefined ? { bcc: email.bcc } : {}),
+        }));
+        if (JSON.stringify(normalizeEmails(existingForm.emails || [])) !== JSON.stringify(desiredEmails)) {
+          try {
+            await pClient.update({
+              collection: 'forms',
+              id: existingForm.id,
+              data: { emails: desiredEmails },
+              depth: 0,
+            });
+            payload.logger.info(`Updated contact form email delivery: ${contactFormData.title}`);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            payload.logger.error(`Failed to update contact form email delivery: ${message}`);
           }
         }
+      }
 
-        const defaultProjects = [
-          { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
-          { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
-          { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
-        ];
+      const defaultProjects = [
+        { title: 'Morphsites', role: 'Backend developer across Laravel and legacy PHP', summary: 'Built and maintained new Laravel projects and older PHP/Statamic sites, while handling support tickets autonomously through Jira.', tags: [{ tag: 'Laravel' }, { tag: 'Statamic' }, { tag: 'Jira support' }], order: 1 },
+        { title: 'Rawnet Ltd.', role: 'PHP Developer with DevOps responsibility', summary: 'Supported in-house developers and AWS infrastructure, built local Docker setup commands, handled WAF blocking, monitored uptime, and managed Ubuntu patching with Canonical Landscape.', tags: [{ tag: 'AWS' }, { tag: 'Docker' }, { tag: 'Ubuntu' }], order: 2 },
+        { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
+      ];
 
-        const existingProjects = await pClient.find({ collection: 'projects', limit: 10 });
-        for (const proj of defaultProjects) {
-          const found = existingProjects.docs.find((p: any) => p.title === proj.title);
-          if (found) {
+      const existingProjects = await pClient.find({ collection: 'projects', limit: 100 });
+      for (const proj of defaultProjects) {
+        const found = existingProjects.docs.find((p: any) => p.title === proj.title);
+        try {
+          if (found && forceSeed) {
             await pClient.update({ collection: 'projects', id: found.id, data: proj });
-          } else {
+          } else if (!found) {
             await pClient.create({ collection: 'projects', data: proj });
           }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed project "${proj.title}": ${message}`);
         }
+      }
 
-        const defaultExperience = [
-          { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
-          { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
-        ];
+      const defaultExperience = [
+        { year: '2024 - Present', title: 'Personal infrastructure', organization: 'Homelab and service automation', summary: 'Building portfolio tooling, reverse-proxy deployments, and containerized services that I can operate end-to-end.', highlights: [{ highlight: 'Docker' }, { highlight: 'NGINX' }, { highlight: 'Go services' }], order: 1 },
+        { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
+      ];
 
-        const existingExp = await pClient.find({ collection: 'experience', limit: 10 });
-        for (const exp of defaultExperience) {
-          const found = existingExp.docs.find((e: any) => e.title === exp.title);
-          if (found) {
+      const existingExp = await pClient.find({ collection: 'experience', limit: 100 });
+      for (const exp of defaultExperience) {
+        const found = existingExp.docs.find((e: any) => e.title === exp.title);
+        try {
+          if (found && forceSeed) {
             await pClient.update({ collection: 'experience', id: found.id, data: exp });
-          } else {
+          } else if (!found) {
             await pClient.create({ collection: 'experience', data: exp });
           }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to seed experience "${exp.title}": ${message}`);
         }
-
-        payload.logger.info('Default Payload CMS documents seeded/synced successfully.');
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

@@ -9,6 +9,7 @@ import { FixedToolbarFeature, HeadingFeature, lexicalEditor } from '@payloadcms/
 
 import { Page, Post } from '@/payload-types'
 import { getServerSideURL } from '@/utilities/getURL'
+import { rejectHoneypot } from '@/hooks/rejectHoneypot'
 
 const siteName = 'Ross Money - Developer & DevOps Portfolio'
 const generateTitle: GenerateTitle<Post | Page> = ({ doc }) => {
@@ -75,6 +76,11 @@ export const plugins: Plugin[] = [
           }
           return field
         })
+      },
+    },
+    formSubmissionOverrides: {
+      hooks: {
+        beforeChange: [rejectHoneypot],
       },
     },
   })

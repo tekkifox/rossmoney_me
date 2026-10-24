@@ -61,7 +61,7 @@ h1{font-size:2.4rem;margin:0 0 12px;line-height:1.05}
 /* Buttons ------------------------------------------------------------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;padding:10px 16px;border-radius:8px;border:1px solid transparent;font-weight:600;cursor:pointer}
 .btn-primary{background:var(--primary);color:#fff}
-.btn-primary:hover{background:var(--primary-hover)}
+.btn-primary:hover{background:var(--primary-hover);color:#fff}
 .btn-secondary{background:#fff;border:1px solid var(--border);color:var(--text)}
 
 /* Metrics / cards grid ------------------------------------------------ */

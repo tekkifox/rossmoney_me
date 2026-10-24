@@ -1,0 +1,75 @@
+version: "3.8"
+services:
+  cms:
+    image: ghcr.io/tekkifox/rossmoney_me-cms:dev
+    pull_policy: always
+    hostname: rossmoney_me-cms-dev-1
+    env_file:
+      - stack.env
+    restart: unless-stopped
+    environment:
+      PORT: "8083"
+    ports:
+      - "8083:8083"
+    networks:
+      - rossmoney-stack-dev
+      - proxy
+    depends_on:
+      - mongo
+    volumes:
+      - payload-media-dev:/app/public/media:rw
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    networks:
+      - rossmoney-stack-dev
+    volumes:
+      - mongo-data-dev:/data/db
+
+  archview:
+    image: ghcr.io/tekkifox/archview:latest
+    pull_policy: always
+    env_file:
+      - stack.env
+    environment:
+      PORT: "8081"
+    networks:
+      - rossmoney-stack-dev
+    depends_on:
+      socket-proxy:
+        condition: service_healthy
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+
+  socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    container_name: socket-proxy-dev
+    env_file:
+      - stack.env
+    networks:
+      - rossmoney-stack-dev
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2375/_ping | grep -q OK"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+networks:
+  rossmoney-stack-dev:
+    driver: bridge
+
+volumes:
+  mongo-data-dev:
+  payload-media-dev:
