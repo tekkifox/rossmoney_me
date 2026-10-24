@@ -1,5 +1,10 @@
 "use client"
 import React, { useEffect, useRef, useState } from 'react'
+import {
+  applyCVDocxRunStyle,
+  cvDocxStyleMap,
+  normalizeCVDocxUnderline,
+} from './cvDocxStyles'
 
 export default function CVViewer() {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -38,11 +43,17 @@ export default function CVViewer() {
           blob = await res.blob()
         }
 
-        const arrayBuffer = await blob.arrayBuffer()
+        const arrayBuffer = await normalizeCVDocxUnderline(await blob.arrayBuffer())
         // dynamic import to avoid build-time dependency problems
         const mammoth = await import('mammoth')
         // convert DOCX to HTML
-        const result = await (mammoth as any).convertToHtml({ arrayBuffer })
+        const result = await mammoth.convertToHtml(
+          { arrayBuffer },
+          {
+            styleMap: cvDocxStyleMap,
+            transformDocument: mammoth.transforms.run(applyCVDocxRunStyle),
+          },
+        )
         const html = result && result.value ? result.value : ''
 
         const container = containerRef.current
