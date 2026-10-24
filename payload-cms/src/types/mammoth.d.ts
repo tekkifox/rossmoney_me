@@ -40,16 +40,3 @@ declare module 'mammoth' {
 
   export default mammoth
 }
-
-declare module 'mammoth/lib/unzip' {
-  export interface MammothZip {
-    read(path: string, encoding?: string): Promise<string>
-    write(path: string, contents: string): void
-    toArrayBuffer(): Promise<ArrayBuffer>
-  }
-
-  export function openZip(options: {
-    arrayBuffer: ArrayBuffer
-    buffer: ArrayBuffer
-  }): Promise<MammothZip>
-}

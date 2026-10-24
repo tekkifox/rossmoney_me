@@ -208,6 +208,7 @@ pre{white-space:pre-wrap;word-break:break-word}
 .docx .docx-font-family-segoe-ui-emoji { font-family: "Segoe UI Emoji", sans-serif }
 .docx .docx-font-family-arial-unicode-ms { font-family: "Arial Unicode MS", Arial, sans-serif }
 .docx .docx-font-family-times-new-roman { font-family: "Times New Roman", serif }
+.docx a { text-decoration: underline }
 .docx p { margin: 0 0 0.75rem }
 .docx h1, .docx h2, .docx h3, .docx h4 { margin-top: 0.5rem; margin-bottom: 0.4rem }
 .docx ul, .docx ol { margin: 0 0 0.75rem 1.25rem; padding-left: 1rem; list-style-position: outside }

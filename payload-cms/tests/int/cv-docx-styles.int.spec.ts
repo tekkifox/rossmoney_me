@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyCVDocxRunStyle,
   cvDocxStyleMap,
-  normalizeCVDocxXml,
 } from '../../src/components/CVViewer/cvDocxStyles'
 
 const cvStyles = readFileSync(
@@ -99,19 +98,23 @@ describe('CV DOCX styles', () => {
     })
   })
 
-  it('normalizes implicit DOCX underline values without changing explicit no-underline runs', () => {
-    const xml = '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:r><w:rPr><w:u w:color="555555"/></w:rPr></w:r><w:r><w:rPr><w:u w:val="none"/></w:rPr></w:r></w:document>'
+  it('leaves ordinary runs un-underlined and maps explicitly underlined runs', () => {
+    const ordinaryRun = {
+      type: 'run' as const,
+      children: [],
+      font: 'Arial',
+      fontSize: 10,
+      styleId: null,
+      styleName: null,
+      isBold: false,
+      isUnderline: false,
+    }
+    const underlinedRun = { ...ordinaryRun, isUnderline: true }
 
-    const normalized = normalizeCVDocxXml(xml)
-    const doc = new DOMParser().parseFromString(normalized, 'application/xml')
-    const underlineValues = Array.from(
-      doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'u'),
-    ).map((underline) => underline.getAttributeNS(
-      'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
-      'val',
-    ))
-
-    expect(underlineValues).toEqual(['single', 'none'])
+    expect(cvDocxStyleMap).toContain('u => u')
+    expect(applyCVDocxRunStyle(ordinaryRun)).toMatchObject({ isUnderline: false })
+    expect(applyCVDocxRunStyle(underlinedRun)).toMatchObject({ isUnderline: true })
+    expect(cvStyles).toContain('.docx a { text-decoration: underline }')
   })
 
   it('leaves unsupported font sizes and font families unchanged', () => {
