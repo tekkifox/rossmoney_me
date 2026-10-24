@@ -1,47 +1,36 @@
 "use client"
 import React, { useEffect, useRef, useState } from 'react'
+import type { Media } from '@/payload-types'
 import {
   applyCVDocxRunStyle,
   cvDocxStyleMap,
   normalizeCVDocxUnderline,
 } from './cvDocxStyles'
 
-export default function CVViewer() {
+type Props = {
+  cvFile?: Media | string | null
+}
+
+export function getCVFileUrl(cvFile: Props['cvFile']) {
+  if (!cvFile || typeof cvFile === 'string') return null
+  return cvFile.url || (cvFile.filename ? `/media/${cvFile.filename}` : null)
+}
+
+export default function CVViewer({ cvFile }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const cvUrl = getCVFileUrl(cvFile)
 
   useEffect(() => {
     let cancelled = false
+    setError(null)
 
     async function renderDoc() {
       try {
-        // Try to fetch CV file from CMS pages api (expecting a 'cv' page with cvFile relation)
-        let blob: Blob | null = null
-        try {
-          const pageRes = await fetch('/api/pages?where[slug][equals]=cv&depth=2')
-          if (pageRes.ok) {
-            const pageJson = await pageRes.json()
-            const doc = Array.isArray(pageJson?.docs) && pageJson.docs.length ? pageJson.docs[0] : null
-            const media = doc?.cvFile || null
-            let url = null
-            if (media) {
-              url = media.url || (media.filename ? `/media/${media.filename}` : null)
-            }
-            if (url) {
-              const r = await fetch(url)
-              if (r.ok) blob = await r.blob()
-            }
-          }
-        } catch (e) {
-          // fall through to static fetch
-        }
-
-        if (!blob) {
-          // fallback to public/media/rossmoney_cv.docx
-          const res = await fetch('/media/rossmoney_cv.docx')
-          if (!res.ok) throw new Error(`Failed to fetch CV (${res.status})`)
-          blob = await res.blob()
-        }
+        if (!cvUrl) return
+        const res = await fetch(cvUrl)
+        if (!res.ok) throw new Error(`Failed to fetch CV (${res.status})`)
+        const blob = await res.blob()
 
         const arrayBuffer = await normalizeCVDocxUnderline(await blob.arrayBuffer())
         // dynamic import to avoid build-time dependency problems
@@ -135,19 +124,23 @@ export default function CVViewer() {
 
     void renderDoc()
     return () => { cancelled = true }
-  }, [])
+  }, [cvUrl])
 
   return (
     <div>
-      {error ? (
+      {!cvUrl ? (
+        <article className="card" style={{ padding: 20 }}>
+          <p className="text-muted">CV document is not available right now.</p>
+        </article>
+      ) : error ? (
         <article className="card" style={{ padding: 20 }}>
           <p className="text-muted">Unable to render DOCX: {error}</p>
-          <p><a href="/media/rossmoney_cv.docx">Download CV</a></p>
+          <p><a href={cvUrl} download>Download CV</a></p>
         </article>
       ) : (
         <div className="card" style={{ padding: 12 }}>
           <div className="cv-viewer-wrapper">
-            <a className="cv-download-top" href="/media/rossmoney_cv.docx" download>
+            <a className="cv-download-top" href={cvUrl} download>
               Download CV (DOCX)
             </a>
             <div ref={containerRef} />
