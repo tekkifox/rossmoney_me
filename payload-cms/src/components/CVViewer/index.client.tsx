@@ -99,14 +99,13 @@ export default function CVViewer({ cvFile }: Props) {
           }
           normalize(container)
         } catch (e) {
-          // eslint-disable-next-line no-console
           console.warn('CV normalize failed', e)
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('CV render failed', err)
+        const rawMessage = typeof err === 'object' && err !== null && 'message' in err ? err.message : undefined
         if (!cancelled && cvUrl) {
-          setError({ message: String((err as any)?.message ?? String(err)), url: cvUrl })
+          setError({ message: String(rawMessage ?? String(err)), url: cvUrl })
         }
       }
     }

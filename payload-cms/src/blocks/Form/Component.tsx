@@ -1,5 +1,6 @@
 'use client'
 import type { Form as FormType } from '@payloadcms/plugin-form-builder/types'
+import type { Form as PayloadForm } from '@/payload-types'
 
 import { useRouter } from 'next/navigation'
 import React, { useCallback, useState } from 'react'
@@ -18,7 +19,7 @@ export type FormBlockType = {
   blockName?: string
   blockType?: 'formBlock'
   enableIntro: boolean
-  form: FormType
+  form: FormType | PayloadForm
   introContent?: DefaultTypedEditorState
 }
 
@@ -35,7 +36,7 @@ export const FormBlock: React.FC<
   } = props
 
   const formMethods = useForm<FieldValues>({
-    defaultValues: formFromProps.fields,
+    defaultValues: formFromProps.fields ?? undefined,
   })
   const {
     control,

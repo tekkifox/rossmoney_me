@@ -1,12 +1,14 @@
-import { PageDoc, RenderLayout, Section } from './shared'
+import { PageDoc, RenderLayout, Section, isRecord, readLinks } from './shared'
 import { FormBlock } from '@/blocks/Form/Component'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import type { Form } from '@/payload-types'
 
 export default async function ContactTemplate({ page }: { page: PageDoc }) {
-  const links = ((page as any).data?.links || []) as Array<{ label?: string; href?: string }>
+  const pageData = isRecord(page.data) ? page.data : {}
+  const links = readLinks(pageData.links)
   
-  let form = null
+  let form: Form | null = null
   try {
     const payload = await getPayload({ config })
     const forms = await payload.find({
@@ -21,7 +23,7 @@ export default async function ContactTemplate({ page }: { page: PageDoc }) {
     if (forms.docs.length > 0) {
       form = forms.docs[0]
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
 
@@ -40,7 +42,7 @@ export default async function ContactTemplate({ page }: { page: PageDoc }) {
           <div className="rounded-3xl border border-border bg-card p-6 md:p-8">
             <FormBlock
               enableIntro={true}
-              form={form as any}
+              form={form}
               blockType="formBlock"
             />
           </div>

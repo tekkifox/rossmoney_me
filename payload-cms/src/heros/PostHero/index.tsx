@@ -12,14 +12,15 @@ export const PostHero: React.FC<{
   const { categories, heroImage, populatedAuthors, publishedAt, title } = post
 
   const hasAuthors =
-    Array.isArray(populatedAuthors) && (populatedAuthors as any[]).length > 0 && formatAuthors(populatedAuthors as any) !== ''
+    Array.isArray(populatedAuthors) && populatedAuthors.length > 0 && formatAuthors(populatedAuthors) !== ''
+  const authorsText = formatAuthors(Array.isArray(populatedAuthors) ? populatedAuthors : [])
 
   return (
     <div className="relative -mt-[10.4rem] flex items-end">
       <div className="container z-10 relative lg:grid lg:grid-cols-[1fr_48rem_1fr] text-white pb-8">
         <div className="col-start-1 col-span-1 md:col-start-2 md:col-span-2">
           <div className="uppercase text-sm mb-6">
-            {Array.isArray(categories) && categories?.map((category: any, index: number) => {
+            {Array.isArray(categories) && categories?.map((category, index: number) => {
               if (typeof category === 'object' && category !== null) {
                 const { title: categoryTitle } = category
 
@@ -48,7 +49,7 @@ export const PostHero: React.FC<{
                 <div className="flex flex-col gap-1">
                   <p className="text-sm">Author</p>
 
-                  <p>{formatAuthors(populatedAuthors)}</p>
+                  <p>{authorsText}</p>
                 </div>
               </div>
             )}

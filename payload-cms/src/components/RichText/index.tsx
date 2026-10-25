@@ -38,7 +38,7 @@ const jsxConverters: JSXConvertersFunction<NodeTypes> = ({ defaultConverters }) 
   ...defaultConverters,
   ...LinkJSXConverter({ internalDocToHref }),
   blocks: {
-    banner: ({ node }: { node: any }) => <BannerBlock className="col-start-2 mb-4" {...node.fields} />,
+    banner: ({ node }: { node: SerializedBlockNode<BannerBlockProps> }) => <BannerBlock className="col-start-2 mb-4" {...node.fields} />,
     mediaBlock: ({ node }) => (
       <MediaBlock
         className="col-start-1 col-span-3"
