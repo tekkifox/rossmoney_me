@@ -1,9 +1,38 @@
 "use client"
 import React, { useEffect } from 'react'
-import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload, buildMetrics, buildHostStats } from '@/utilities/archHelpers'
+import { buildFacts, buildHighlights, renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 
 interface Props {
   project?: string
+}
+
+interface ArchitectureMetrics {
+  updatedAt?: string | number
+  loadSample?: string | number
+  loadAvg?: string | number
+  cpuAvg?: string | number
+  memoryUsedBytes?: string | number
+  memoryTotalBytes?: string | number
+  memoryPercent?: string | number
+  diskUsedBytes?: string | number
+  diskTotalBytes?: string | number
+  diskPercent?: string | number
+  hostCount?: string | number
+  topOS?: string | number
+  networkRxMB?: string | number
+  networkTxMB?: string | number
+  swapTotalBytes?: string | number
+  swapFreeBytes?: string | number
+  swapPercent?: string | number
+  processCount?: string | number
+}
+
+interface ArchitecturePayload {
+  updatedAt?: string | number
+  telemetry?: {
+    metrics?: ArchitectureMetrics
+  }
+  [key: string]: unknown
 }
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
@@ -30,24 +59,21 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const ct = res.headers.get('content-type') || ''
         const payload = ct.includes('application/json') ? await res.json() : { raw: await res.text() }
         updateDom(payload)
-      } catch (err) {
+      } catch {
       }
     }
 
-    function updateDom(payload: any) {
+    function updateDom(payload: ArchitecturePayload) {
       try {
         const titleEl = document.getElementById('architecture-title')
         const descEl = document.getElementById('architecture-description')
         const factsEl = document.getElementById('architecture-facts')
         const highlightsEl = document.getElementById('architecture-highlights')
         const diagramEl = document.getElementById('architecture-diagram')
-        // image elements removed from layout; no-op placeholders kept for compatibility
-        const imagesEl = null
-        const imagesCountEl = null
         const rawEl = document.getElementById('architecture-raw')
         const updatedEl = document.getElementById('architecture-updated')
 
-        const arch = payload || {}
+        const arch: ArchitecturePayload = payload || {}
 
         if (titleEl) titleEl.textContent = titleFromPayload(arch)
         if (descEl) descEl.textContent = descriptionFromPayload(arch)
@@ -108,7 +134,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
             } else {
               updatedEl.textContent = (new Date()).toLocaleString()
             }
-          } catch (e) {
+          } catch {
             updatedEl.textContent = (new Date()).toLocaleString()
           }
         }
@@ -183,11 +209,9 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
             }
           }
         } catch (e) {
-          // eslint-disable-next-line no-console
           console.warn('Failed to populate additional metrics', e)
         }
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn('ArchitectureClient updateDom failed', e)
       }
     }

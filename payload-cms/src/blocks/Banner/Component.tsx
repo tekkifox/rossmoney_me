@@ -1,10 +1,11 @@
 import React from 'react'
+import type { DefaultTypedEditorState } from '@payloadcms/richtext-lexical'
 import { cn } from '@/utilities/ui'
 import RichText from '@/components/RichText'
 
 export type BannerBlock = {
   style?: string
-  content?: any
+  content: DefaultTypedEditorState
   [k: string]: unknown
 }
 

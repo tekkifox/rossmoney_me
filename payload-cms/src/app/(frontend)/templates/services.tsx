@@ -1,6 +1,15 @@
 import React from 'react'
 
-import { PageDoc, PageMeta, RenderLayout, Section } from './shared'
+import {
+  PageDoc,
+  PageMeta,
+  RenderLayout,
+  Section,
+  isRecord,
+  readPageData,
+  readString,
+  readStringFields,
+} from './shared'
 
 type ServiceRate = {
   min?: number
@@ -19,6 +28,71 @@ type Service = {
   detail?: string
   bestFor?: string
   rate?: ServiceRate
+}
+
+type LabelValue = {
+  label?: string
+  value?: string
+}
+
+type SourceLink = {
+  label?: string
+  url?: string
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : undefined
+}
+
+function readRate(value: unknown): ServiceRate | undefined {
+  if (!isRecord(value)) return undefined
+  return {
+    min: readNumber(value.min),
+    max: readNumber(value.max),
+    currency: readString(value.currency),
+    unit: readString(value.unit),
+  }
+}
+
+function readService(entry: unknown): Service {
+  const service = isRecord(entry) ? entry : {}
+  return {
+    slug: readString(service.slug),
+    name: readString(service.name),
+    badge: readString(service.badge),
+    summary: readString(service.summary),
+    focus: readString(service.focus),
+    includes: readStringArray(service.includes),
+    detail: readString(service.detail),
+    bestFor: readString(service.bestFor),
+    rate: readRate(service.rate),
+  }
+}
+
+function readServices(value: unknown): Service[] {
+  return Array.isArray(value) ? value.map(readService) : []
+}
+
+function readLabelValueList(value: unknown): LabelValue[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const item = isRecord(entry) ? entry : {}
+    return { label: readString(item.label), value: readString(item.value) }
+  })
+}
+
+function readSourceList(value: unknown): SourceLink[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const item = isRecord(entry) ? entry : {}
+    return { label: readString(item.label), url: readString(item.url) }
+  })
 }
 
 function currencySymbol(currency?: string) {
@@ -103,15 +177,32 @@ function ServiceCard({
 }
 
 export default function ServicesTemplate({ page }: { page: PageDoc }) {
-  const data = ((page as any).data || {}) as any
-  const services = (Array.isArray(data.services) ? data.services : []) as Service[]
-  const heroStats = data.heroStats || {}
-  const pricingTable = data.pricingTable || {}
-  const accordion = data.accordion || {}
-  const engagement = data.engagement || {}
-  const cta = data.cta || {}
-  const pricingBasis = data.pricingBasis || {}
-  const secondaryButton = data.secondaryButton || {}
+  const data = readPageData(page)
+  const services = readServices(data.services)
+  const heroStats = readStringFields(data.heroStats, [
+    'ariaLabel',
+    'servicesLabel',
+    'rangeLabel',
+    'reviewed',
+    'reviewLabel',
+  ])
+  const pricingTable = readStringFields(data.pricingTable, [
+    'eyebrow',
+    'title',
+    'lead',
+    'caption',
+    'serviceColumn',
+    'focusColumn',
+    'rateColumn',
+  ])
+  const accordion = readStringFields(data.accordion, ['eyebrow', 'title', 'lead', 'bestForLabel'])
+  const engagement = readStringFields(data.engagement, ['eyebrow', 'title', 'lead'])
+  const engagementItems = readLabelValueList(isRecord(data.engagement) ? data.engagement.items : undefined)
+  const cta = readStringFields(data.cta, ['eyebrow', 'title', 'lead', 'label', 'href'])
+  const pricingBasis = readStringFields(data.pricingBasis, ['summary', 'sourcesLabel'])
+  const pricingSources = readSourceList(isRecord(data.pricingBasis) ? data.pricingBasis.sources : undefined)
+  const secondaryButton = readStringFields(data.secondaryButton, ['label', 'href'])
+  const servicesSection = readStringFields(data.servicesSection, ['eyebrow', 'title', 'lead', 'detailLabel'])
   const range = rateBounds(services)
 
   return (
@@ -157,14 +248,14 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
       <div id="services">
         <Section
           className="services-section"
-          eyebrow={data.servicesSection?.eyebrow}
-          title={data.servicesSection?.title || ''}
-          lead={data.servicesSection?.lead}
+          eyebrow={servicesSection.eyebrow}
+          title={servicesSection.title || ''}
+          lead={servicesSection.lead}
         >
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {services.map((service, index) => (
               <ServiceCard
-                detailLabel={data.servicesSection?.detailLabel}
+                detailLabel={servicesSection.detailLabel}
                 key={service.slug || service.name || index}
                 rateLabel={pricingTable.rateColumn}
                 service={service}
@@ -212,13 +303,13 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
         {pricingBasis.summary && (
           <div className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
             <p>{pricingBasis.summary}</p>
-            {Array.isArray(pricingBasis.sources) && pricingBasis.sources.length > 0 && (
+            {pricingSources.length > 0 && (
               <details className="rounded-2xl border border-border bg-card px-5 py-4">
                 <summary className="cursor-pointer font-medium text-foreground">
                   {pricingBasis.sourcesLabel}
                 </summary>
                 <ul className="mt-3 space-y-2">
-                  {pricingBasis.sources.map((source: { label?: string; url?: string }) => (
+                  {pricingSources.map((source) => (
                     <li key={source.url}>
                       <a
                         className="text-primary underline-offset-4 hover:underline"
@@ -278,8 +369,8 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
 
       <Section className="services-section" eyebrow={engagement.eyebrow} title={engagement.title || ''} lead={engagement.lead}>
         <div className="grid gap-4 md:grid-cols-2">
-          {Array.isArray(engagement.items) &&
-            engagement.items.map((item: { label?: string; value?: string }, index: number) => (
+          {engagementItems.length > 0 &&
+            engagementItems.map((item, index) => (
               <article
                 className="rounded-3xl border border-border bg-card p-6 shadow-sm"
                 key={`${item.label || 'engagement'}-${index}`}

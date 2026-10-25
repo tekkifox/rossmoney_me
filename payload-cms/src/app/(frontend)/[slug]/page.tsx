@@ -21,7 +21,7 @@ import NavigationTemplate from '../templates/navigation'
 import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
-import { loadCollections, PageMeta } from '../templates/shared'
+import { loadCollections, PageMeta, isRecord, readString } from '../templates/shared'
 
 // This page intentionally uses dynamic data from internal APIs (architecture, commits)
 // Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
@@ -42,7 +42,7 @@ export async function generateStaticParams() {
     })
 
     const params = pages.docs
-      ?.filter((doc: any) => {
+      ?.filter((doc: { slug?: string | null }) => {
         return doc.slug !== 'home'
       })
       .map(({ slug }: { slug: string }) => {
@@ -75,7 +75,7 @@ export default async function Page({ params: paramsPromise }: Args) {
 
   // Remove this code once your website is seeded
   if (!page && slug === 'home') {
-    page = homeStatic as any
+    page = homeStatic
   }
 
   if (!page) {
@@ -83,9 +83,13 @@ export default async function Page({ params: paramsPromise }: Args) {
   }
 
   const collections = page.slug === 'work' || page.slug === 'experience-page' ? await loadCollections() : null
+  const pageData = isRecord(page.data) ? page.data : {}
+  const archviewSource = page.archviewUrl || readString(pageData.archviewUrl) || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
+  const architectureBase = archviewSource ? String(archviewSource).replace(/\/$/, '') : ''
+  const architectureApi = architectureBase ? `${architectureBase}/api/architecture` : '/api/architecture'
 
   return (
-    <article id="page-root" className="pt-16 pb-24" data-architecture-api={((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') ? (((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') + '/api/architecture') : '/api/architecture'}>
+    <article id="page-root" className="pt-16 pb-24" data-architecture-api={architectureApi}>
       <PageMeta page={page} />
       <PageClient />
       {/* Allows redirects for valid pages too */}
