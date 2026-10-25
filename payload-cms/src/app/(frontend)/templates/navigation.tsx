@@ -1,7 +1,8 @@
-import { PageDoc, RenderLayout, Section } from './shared'
+import { PageDoc, RenderLayout, Section, isRecord, readLinks } from './shared'
 
 export default function NavigationTemplate({ page }: { page: PageDoc }) {
-  const links = ((page as any).data?.links || []) as Array<{ label?: string; href?: string }>
+  const pageData = isRecord(page.data) ? page.data : {}
+  const links = readLinks(pageData.links)
   return (
     <Section eyebrow={page.eyebrow || 'Navigation'} title={page.title || 'Site navigation links.'} lead={page.lead || 'Structured links used by the CMS-driven header and footer.'}>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -1,52 +1,98 @@
 import Link from 'next/link'
 import React from 'react'
 import { assembleSite } from '@/utilities/assembleSite'
-// Query ArchView directly from server-side to avoid requesting the Next server itself
-const ARCHVIEW_BASE = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
-import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
-import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
+import {
+  PageDoc,
+  RenderLayout,
+  ContactPanel,
+  PageMeta,
+  UnknownRecord,
+  isRecord,
+  readExperience,
+  readMetrics,
+  readPageContact,
+  readPageData,
+  readProjects,
+  readString,
+} from './shared'
+
+type SitePayload = {
+  home?: unknown
+  contact?: unknown
+  projects?: unknown
+  experience?: unknown
+}
+
+type FocusData = {
+  title?: string
+  items?: Array<{ label?: string; value?: string }>
+}
+
+function readFocus(value: unknown): FocusData | null {
+  if (!isRecord(value)) return null
+  return {
+    title: readString(value.title),
+    items: Array.isArray(value.items)
+      ? value.items.map((entry) => {
+          const item = isRecord(entry) ? entry : {}
+          return { label: readString(item.label), value: readString(item.value) }
+        })
+      : undefined,
+  }
+}
+
+function readLink(value: unknown): { label?: string; href?: string } {
+  if (!isRecord(value)) return {}
+  return { label: readString(value.label), href: readString(value.href) }
+}
 
 export default async function HomeTemplate({ page }: { page: PageDoc }) {
-  const data = (page as any).data || {}
-  const focus = (page as any).focus || {}
+  const data = readPageData(page)
+  const focus = page.focus || {}
 
-  let sitePayload: any = null
+  let sitePayload: SitePayload | null = null
   try {
     sitePayload = await assembleSite()
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('assembleSite failed, falling back to page data', err)
     sitePayload = { home: { ...data, focus }, projects: [], experience: [], contact: null }
   }
 
-  const projects = sitePayload?.projects || []
-  const experience = sitePayload?.experience || []
-  const homeData = sitePayload?.home || { ...data, focus }
+  const projects = readProjects(sitePayload?.projects)
+  const experience = readExperience(sitePayload?.experience)
+  const homeData: UnknownRecord = isRecord(sitePayload?.home) ? sitePayload.home : { ...data, focus }
 
   // Server-side fetch of architecture snapshot via CMS API route (ISR)
-  let archPayload: any = null
+  let archPayload: Record<string, unknown> | null = null
   try {
     const res = await fetch(`/api/architecture`, { cache: 'no-store' })
     if (res.ok) archPayload = await res.json()
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('Failed to fetch architecture snapshot', err)
   }
 
   const archTitle = titleFromPayload(archPayload)
   const archDesc = descriptionFromPayload(archPayload)
   const archDiagram = renderDiagram(archPayload)
-  const archImages = extractDockerImages(archPayload)
-  
+
+  const homeFocus = readFocus(homeData.focus)
+  const pageFocus = readFocus(focus)
+  const focusTitle = homeFocus?.title || pageFocus?.title || 'Building personal infrastructure'
+  const focusItems = homeFocus?.items ?? pageFocus?.items ?? []
+  const primaryButton = readLink(homeData.primaryButton)
+  const secondaryButton = readLink(homeData.secondaryButton)
+  const heroMetrics = readMetrics(homeData.metrics)
+
   // Optionally show recent commits for the site repo (homepage uses portfolio repo)
   let homepageCommitsText = null
   try {
     const { getGithubCommits } = await import('@/utilities/getGithubCommits')
     const commits = await getGithubCommits('tekkifox', 'rossmoney_me', 'main', 5)
     if (Array.isArray(commits) && commits.length > 0) {
-      homepageCommitsText = ['$ git log --oneline -n 5', ...commits.map((c: any) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
+      homepageCommitsText = ['$ git log --oneline -n 5', ...commits.map((c) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
     }
   } catch (err) {
     console.warn('Failed to load GitHub commits for rossmoney_me', err)
@@ -62,14 +108,14 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           <p className="lead" id="hero-lead">{page.lead || ''}</p>
 
           <div className="hero-actions">
-            {homeData.primaryButton?.label && homeData.primaryButton?.href ? (
-              <Link id="hero-primary-button" className="btn btn-primary" href={homeData.primaryButton.href}>{homeData.primaryButton.label}</Link>
+            {primaryButton.label && primaryButton.href ? (
+              <Link id="hero-primary-button" className="btn btn-primary" href={primaryButton.href}>{primaryButton.label}</Link>
             ) : (
               <Link id="hero-primary-button" className="btn btn-primary" href="/contact">Start a conversation</Link>
             )}
 
-            {homeData.secondaryButton?.label && homeData.secondaryButton?.href ? (
-              <Link id="hero-secondary-button" className="btn btn-secondary" href={homeData.secondaryButton.href}>{homeData.secondaryButton.label}</Link>
+            {secondaryButton.label && secondaryButton.href ? (
+              <Link id="hero-secondary-button" className="btn btn-secondary" href={secondaryButton.href}>{secondaryButton.label}</Link>
             ) : (
               <a id="hero-secondary-button" className="btn btn-secondary" href="#architecture">Inspect live architecture</a>
             )}
@@ -78,7 +124,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           </div>
 
           <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">
-            {(homeData.metrics || []).map((m: any, i: number) => (
+            {heroMetrics.map((m, i) => (
               <article key={i} className="metric">
                 <span className="metric-value">{m.value}</span>
                 <span className="metric-label">{m.label}</span>
@@ -91,13 +137,13 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           <div className="panel-header">
             <div>
               <p className="panel-kicker">Current focus</p>
-              <h2>{homeData.focus?.title || focus.title || 'Building personal infrastructure'}</h2>
+              <h2>{focusTitle}</h2>
             </div>
             <span className="status-pill status-live">Live</span>
           </div>
 
           <div className="panel-grid">
-            {(homeData.focus?.items || focus.items || []).map((item: any, idx: number) => (
+            {focusItems.map((item, idx) => (
               <div key={idx} className="card">
                 <p className="text-xs uppercase text-muted">{item.label}</p>
                 <p className="mt-1">{item.value}</p>
@@ -114,7 +160,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
         </div>
 
         <div className="cards-grid" id="cms-projects">
-          {projects.slice(0, 6).map((project: any, i: number) => (
+          {projects.slice(0, 6).map((project, i) => (
             <article key={i} className="feature-card card">
               <p className="card-kicker">{project.role}</p>
               <h3>{project.title}</h3>
@@ -132,7 +178,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
         </div>
 
         <div className="timeline" id="cms-experience">
-          {experience.slice(0, 6).map((entry: any, i: number) => (
+          {experience.slice(0, 6).map((entry, i) => (
             <article key={i} className="timeline-item">
               <p className="timeline-year">{entry.year}</p>
               <div>
@@ -244,7 +290,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
       </section>
 
       {/* Contact panel */}
-      <ContactPanel contact={sitePayload?.contact || (page as any).contact || ((page as any).data || null)} />
+      <ContactPanel contact={sitePayload?.contact || readPageContact(page) || page.data || null} />
 
       <RenderLayout page={page} />
     </main>

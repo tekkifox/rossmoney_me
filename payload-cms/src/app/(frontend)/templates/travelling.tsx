@@ -1,31 +1,65 @@
 import React from 'react'
 import Link from 'next/link'
-import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
+import {
+  PageDoc,
+  RenderLayout,
+  ContactPanel,
+  PageMeta,
+  UnknownRecord,
+  isRecord,
+  readMetrics,
+  readPageContact,
+  readPageData,
+  readString,
+} from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
-import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
+type SitePayload = {
+  travelling?: unknown
+  contact?: unknown
+}
+
+type CardData = {
+  kicker?: string
+  title?: string
+  text?: string
+}
+
+function readCards(value: unknown): CardData[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const card = isRecord(entry) ? entry : {}
+    return {
+      kicker: readString(card.kicker),
+      title: readString(card.title),
+      text: readString(card.text),
+    }
+  })
+}
+
 export default async function TravellingTemplate({ page }: { page: PageDoc }) {
-  const data = (page as any).data || {}
+  const data = readPageData(page)
   // Prefer assembled site payload values (travelPayload) but fall back to page-level data
   // cards may live under page.data or under the assembled travelling payload
 
-  let sitePayload: any = null
+  let sitePayload: SitePayload | null = null
   try {
     sitePayload = await assembleSite()
-  } catch (err) {
+  } catch {
     sitePayload = null
   }
 
-  const travelPayload = sitePayload?.travelling || { eyebrow: page.eyebrow, title: page.title, lead: page.lead, ...data }
-  const cardsList = Array.isArray(travelPayload.cards) ? travelPayload.cards : (Array.isArray(data.cards) ? data.cards : [])
-  const summaryTitle = travelPayload.summaryTitle ?? travelPayload.data?.summaryTitle ?? data.summaryTitle ?? ''
-  const summaryLead = travelPayload.summaryLead ?? travelPayload.data?.summaryLead ?? data.summaryLead ?? page.lead ?? ''
+  const travelPayload: UnknownRecord = isRecord(sitePayload?.travelling) ? sitePayload.travelling : { eyebrow: page.eyebrow, title: page.title, lead: page.lead, ...data }
+  const travelData: UnknownRecord = isRecord(travelPayload.data) ? travelPayload.data : {}
+  const cardsList = Array.isArray(travelPayload.cards) ? readCards(travelPayload.cards) : (Array.isArray(data.cards) ? readCards(data.cards) : [])
+  const summaryLead = readString(travelPayload.summaryLead) ?? readString(travelData.summaryLead) ?? readString(data.summaryLead) ?? page.lead ?? ''
 
   // Server-side fetch architecture snapshot via the CMS API route (ISR)
-  let archPayload: any = null
+  let archPayload: Record<string, unknown> | null = null
   try {
-    const archviewFromPage = travelPayload.archviewUrl || travelPayload.data?.archviewUrl || data.archviewUrl || data.archview
+    const archviewFromPage = readString(travelPayload.archviewUrl) || readString(travelData.archviewUrl) || readString(data.archviewUrl) || readString(data.archview)
     const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
     const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=image-mosaic`
@@ -33,14 +67,12 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     if (r.ok) archPayload = await r.json()
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('Failed to fetch architecture for travelling', err)
   }
 
   const archTitle = titleFromPayload(archPayload)
   const archDesc = descriptionFromPayload(archPayload)
   const archDiagram = renderDiagram(archPayload)
-  const archImages = extractDockerImages(archPayload)
 
   // Server-side fetch recent commits for the travel repo
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
@@ -48,28 +80,30 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     const { getGithubCommits } = await import('@/utilities/getGithubCommits')
     const commits = await getGithubCommits('tekkifox', 'image-mosaic', 'main', 5)
     if (Array.isArray(commits) && commits.length > 0) {
-      commitsText = ['$ git log --oneline -n 5', ...commits.map((c: any) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
+      commitsText = ['$ git log --oneline -n 5', ...commits.map((c) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
     } else {
       commitsText = '$ git log --oneline -n 5\nNo commits returned'
     }
-  } catch (err) {
-    // eslint-disable-next-line no-console
+  } catch {
     commitsText = '$ git log --oneline -n 5\nUnable to load recent commits'
   }
+
+  const liveUrl = (readString(travelPayload.liveUrl) || readString(data.liveUrl) || '').trim()
+  const heroMetrics = readMetrics(travelPayload.metrics || data.metrics || [])
 
   return (
     <main>
       <PageMeta page={page} />
     <section className="hero container">
       <div className="hero-copy">
-        <p className="eyebrow" id="travelling-eyebrow">{travelPayload.eyebrow || page.eyebrow || 'Travelling.rossmoney.me'}</p>
-        <h1 id="travelling-title">{travelPayload.title || page.title || 'Travel archive built around a private image pipeline.'}</h1>
-          <p className="lead" id="travelling-lead">{travelPayload.lead || summaryLead || 'The travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos from the trip.'}</p>
+        <p className="eyebrow" id="travelling-eyebrow">{readString(travelPayload.eyebrow) || page.eyebrow || 'Travelling.rossmoney.me'}</p>
+        <h1 id="travelling-title">{readString(travelPayload.title) || page.title || 'Travel archive built around a private image pipeline.'}</h1>
+          <p className="lead" id="travelling-lead">{readString(travelPayload.lead) || summaryLead || 'The travelling project is the site for my 2016 Southeast Asia trip, built as a separate gallery stack around the photos from the trip.'}</p>
 
         <div className="hero-actions">
           {/* Normalize and validate live URL; prefer https when scheme missing */}
           {(() => {
-            const raw = (travelPayload.liveUrl || data.liveUrl || '').trim()
+            const raw = liveUrl
             if (!raw) return (
               <button className="btn btn-primary" type="button" disabled title="Set a 'liveUrl' on the travelling page to enable this link">Open live site</button>
             )
@@ -83,7 +117,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
         </div>
 
         <div className="hero-metrics" id="travelling-metrics" aria-label="Project highlights">
-          {(travelPayload.metrics || data.metrics || []).map((m: any, i: number) => (
+          {heroMetrics.map((m, i) => (
             <article key={i} className="metric">
               <span className="metric-value">{m.value}</span>
               <span className="metric-label">{m.label}</span>
@@ -102,7 +136,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
 
         <div className="cards-grid">
         {cardsList.length > 0 ? (
-          cardsList.map((c: any, i: number) => (
+          cardsList.map((c, i) => (
             <article key={i} className="feature-card card">
               {c.kicker && <p className="card-kicker">{c.kicker}</p>}
               {c.title && <h3>{c.title}</h3>}
@@ -219,7 +253,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     </section>
 
     {/* Contact panel */}
-    <ContactPanel contact={sitePayload?.contact || (page as any).contact || ((page as any).data || null)} />
+    <ContactPanel contact={sitePayload?.contact || readPageContact(page) || page.data || null} />
 
     <RenderLayout page={page} />
     </main>

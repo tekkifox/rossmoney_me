@@ -1,30 +1,45 @@
 import React from 'react'
 import Link from 'next/link'
-import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
+import {
+  PageDoc,
+  RenderLayout,
+  ContactPanel,
+  PageMeta,
+  UnknownRecord,
+  isRecord,
+  readMetrics,
+  readPageContact,
+  readPageData,
+  readString,
+} from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: ARCHVIEW base will be resolved from page data (projectPayload) when available; fall back to env.
-import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
 
-export default async function GameServersTemplate({ page }: { page: PageDoc }) {
-  const data = (page as any).data || {}
+type SitePayload = {
+  gameservers?: unknown
+  contact?: unknown
+}
 
-  let sitePayload: any = null
+export default async function GameServersTemplate({ page }: { page: PageDoc }) {
+  const data = readPageData(page)
+
+  let sitePayload: SitePayload | null = null
   try {
     sitePayload = await assembleSite()
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('assembleSite failed for gameservers, falling back', err)
     sitePayload = null
   }
 
-  const projectPayload = sitePayload?.gameservers || { eyebrow: page.eyebrow, title: page.title, lead: page.lead, ...data }
-  const summaryLead = projectPayload.summaryLead ?? data.summaryLead ?? page.lead ?? ''
+  const projectPayload: UnknownRecord = isRecord(sitePayload?.gameservers) ? sitePayload.gameservers : { eyebrow: page.eyebrow, title: page.title, lead: page.lead, ...data }
+  const summaryLead = readString(projectPayload.summaryLead) ?? readString(data.summaryLead) ?? page.lead ?? ''
 
-  let archPayload: any = null
+  let archPayload: Record<string, unknown> | null = null
   try {
-    const archviewFromPage = projectPayload.archviewUrl || projectPayload.archview || data.archviewUrl || data.archview
+    const archviewFromPage = readString(projectPayload.archviewUrl) || readString(projectPayload.archview) || readString(data.archviewUrl) || readString(data.archview)
     const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
     const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
@@ -32,28 +47,28 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
     if (r.ok) archPayload = await r.json()
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('Failed to fetch architecture for gameservers', err)
   }
 
   const archTitle = titleFromPayload(archPayload)
   const archDesc = descriptionFromPayload(archPayload)
   const archDiagram = renderDiagram(archPayload)
-  const archImages = extractDockerImages(archPayload)
 
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
   try {
     const commits = await getGithubCommits('tekkifox', 'vortexservers_co_uk', 'main', 5)
     if (Array.isArray(commits) && commits.length > 0) {
-      commitsText = ['$ git log --oneline -n 5', ...commits.map((c: any) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
+      commitsText = ['$ git log --oneline -n 5', ...commits.map((c) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
     } else {
       commitsText = '$ git log --oneline -n 5\nNo commits returned'
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('Failed to load GitHub commits for vortexservers_co_uk', err)
     commitsText = '$ git log --oneline -n 5\nUnable to load recent commits'
   }
+
+  const liveUrl = (readString(projectPayload.liveUrl) || readString(data.liveUrl) || '').trim()
+  const heroMetrics = readMetrics(projectPayload.metrics || [])
 
   return (
     <main>
@@ -61,12 +76,12 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
       {/* Reuse travelling-like layout but for Vortex project */}
       <section className="hero container">
         <div className="hero-copy">
-          <p className="eyebrow" id="gameservers-eyebrow">{projectPayload.eyebrow || page.eyebrow}</p>
-          <h1 id="gameservers-title">{projectPayload.title || page.title}</h1>
-          <p className="lead" id="gameservers-lead">{projectPayload.lead || summaryLead}</p>
+          <p className="eyebrow" id="gameservers-eyebrow">{readString(projectPayload.eyebrow) || page.eyebrow}</p>
+          <h1 id="gameservers-title">{readString(projectPayload.title) || page.title}</h1>
+          <p className="lead" id="gameservers-lead">{readString(projectPayload.lead) || summaryLead}</p>
           <div className="hero-actions">
             {(() => {
-              const raw = (projectPayload.liveUrl || data.liveUrl || '').trim()
+              const raw = liveUrl
               if (!raw) return (
                 <button className="btn btn-primary" type="button" disabled title="Set a 'liveUrl' on the gameservers page to enable this link">Open live site</button>
               )
@@ -80,7 +95,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
 
           </div>
           <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">
-            {(projectPayload.metrics || []).slice(0, 3).map((m: any, i: number) => (
+            {heroMetrics.slice(0, 3).map((m, i) => (
               <article key={i} className="metric">
                 <span className="metric-value">{m.value}</span>
                 <span className="metric-label">{m.label}</span>
@@ -136,7 +151,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
         <div className="card architecture-summary"><pre className="diagram-view" id="github-commits">{commitsText}</pre></div>
       </section>
 
-      <ContactPanel contact={sitePayload?.contact || (page as any).contact || ((page as any).data || null)} />
+      <ContactPanel contact={sitePayload?.contact || readPageContact(page) || page.data || null} />
       <RenderLayout page={page} />
     </main>
   )
