@@ -294,7 +294,7 @@ export function extractDockerImages(payload: AnyObject | null | undefined): Arra
 
       const tags = asArray(item.repoTags || item.RepoTags || item.tags || item.Tags)
       const firstTag = tags.find(Boolean)
-      let tagValue: string | null = firstTag ? String(firstTag) : null
+      const tagValue: string | null = firstTag ? String(firstTag) : null
       let name = tagValue ? normalizeImageRef(tagValue) : ''
       if (!name) {
         const maybe = item.repository || item.Repository || item.image || item.Image || item.name || item.Name || item.id || item.ID

@@ -1,4 +1,5 @@
 import React from 'react'
+import Link from 'next/link'
 import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: ARCHVIEW base will be resolved from page data (projectPayload) when available; fall back to env.
@@ -75,7 +76,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
                 <a className="btn btn-primary" href={href} target="_blank" rel="noopener noreferrer">Open live site</a>
               )
             })()}
-            <a className="btn btn-secondary" href="/">Back to portfolio</a>
+            <Link className="btn btn-secondary" href="/">Back to portfolio</Link>
 
           </div>
           <div className="hero-metrics" aria-label="Highlights" id="hero-metrics">

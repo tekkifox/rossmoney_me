@@ -7,31 +7,38 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import React, { useState } from 'react'
+import React, { useState, useSyncExternalStore } from 'react'
 
 import type { Theme } from './types'
 
 import { useTheme } from '..'
 import { themeLocalStorageKey } from './types'
 
+const subscribeToStoredTheme = (onStoreChange: () => void) => {
+  window.addEventListener('storage', onStoreChange)
+  return () => window.removeEventListener('storage', onStoreChange)
+}
+
+const getStoredTheme = () => window.localStorage.getItem(themeLocalStorageKey) ?? 'auto'
+
+/* Empty on the server so hydration renders the placeholder, matching the previous
+ * behaviour where the stored preference was only read after mount. */
+const getServerTheme = () => ''
+
 export const ThemeSelector: React.FC = () => {
   const { setTheme } = useTheme()
-  const [value, setValue] = useState('')
+  const storedTheme = useSyncExternalStore(subscribeToStoredTheme, getStoredTheme, getServerTheme)
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null)
+  const value = selectedTheme ?? storedTheme
 
   const onThemeChange = (themeToSet: Theme & 'auto') => {
     if (themeToSet === 'auto') {
       setTheme(null)
-      setValue('auto')
     } else {
       setTheme(themeToSet)
-      setValue(themeToSet)
     }
+    setSelectedTheme(themeToSet)
   }
-
-  React.useEffect(() => {
-    const preference = window.localStorage.getItem(themeLocalStorageKey)
-    setValue(preference ?? 'auto')
-  }, [])
 
   return (
     <Select onValueChange={onThemeChange} value={value}>
