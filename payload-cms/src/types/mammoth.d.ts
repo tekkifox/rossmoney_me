@@ -17,6 +17,7 @@ declare module 'mammoth' {
   export interface MammothOptions {
     styleMap?: string[]
     transformDocument?: (document: MammothElement) => MammothElement
+    ignoreEmptyParagraphs?: boolean
   }
 
   export const transforms: {
