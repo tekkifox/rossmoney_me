@@ -1,7 +1,7 @@
 "use client"
 import React, { useEffect, useRef, useState } from 'react'
-import { applyCVDocxRunStyle, cvDocxStyleMap, normalizeCVDocxForRendering } from './cvDocxStyles'
 import type { Media } from '@/payload-types'
+import { convertCVDocxToHtml, normalizeCVDocxForRendering } from './cvDocxStyles'
 
 type Props = {
   cvFile?: Media | string | null
@@ -29,17 +29,8 @@ export default function CVViewer({ cvFile }: Props) {
         const blob = await res.blob()
 
         const arrayBuffer = await normalizeCVDocxForRendering(await blob.arrayBuffer())
-        // dynamic import to avoid build-time dependency problems
-        const mammoth = await import('mammoth')
-        // convert DOCX to HTML
-        const result = await mammoth.convertToHtml(
-          { arrayBuffer },
-          {
-            styleMap: cvDocxStyleMap,
-            transformDocument: mammoth.transforms.run(applyCVDocxRunStyle),
-          },
-        )
-        const html = result && result.value ? result.value : ''
+        // convert DOCX to HTML (dynamic import happens inside the helper)
+        const html = await convertCVDocxToHtml(arrayBuffer)
 
         const container = containerRef.current
         if (!container) return

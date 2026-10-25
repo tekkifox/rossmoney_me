@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import mammoth from 'mammoth'
+import { openZip } from 'mammoth/lib/unzip'
 import {
   applyCVDocxRunStyle,
+  convertCVDocxToHtml,
   cvDocxStyleMap,
   normalizeCVDocxForRendering,
   normalizeCVDocxXml,
@@ -22,6 +23,37 @@ const benchmarkDocxBase64 =
 const benchmarkDocx = () => {
   const bytes = Uint8Array.from(Buffer.from(benchmarkDocxBase64, 'base64'))
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+}
+
+// Add experience blocks and empty separator paragraphs shaped like the real
+// CV: each separator is an empty paragraph with a thin (w:sz="2") bottom
+// border, while section headings keep the thick (w:sz="12") border.
+async function benchmarkDocxWithExperienceSeparators() {
+  const arrayBuffer = benchmarkDocx()
+  const zip = await openZip({ arrayBuffer, buffer: arrayBuffer })
+  const xml = await zip.read('word/document.xml', 'utf-8')
+
+  const role = (title: string) =>
+    `<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:b w:val="1"/><w:color w:val="111111"/><w:sz w:val="21"/></w:rPr><w:t>${title}</w:t></w:r></w:p>`
+  const separator =
+    '<w:p><w:pPr><w:pStyle w:val="Body A A"/><w:pBdr><w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="single" w:color="111111" w:sz="2" w:space="0" w:shadow="0" w:frame="0"/><w:right w:val="nil"/></w:pBdr><w:spacing w:after="25"/></w:pPr></w:p>'
+
+  zip.write(
+    'word/document.xml',
+    xml.replace(
+      '<w:sectPr/>',
+      [
+        role('Role One'),
+        separator,
+        role('Role Two'),
+        separator,
+        role('Role Three'),
+        '<w:p></w:p>',
+        '<w:sectPr/>',
+      ].join(''),
+    ),
+  )
+  return zip.toArrayBuffer()
 }
 
 function renderCVDocx(html: string) {
@@ -131,12 +163,13 @@ describe('CV DOCX styles', () => {
     expect(cvStyles).toContain('.docx .docx-color-2386f5 { color: #2386f5 }')
   })
 
-  it('records benchmark colours and section rules without touching underline values', () => {
+  it('records benchmark colours and both rule thicknesses without touching underline values', () => {
     const xml = `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body>
       <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="12"/></w:pBdr></w:pPr><w:r><w:rPr><w:rStyle w:val="None"/><w:color w:val="2386F5"/><w:u w:color="2386F5"/></w:rPr><w:t>Heading</w:t></w:r></w:p>
-      <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="2"/></w:pBdr></w:pPr></w:p>
+      <w:p><w:pPr><w:pStyle w:val="Body A A"/><w:pBdr><w:bottom w:val="single" w:sz="2"/></w:pBdr></w:pPr></w:p>
       <w:p><w:r><w:rPr><w:rStyle w:val="RealStyle"/><w:color w:val="2386f5"/><w:u w:val="single"/></w:rPr><w:t>Styled</w:t></w:r></w:p>
       <w:p><w:pPr><w:pStyle w:val="RealParagraph"/><w:pBdr><w:bottom w:val="single" w:sz="12"/></w:pBdr></w:pPr></w:p>
+      <w:p><w:pPr><w:pStyle w:val="RealParagraph"/><w:pBdr><w:bottom w:val="single" w:sz="2"/></w:pBdr></w:pPr></w:p>
     </w:body></w:document>`
 
     const normalized = normalizeCVDocxXml(xml)
@@ -150,17 +183,18 @@ describe('CV DOCX styles', () => {
 
     expect(styleId(runs[0])).toBe('cvColor2386f5')
     expect(styleId(runs[1])).toBe('RealStyle')
-    expect(
-      paragraphs[0]
+    const paragraphStyleId = (element: Element) =>
+      element
         .getElementsByTagNameNS(WORD_NAMESPACE, 'pStyle')[0]
-        ?.getAttributeNS(WORD_NAMESPACE, 'val'),
-    ).toBe('cvSectionRule')
-    expect(paragraphs[1].getElementsByTagNameNS(WORD_NAMESPACE, 'pStyle')).toHaveLength(0)
-    expect(
-      paragraphs[3]
-        .getElementsByTagNameNS(WORD_NAMESPACE, 'pStyle')[0]
-        ?.getAttributeNS(WORD_NAMESPACE, 'val'),
-    ).toBe('RealParagraph')
+        ?.getAttributeNS(WORD_NAMESPACE, 'val')
+
+    expect(paragraphStyleId(paragraphs[0])).toBe('cvSectionRule')
+    // The thin separator borders are the experience rules; the "Body A A"
+    // style the real document uses is replaced by the rule class.
+    expect(paragraphStyleId(paragraphs[1])).toBe('cvEntryRule')
+    expect(paragraphs[1].getElementsByTagNameNS(WORD_NAMESPACE, 'pStyle')).toHaveLength(1)
+    expect(paragraphStyleId(paragraphs[3])).toBe('RealParagraph')
+    expect(paragraphStyleId(paragraphs[4])).toBe('RealParagraph')
     expect(
       runs[0].getElementsByTagNameNS(WORD_NAMESPACE, 'u')[0]?.getAttributeNS(WORD_NAMESPACE, 'val'),
     ).toBeNull()
@@ -171,14 +205,8 @@ describe('CV DOCX styles', () => {
 
   it('converts benchmark-shaped DOCX runs without adding underline', async () => {
     const arrayBuffer = await normalizeCVDocxForRendering(benchmarkDocx())
-    const result = await mammoth.convertToHtml(
-      { buffer: Buffer.from(arrayBuffer) },
-      {
-        styleMap: cvDocxStyleMap,
-        transformDocument: mammoth.transforms.run(applyCVDocxRunStyle),
-      },
-    )
-    const { rendered, cleanup } = renderCVDocx(result.value)
+    const html = await convertCVDocxToHtml(arrayBuffer)
+    const { rendered, cleanup } = renderCVDocx(html)
 
     try {
       const plainRun = spanWithText(
@@ -226,6 +254,49 @@ describe('CV DOCX styles', () => {
       expect(getComputedStyle(link!).color).toBe('rgb(85, 85, 85)')
       expect(getComputedStyle(link!).textDecoration).toBe('underline')
       expect(cvStyles).toContain('.docx p.docx-section-rule { border-bottom: 1.5pt solid #111')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('renders one entry rule per experience separator without dropping section rules', async () => {
+    const arrayBuffer = await normalizeCVDocxForRendering(
+      await benchmarkDocxWithExperienceSeparators(),
+    )
+    const html = await convertCVDocxToHtml(arrayBuffer)
+    const { rendered, cleanup } = renderCVDocx(html)
+
+    try {
+      const entryRules = Array.from(rendered.querySelectorAll('p.docx-entry-rule'))
+      const sectionRules = Array.from(rendered.querySelectorAll('p.docx-section-rule'))
+      const emptyNonRuleParagraphs = Array.from(rendered.querySelectorAll('p')).filter(
+        (paragraph) =>
+          !paragraph.textContent?.trim() && !paragraph.classList.contains('docx-entry-rule'),
+      )
+
+      expect(entryRules).toHaveLength(2)
+      expect(sectionRules).toHaveLength(1)
+
+      // Each rule is the element between two roles, not an empty gap.
+      expect(entryRules[0].previousElementSibling?.textContent).toContain('Role One')
+      expect(entryRules[0].nextElementSibling?.textContent).toContain('Role Two')
+      expect(entryRules[1].previousElementSibling?.textContent).toContain('Role Two')
+      expect(entryRules[1].nextElementSibling?.textContent).toContain('Role Three')
+
+      // The rule paragraphs survive Mammoth and draw the subtle separator,
+      // while other empty paragraphs stay hidden (no new blank gaps).
+      expect(getComputedStyle(entryRules[0]).display).toBe('block')
+      expect(getComputedStyle(entryRules[0]).borderBottomWidth).toBe('1px')
+      expect(getComputedStyle(entryRules[0]).borderBottomStyle).toBe('solid')
+      expect(emptyNonRuleParagraphs.length).toBeGreaterThan(0)
+      for (const paragraph of emptyNonRuleParagraphs) {
+        expect(getComputedStyle(paragraph).display).toBe('none')
+      }
+
+      expect(cvStyles).toContain(
+        '.docx p.docx-entry-rule { border-bottom: 1px solid rgba(17, 17, 17, 0.2)',
+      )
+      expect(cvStyles).toContain('.docx p:empty:not(.docx-entry-rule) { display: none }')
     } finally {
       cleanup()
     }
