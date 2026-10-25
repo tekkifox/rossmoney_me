@@ -1,6 +1,9 @@
 #!/usr/bin/env node
-const fs = require('fs')
-const path = require('path')
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const seedDir = path.join(__dirname, '..', 'src', 'endpoints', 'seed')
 const publicDir = path.join(__dirname, '..', 'public')

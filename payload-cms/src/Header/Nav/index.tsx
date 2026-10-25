@@ -24,8 +24,14 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
   const navItems = data?.navItems || []
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const [previousPathname, setPreviousPathname] = useState(pathname)
 
-  useEffect(() => setOpen(false), [pathname])
+  // Close the mobile menu when navigation happens. Adjusting state during render
+  // (rather than in an effect) avoids an extra render pass with the menu still open.
+  if (pathname !== previousPathname) {
+    setPreviousPathname(pathname)
+    setOpen(false)
+  }
 
   useEffect(() => {
     if (!open) return
