@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-printf '%s\n' "Pruning dangling Docker images on the deployment host."
-exec /usr/bin/sudo -n /usr/bin/docker image prune -f

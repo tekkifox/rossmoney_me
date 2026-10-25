@@ -106,34 +106,36 @@ The first block is for the CMS and telemetry services; the remaining socket-prox
 
 Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing images.
 
-After the webhook accepts a request, the deployment workflow polls Portainer's stack API for a new `Deploying` → `Active` result. Only then does it connect to the host using a dedicated SSH key and run the fixed-purpose dangling-image cleanup. A webhook response alone is not treated as deployment success, HTTP 409 is rejected, and an ambiguous or failed deployment never runs cleanup. Portainer's `Active` status confirms the deployment operation completed without error; it does not guarantee application-level health.
+GitHub Actions only triggers the existing Portainer webhook; its HTTP response means the request was accepted, not that deployment completed. It rejects HTTP 409 and does not connect to the deployment host. A host-local systemd worker polls Portainer's read-only stack API and runs cleanup only when it observes a new `Deploying` → `Active` status sequence. Portainer's `Active` status confirms the deployment operation completed without error; it does not guarantee application-level health.
 
-Configure these GitHub Actions repository secrets for both deployment targets:
+An administrator must install Python 3 and the Docker CLI on the deployment host. Install the worker and service unit as root-owned, non-writable files, then create the root-only configuration and state directories:
 
-| Production secret | Development secret | Purpose |
-| --- | --- | --- |
-| `PORTAINER_WEBHOOK_URL` | `PORTAINER_WEBHOOK_URL_DEV` | Existing stack webhook URL |
-| `PORTAINER_API_URL` | `PORTAINER_API_URL_DEV` | HTTPS Portainer base URL |
-| `PORTAINER_API_TOKEN` | `PORTAINER_API_TOKEN_DEV` | Portainer API token with access to the target stack |
-| `PORTAINER_STACK_ID` | `PORTAINER_STACK_ID_DEV` | Numeric stack ID |
-| `DEPLOY_HOST` | `DEPLOY_HOST_DEV` | Deployment host DNS name or IPv4 address |
-| `DEPLOY_USER` | `DEPLOY_USER_DEV` | Dedicated restricted SSH account |
-| `DEPLOY_SSH_PRIVATE_KEY` | `DEPLOY_SSH_PRIVATE_KEY_DEV` | Private key paired with the restricted host key |
-| `DEPLOY_SSH_KNOWN_HOSTS` | `DEPLOY_SSH_KNOWN_HOSTS_DEV` | Pinned host-key entry from a trusted source |
-
-Provision the host once for each dedicated SSH account. Install `deploy/prune-dangling-images` as `/usr/local/sbin/rossmoney-prune-dangling-images` owned by root and mode `0755`. The account must be able to run only the exact Docker command through sudo; verify the Docker binary path on the host and keep it identical in the installed script and sudoers rule:
-
-```sudoers
-rossmoney-prune ALL=(root) NOPASSWD: /usr/bin/docker image prune -f
+```sh
+sudo install -d -o root -g root -m 0755 /opt/rossmoney-image-prune
+sudo install -o root -g root -m 0644 deploy/portainer_image_prune.py /opt/rossmoney-image-prune/portainer_image_prune.py
+sudo install -o root -g root -m 0644 'deploy/rossmoney-image-prune@.service' /etc/systemd/system/rossmoney-image-prune@.service
+sudo install -d -o root -g root -m 0700 /etc/rossmoney-image-prune
+sudo install -d -o root -g root -m 0700 /var/lib/rossmoney-image-prune
 ```
 
-Install a dedicated public key in that account's `authorized_keys`, replacing the example key material. The forced command prevents the CI key from selecting another host command; the restrictions disable interactive and forwarding features:
+Create one root-owned, mode-`0600` environment file per Portainer stack (`/etc/rossmoney-image-prune/production.env` and `development.env`) with:
 
-```text
-command="/usr/local/sbin/rossmoney-prune-dangling-images",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAA... rossmoney-deploy-cleanup
+```ini
+PORTAINER_API_URL=https://portainer.example
+PORTAINER_API_TOKEN=replace-with-a-read-only-token
+PORTAINER_STACK_ID=123
+PORTAINER_POLL_INTERVAL_SECONDS=15
 ```
 
-Give the dedicated account a normal shell so OpenSSH can invoke the forced command, but do not add it to the Docker group. Lock its password and allow only the dedicated public key for SSH. Keep its `.ssh` directory and `authorized_keys` owned by that account with modes `0700` and `0600`; keep the runner script and sudoers rule owned by root. The matching private key belongs only in the corresponding GitHub secret. Populate the known-hosts secret with a host-key entry verified independently of the CI runner. The host runner calls only `docker image prune -f`; it does not prune tagged images, containers, volumes, or networks. The deploy workflow is not a host provisioning mechanism, so this setup must be completed by an administrator before enabling the webhook secret.
+Use an HTTPS Portainer URL and a dedicated API token whose account has read-only access to the Docker environment containing the corresponding stack. The token stays on the host; no Portainer API credentials or host access credentials are required in GitHub Actions. Enable one service instance per configured stack:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now rossmoney-image-prune@production.service
+sudo systemctl enable --now rossmoney-image-prune@development.service
+```
+
+The service runs locally as root because access to the Docker daemon is effectively root-equivalent. It exposes no listener, only makes outbound HTTPS requests to Portainer and uses the local Docker CLI. Its systemd sandbox limits filesystem writes to the state directory. On first start it records the currently observed deployment as a baseline without pruning; install and start it before expecting cleanup after a deployment. Portainer deployment event times have second-level precision, so an event that cannot be distinguished from the last processed success is skipped rather than treated as confirmed. Failed prune attempts are logged and retried on the next poll. The only Docker operation is `docker image prune -f`; tagged images, containers, volumes, and networks are not pruned.
 
 ## Notes
 
