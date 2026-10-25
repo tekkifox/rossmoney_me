@@ -1,4 +1,4 @@
-import { buildConfig, Payload } from 'payload';
+import { buildConfig, type BaseDatabaseAdapter, type DatabaseAdapterObj, type Payload } from 'payload';
 import { mongooseAdapter } from '@payloadcms/db-mongodb';
 import { lexicalEditor } from '@payloadcms/richtext-lexical';
 import sharp from 'sharp';
@@ -28,31 +28,44 @@ import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
 import { cv } from './endpoints/seed/cv-page';
+import { asRecord } from './utilities/json';
+import type { Form } from './payload-types';
 import fs from 'fs'
 import os from 'os'
-import { fileURLToPath as fURL } from 'url'
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 
-const noopDb = {
+/**
+ * Inert database adapter used for production builds (and any DB-less run).
+ * It answers the handful of calls `onInit` makes with empty results and never
+ * connects anywhere. `Payload` requires the full adapter surface, so the stub is
+ * narrowed to that interface at this single boundary rather than leaking `any`.
+ */
+const noopAdapter = {
   connect: async () => undefined,
   destroy: async () => undefined,
-  create: async () => ({}) as any,
-  update: async () => ({}) as any,
-  delete: async () => ({}) as any,
-  find: async () => ({ docs: [], totalDocs: 0 }) as any,
-  findOne: async () => null as any,
+  create: async () => ({}),
+  update: async () => ({}),
+  delete: async () => ({}),
+  find: async () => ({ docs: [], totalDocs: 0 }),
+  findOne: async () => null,
   count: async () => 0,
   countVersions: async () => 0,
-  createGlobal: async () => ({}) as any,
-  updateGlobal: async () => ({}) as any,
-  findGlobal: async () => null as any,
-  createMigration: async () => ({}) as any,
+  createGlobal: async () => ({}),
+  updateGlobal: async () => ({}),
+  findGlobal: async () => null,
+  createMigration: async () => ({}),
   migrate: async () => undefined,
   rollbackMigration: async () => undefined,
-  transaction: async (fn: any) => fn?.(),
-} as any;
+  transaction: async <T>(fn: () => Promise<T>) => fn?.(),
+} as unknown as BaseDatabaseAdapter;
+
+const noopDb: DatabaseAdapterObj = {
+  defaultIDType: 'text',
+  name: 'noop',
+  init: () => noopAdapter,
+};
 
 const useNoopDb = process.env.SKIP_DB === 'true' || process.env.NEXT_PHASE === 'phase-production-build';
 
@@ -129,11 +142,11 @@ export default buildConfig({
           fs.mkdirSync(publicMedia, { recursive: true })
           // try to set permissive mode on POSIX systems
           if (os.platform() !== 'win32') {
-            try { fs.chmodSync(publicMedia, 0o755) } catch (e) { /* ignore */ }
+            try { fs.chmodSync(publicMedia, 0o755) } catch { /* ignore */ }
           }
-          payload.logger?.info && payload.logger.info(`Created public media directory at ${publicMedia}`)
+          if (payload.logger?.info) payload.logger.info(`Created public media directory at ${publicMedia}`)
         } catch (e) {
-          payload.logger?.warn && payload.logger.warn(`Could not create public media directory: ${e}`)
+          if (payload.logger?.warn) payload.logger.warn(`Could not create public media directory: ${e}`)
         }
       }
     } catch (err) {
@@ -141,7 +154,7 @@ export default buildConfig({
       console.warn('public media dir check failed', err)
     }
     try {
-      const pClient = payload as any;
+      const pClient = payload;
 
       // Ensure header global is seeded/synced on every startup
         try {
@@ -157,16 +170,18 @@ export default buildConfig({
             ],
           };
 
-          const currentHeader = await pClient.db.findGlobal({ slug: 'header' }).catch(() => null);
+          const currentHeader = await pClient.db
+            .findGlobal<{ navItems?: Array<{ link?: { label?: string | null; url?: string | null } }> }>({ slug: 'header' })
+            .catch(() => null);
           if (!currentHeader) {
             await pClient.db.createGlobal({ slug: 'header', data: headerData });
             payload.logger.info('Header global created and seeded successfully.');
-          } else if (!Array.isArray((currentHeader as any).navItems) || (currentHeader as any).navItems.length === 0 || process.env.PAYLOAD_SEED === 'true') {
+          } else if (!Array.isArray(currentHeader.navItems) || currentHeader.navItems.length === 0 || process.env.PAYLOAD_SEED === 'true') {
             await pClient.db.updateGlobal({ slug: 'header', data: headerData });
             payload.logger.info('Header global updated and seeded successfully.');
           } else {
-            const navItems = (currentHeader as any).navItems;
-            const correctedNavItems = navItems.map((item: any) => {
+            const navItems = currentHeader.navItems;
+            const correctedNavItems = navItems.map((item) => {
               if (item?.link?.label === 'Contact' && item.link.url === '/#contact') {
                 return { ...item, link: { ...item.link, url: '/contact' } };
               }
@@ -206,7 +221,7 @@ export default buildConfig({
 
       const existingPages = await pClient.find({ collection: 'pages', limit: 1000 });
       for (const pageData of defaultPages) {
-        const found = existingPages.docs.find((p: any) => p.slug === pageData.slug);
+        const found = existingPages.docs.find((p) => p.slug === pageData.slug);
         try {
           if (found && forceSeed) {
             await pClient.update({
@@ -226,15 +241,15 @@ export default buildConfig({
             // Narrow, idempotent correction: older databases still store the
             // homepage button as the retired in-page anchor. Only rewrite that
             // exact value so editor changes to the page are preserved.
-            const data = found.data && typeof found.data === 'object' ? found.data : {};
-            const primaryButton = (data as any).primaryButton;
-            if (primaryButton?.href === '#contact') {
+            const data = asRecord(found.data);
+            const primaryButton = asRecord(data.primaryButton);
+            if (primaryButton.href === '#contact') {
               await pClient.update({
                 collection: 'pages',
                 id: found.id,
                 data: {
                   data: {
-                    ...(data as Record<string, unknown>),
+                    ...data,
                     primaryButton: { ...primaryButton, href: '/contact' },
                   },
                 },
@@ -268,9 +283,9 @@ export default buildConfig({
           payload.logger.error(`Failed to seed contact form "${contactFormData.title}": ${message}`);
         }
       } else {
-        const existingForm = existingContactForm.docs[0] as any;
+        const existingForm = existingContactForm.docs[0];
         const desiredEmails = contactFormData.emails || [];
-        const normalizeEmails = (emails: any[]) => emails.map((email) => ({
+        const normalizeEmails = (emails: NonNullable<Form['emails']>) => emails.map((email) => ({
           emailFrom: email.emailFrom,
           emailTo: email.emailTo,
           message: email.message,
@@ -303,7 +318,7 @@ export default buildConfig({
 
       const existingProjects = await pClient.find({ collection: 'projects', limit: 100 });
       for (const proj of defaultProjects) {
-        const found = existingProjects.docs.find((p: any) => p.title === proj.title);
+        const found = existingProjects.docs.find((p) => p.title === proj.title);
         try {
           if (found && forceSeed) {
             await pClient.update({ collection: 'projects', id: found.id, data: proj });
@@ -323,7 +338,7 @@ export default buildConfig({
 
       const existingExp = await pClient.find({ collection: 'experience', limit: 100 });
       for (const exp of defaultExperience) {
-        const found = existingExp.docs.find((e: any) => e.title === exp.title);
+        const found = existingExp.docs.find((e) => e.title === exp.title);
         try {
           if (found && forceSeed) {
             await pClient.update({ collection: 'experience', id: found.id, data: exp });

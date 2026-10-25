@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { Page, Post } from '@/payload-types'
+import type { Page, Post, Redirect } from '@/payload-types'
 
 import { getCachedDocument } from '@/utilities/getDocument'
 import { getCachedRedirects } from '@/utilities/getRedirects'
@@ -14,7 +14,7 @@ interface Props {
 export const PayloadRedirects: React.FC<Props> = async ({ disableNotFound, url }) => {
   const redirects = await getCachedRedirects()()
 
-  const redirectItem = redirects.find((redirect: any) => redirect.from === url)
+  const redirectItem = redirects.find((redirect: Redirect) => redirect.from === url)
 
   if (redirectItem) {
     if (redirectItem.to?.url) {

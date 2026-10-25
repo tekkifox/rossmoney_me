@@ -6,6 +6,8 @@ import { getSafePayload } from '@/utilities/getSafePayload'
 
 export type PageDoc = RequiredDataFromCollectionSlug<'pages'>
 
+export type UnknownRecord = { [key: string]: unknown }
+
 export type ProjectDoc = {
   title?: string
   role?: string
@@ -19,18 +21,96 @@ export type ExperienceDoc = {
   summary?: string
 }
 
+export type MetricItem = {
+  value?: string | number
+  label?: string | number
+}
+
+export function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export function readString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+export function readText(value: unknown): string | number | undefined {
+  return typeof value === 'string' || typeof value === 'number' ? value : undefined
+}
+
+export function readPageData(page: PageDoc): UnknownRecord {
+  return isRecord(page.data) ? page.data : {}
+}
+
+export function readPageContact(page: PageDoc): unknown {
+  return 'contact' in page ? page.contact : null
+}
+
+export function readStringFields<K extends string>(
+  value: unknown,
+  keys: readonly K[],
+): Partial<Record<K, string>> {
+  const record = isRecord(value) ? value : {}
+  const fields: Partial<Record<K, string>> = {}
+  for (const key of keys) {
+    const field = readString(record[key])
+    if (field !== undefined) fields[key] = field
+  }
+  return fields
+}
+
+export function readLinks(value: unknown): Array<{ label?: string; href?: string }> {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const record = isRecord(entry) ? entry : {}
+    return { label: readString(record.label), href: readString(record.href) }
+  })
+}
+
+export function readMetrics(value: unknown): MetricItem[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const record = isRecord(entry) ? entry : {}
+    return { value: readText(record.value), label: readText(record.label) }
+  })
+}
+
+export function readProjects(value: unknown): ProjectDoc[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const record = isRecord(entry) ? entry : {}
+    return {
+      title: readString(record.title),
+      role: readString(record.role),
+      summary: readString(record.summary),
+    }
+  })
+}
+
+export function readExperience(value: unknown): ExperienceDoc[] {
+  if (!Array.isArray(value)) return []
+  return value.map((entry) => {
+    const record = isRecord(entry) ? entry : {}
+    return {
+      year: readString(record.year),
+      title: readString(record.title),
+      organization: readString(record.organization),
+      summary: readString(record.summary),
+    }
+  })
+}
+
 export async function loadCollections() {
   const payload = await getSafePayload()
-  const pClient = payload as any
 
   const [projects, experience] = await Promise.all([
-    pClient.find({ collection: 'projects', limit: 100, sort: 'order' }),
-    pClient.find({ collection: 'experience', limit: 100, sort: 'order' }),
+    payload.find({ collection: 'projects', limit: 100, sort: 'order' }),
+    payload.find({ collection: 'experience', limit: 100, sort: 'order' }),
   ])
 
   return {
-    projects: projects.docs as ProjectDoc[],
-    experience: experience.docs as ExperienceDoc[],
+    projects: readProjects(projects.docs),
+    experience: readExperience(experience.docs),
   }
 }
 
@@ -47,21 +127,24 @@ export function Section({ eyebrow, title, lead, children, className }: { eyebrow
   )
 }
 
-export function ContactPanel({ contact }: { contact?: any }) {
-  const c = contact || {}
-  const links = Array.isArray(c.links) ? c.links : []
+export function ContactPanel({ contact }: { contact?: unknown }) {
+  const c = isRecord(contact) ? contact : {}
+  const links = readLinks(c.links)
+  const eyebrow = readText(c.eyebrow)
+  const title = readText(c.title)
+  const lead = readText(c.lead)
 
   return (
     <section className="section container contact-section" id="contact">
       <div className="card contact-card">
         <div>
-          {c.eyebrow && <p className="eyebrow">{c.eyebrow}</p>}
-          {c.title && <h2>{c.title}</h2>}
-          {c.lead && <p className="lead">{c.lead}</p>}
+          {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+          {title && <h2>{title}</h2>}
+          {lead && <p className="lead">{lead}</p>}
         </div>
 
         <div className="contact-links">
-          {links.map((l: any, i: number) => (
+          {links.map((l, i) => (
             <a key={i} href={l?.href || '#'} className="text-muted small" rel="noreferrer">{l?.label || l?.href || 'Contact'}</a>
           ))}
         </div>
@@ -86,7 +169,7 @@ export function SimpleCards({ items }: { items: Array<{ title?: string; kicker?:
 
 export function RenderLayout({ page }: { page: PageDoc }) {
   if (Array.isArray(page.layout) && page.layout.length > 0) {
-    return <RenderBlocks blocks={page.layout as any} />
+    return <RenderBlocks blocks={page.layout} />
   }
 
   return null
@@ -95,7 +178,8 @@ export function RenderLayout({ page }: { page: PageDoc }) {
 import Head from 'next/head'
 
 export function PageMeta({ page }: { page: PageDoc }) {
-  const archview = (page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
+  const data = readPageData(page)
+  const archview = page.archviewUrl || readString(data.archviewUrl) || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
   const base = archview ? String(archview).replace(/\/$/, '') : ''
   const api = base ? `${base}/api/architecture` : '/api/architecture'
   return (

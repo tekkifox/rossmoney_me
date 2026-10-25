@@ -270,4 +270,4 @@ export const services: RequiredDataFromCollectionSlug<'pages'> = {
     description:
       'Day-rate services for website builds, CMS integration, DevOps and CI/CD, cloud infrastructure, monitoring, and security hardening.',
   },
-} as any
+}

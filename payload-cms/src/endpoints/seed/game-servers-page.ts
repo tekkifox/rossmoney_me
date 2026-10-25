@@ -1,4 +1,6 @@
-export const gameservers = {
+import type { RequiredDataFromCollectionSlug } from 'payload'
+
+export const gameservers: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'game-servers',
   _status: 'published',
   hero: {
@@ -38,4 +40,4 @@ export const gameservers = {
     title: 'Game Servers',
     description: 'Infrastructure and operational view for VortexServers.co.uk',
   },
-} as any
+}

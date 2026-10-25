@@ -1,3 +1,5 @@
+import { asString, isObjectLike } from '@/utilities/json'
+
 export interface CommitItem {
   sha: string
   message: string
@@ -50,11 +52,15 @@ export async function getGithubCommits(
     throw new Error(`GitHub API returned ${res.status}`)
   }
 
-  const data = await res.json().catch(() => [])
+  const data: unknown = await res.json().catch(() => [])
   if (!Array.isArray(data)) return []
 
-  return data.map((commit: any) => ({
-    sha: commit?.sha || '',
-    message: commit?.commit?.message?.split('\n')[0] || 'No commit message',
-  }))
+  return data.map((commit) => {
+    const record = isObjectLike(commit) ? commit : {}
+    const details = isObjectLike(record.commit) ? record.commit : {}
+    return {
+      sha: asString(record.sha) || '',
+      message: asString(details.message)?.split('\n')[0] || 'No commit message',
+    }
+  })
 }

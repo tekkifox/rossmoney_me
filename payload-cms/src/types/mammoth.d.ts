@@ -25,14 +25,24 @@ declare module 'mammoth' {
       (document: MammothElement) => MammothElement
   }
 
+  export interface MammothInput {
+    arrayBuffer?: ArrayBuffer | Uint8Array
+    buffer?: ArrayBuffer | Uint8Array
+  }
+
+  export interface MammothMessage {
+    type: string
+    message: string
+  }
+
   /**
    * Convert a DOCX (ArrayBuffer or object) to HTML.
    * The real mammoth API returns an object with `value` (string HTML) and `messages` (array).
    */
   export function convertToHtml(
-    input: any,
+    input: MammothInput | ArrayBuffer | Uint8Array,
     options?: MammothOptions,
-  ): Promise<{ value: string; messages?: any[] }>
+  ): Promise<{ value: string; messages?: MammothMessage[] }>
 
   const mammoth: {
     convertToHtml: typeof convertToHtml

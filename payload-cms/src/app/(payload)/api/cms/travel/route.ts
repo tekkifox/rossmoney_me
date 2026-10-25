@@ -1,56 +1,66 @@
 import { NextResponse } from 'next/server'
+
 import { assembleSite } from '@/utilities/assembleSite'
 import { travelling as travellingSeed } from '@/endpoints/seed/travelling-page'
+import { asRecord, asString } from '@/utilities/json'
+
+async function fetchRecentCommits() {
+  return fetch('https://api.github.com/repos/tekkifox/image-mosaic/commits?per_page=5&sha=main', {
+    headers: {
+      Accept: 'application/vnd.github+json'
+    },
+    cache: 'no-store'
+  }).then(async (response) => {
+    if (!response.ok) {
+      return []
+    }
+    const data: unknown = await response.json().catch(() => [])
+    return Array.isArray(data)
+      ? data.map((commit) => {
+          const record = asRecord(commit)
+          const details = asRecord(record.commit)
+          return {
+            sha: asString(record.sha),
+            message: asString(details.message)?.split('\n')[0] || 'No commit message'
+          }
+        })
+      : []
+  }).catch(() => [])
+}
 
 export async function GET() {
   try {
     const site = await assembleSite()
-    const contactDoc = site.contact || {}
-    const travellingDoc = site.travelling || (travellingSeed as any) || {}
-    const navLinks = site.navItems || (site.navigation && site.navigation.links) || []
-    const commits = await fetch('https://api.github.com/repos/tekkifox/image-mosaic/commits?per_page=5&sha=main', {
-      headers: {
-        Accept: 'application/vnd.github+json'
-      },
-      cache: 'no-store'
-    }).then(async (response) => {
-      if (!response.ok) {
-        return [];
-      }
-      const data = await response.json().catch(() => []);
-      return Array.isArray(data)
-        ? data.map((commit: any) => ({
-            sha: commit?.sha,
-            message: commit?.commit?.message?.split('\n')[0] || 'No commit message'
-          }))
-        : [];
-    }).catch(() => []);
+    const contactDoc = site.contact
+    const travellingDoc = asRecord(site.travelling ?? travellingSeed)
+    const navLinks = site.navItems ?? site.navigation?.links ?? []
+    const commits = await fetchRecentCommits()
 
     // prefer assembled navLinks from site assembly
     const navLinksFinal = Array.isArray(navLinks) ? navLinks : []
 
     return NextResponse.json({
     travelling: {
-      eyebrow: (travellingDoc as any).eyebrow,
-      title: (travellingDoc as any).title,
-      lead: (travellingDoc as any).lead,
-      ...(((travellingDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: asString(travellingDoc.eyebrow),
+      title: asString(travellingDoc.title),
+      lead: asString(travellingDoc.lead),
+      ...asRecord(travellingDoc.data),
       github: {
         owner: 'tekkifox',
         repo: 'image-mosaic',
         branch: 'main',
       },
-      focus: (travellingDoc as any).focus || ((travellingDoc as any).data as any)?.focus,
+      focus: travellingDoc.focus || asRecord(travellingDoc.data).focus,
     },
     navigation: {
-      ...(((site.navigation as any)?.data as Record<string, unknown>) || {}),
+      ...asRecord(site.navigation?.data),
       links: navLinksFinal,
     },
     contact: {
-      eyebrow: (contactDoc as any).eyebrow,
-      title: (contactDoc as any).title,
-      lead: (contactDoc as any).lead,
-      ...(((contactDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: asString(contactDoc.eyebrow),
+      title: asString(contactDoc.title),
+      lead: asString(contactDoc.lead),
+      ...asRecord(contactDoc.data),
     },
       commits: {
         items: commits,

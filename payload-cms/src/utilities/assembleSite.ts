@@ -1,6 +1,107 @@
-import { getSafePayload } from '@/utilities/getSafePayload'
+import type { Payload } from 'payload'
 
-export async function assembleSite(pClientArg?: any) {
+import type { Experience, Page, Project } from '@/payload-types'
+
+import { getSafePayload } from '@/utilities/getSafePayload'
+import { asRecord, asString, isObjectLike } from '@/utilities/json'
+
+export interface NavLink {
+  label: string
+  href: string
+}
+
+export interface SiteFocusItem {
+  label?: string | null
+  value?: string | null
+}
+
+export interface SiteFocus {
+  kicker?: string | null
+  title?: string | null
+  status?: string | null
+  items?: SiteFocusItem[] | null
+}
+
+/**
+ * A page as the templates consume it: the page document's own fields plus the
+ * free-form `data` JSON blob flattened onto the section.
+ */
+export interface SiteSection {
+  eyebrow?: string | null
+  title?: string | null
+  lead?: string | null
+  liveUrl?: string | null
+  archviewUrl?: string | null
+  focus?: SiteFocus | null
+  metrics?: unknown[]
+  cards?: unknown[]
+  summaryTitle?: string | null
+  summaryLead?: string | null
+  [key: string]: unknown
+}
+
+export interface AssembledSite {
+  home: SiteSection
+  work: SiteSection
+  experiencePage: SiteSection
+  contact: SiteSection
+  travelling: SiteSection
+  gameservers: SiteSection
+  architecture: SiteSection
+  commits: SiteSection
+  navigation: SiteSection & { links?: NavLink[] }
+  navItems?: NavLink[]
+  projects: Project[]
+  experience: Experience[]
+  updatedAt: string
+}
+
+/** The subset of a page document that `assembleSite` reads. */
+interface PageLike {
+  slug?: string | null
+  eyebrow?: string | null
+  title?: string | null
+  lead?: string | null
+  data?: unknown
+  focus?: SiteFocus | null
+  liveUrl?: string | null
+  archviewUrl?: string | null
+}
+
+function focusOf(value: unknown): SiteFocus | undefined {
+  if (!isObjectLike(value)) return undefined
+
+  const items = Array.isArray(value.items)
+    ? value.items.filter(isObjectLike).map((item) => ({
+        label: asString(item.label) ?? null,
+        value: asString(item.value) ?? null,
+      }))
+    : undefined
+
+  return {
+    kicker: asString(value.kicker) ?? null,
+    title: asString(value.title) ?? null,
+    status: asString(value.status) ?? null,
+    items,
+  }
+}
+
+function navigationLinks(value: unknown): NavLink[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.map((entry) => {
+    const link = asRecord(entry)
+    return {
+      label: asString(link.label) || 'Link',
+      href: asString(link.href) || '#',
+    }
+  })
+}
+
+function findPage(pages: Page[], slug: string, alias?: string): PageLike {
+  return pages.find((page) => page.slug === slug || (alias ? page.slug === alias : false)) ?? {}
+}
+
+export async function assembleSite(pClientArg?: Payload): Promise<AssembledSite> {
   const pClient = pClientArg ?? (await getSafePayload())
 
   const pages = await pClient.find({ collection: 'pages', limit: 100 })
@@ -8,112 +109,102 @@ export async function assembleSite(pClientArg?: any) {
   const experience = await pClient.find({ collection: 'experience', limit: 100, sort: 'order' })
   const headerDoc = await pClient.findGlobal({ slug: 'header' }).catch(() => ({ navItems: [] }))
 
-  const homeDoc = pages.docs.find((p: any) => p.slug === 'home') || {}
-  const contactDoc = pages.docs.find((p: any) => p.slug === 'contact') || {}
-  let travellingDoc = pages.docs.find((p: any) => p.slug === 'travelling') || {}
+  const homeDoc = findPage(pages.docs, 'home')
+  const contactDoc = findPage(pages.docs, 'contact')
+  const travellingDoc = findPage(pages.docs, 'travelling')
   // If travelling page is missing (eg. DB empty or not seeded), fall back to the seed data so templates render
-  if (!travellingDoc || Object.keys(travellingDoc).length === 0) {
+  if (Object.keys(travellingDoc).length === 0) {
     try {
       const seedMod = await import('@/endpoints/seed/travelling-page')
-      // seed exports `travelling`
-      // cast to any to match the shape
-      // only override when seed exists
       if (seedMod && seedMod.travelling) {
-        // copy seed into travellingDoc shape expected by templates
-        // keep slug/status if present in seed
-        // ensure travellingDoc looks like a page doc
-        const s = seedMod.travelling as any
-        // create a best-effort page-like object
+        // create a best-effort page-like object from the seed data
         // payload page docs usually contain eyebrow/title/lead/data/focus
-        // we'll map seed fields into that shape
-        // This fallback is only used when the DB does not have a travelling page
-        // so templates still receive meaningful defaults
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        travellingDoc = {
-          slug: s.slug || 'travelling',
-          _status: s._status || 'published',
-          eyebrow: s.eyebrow,
-          title: s.title,
-          lead: s.lead,
-          data: s.data || {},
-          focus: s.focus || (s.data && s.data.focus) || undefined,
-        }
+        travellingDoc.eyebrow = seedMod.travelling.eyebrow
+        travellingDoc.title = seedMod.travelling.title
+        travellingDoc.lead = seedMod.travelling.lead
+        travellingDoc.data = seedMod.travelling.data || {}
+        travellingDoc.focus = seedMod.travelling.focus
       }
-    } catch (e) {
+    } catch {
       // ignore if seed not available
     }
   }
-  const archDoc = pages.docs.find((p: any) => p.slug === 'architecture') || {}
-  const commitsDoc = pages.docs.find((p: any) => p.slug === 'commits') || {}
-  const workDoc = pages.docs.find((p: any) => p.slug === 'work') || {}
-  const expPageDoc = pages.docs.find((p: any) => p.slug === 'experience-page') || {}
-  const navDoc = pages.docs.find((p: any) => p.slug === 'navigation') || {}
-  const gameserversDoc = pages.docs.find((p: any) => p.slug === 'game-servers' || p.slug === 'gameservers') || {}
+  const archDoc = findPage(pages.docs, 'architecture')
+  const commitsDoc = findPage(pages.docs, 'commits')
+  const workDoc = findPage(pages.docs, 'work')
+  const expPageDoc = findPage(pages.docs, 'experience-page')
+  const navDoc = findPage(pages.docs, 'navigation')
+  const gameserversDoc = findPage(pages.docs, 'game-servers', 'gameservers')
 
-  const navLinks = (Array.isArray(headerDoc?.navItems) && headerDoc.navItems.length > 0)
-    ? headerDoc.navItems.map((item: any) => {
-        const l = item?.link || item
-        return {
-          label: l?.label || l?.title || 'Link',
-          href: l?.url || l?.href || '#',
-        }
-      })
-    : (((navDoc as any).data as Record<string, unknown>)?.links)
+  const headerNavItems = Array.isArray(headerDoc?.navItems) ? headerDoc.navItems : []
+  const navLinks: NavLink[] | undefined =
+    headerNavItems.length > 0
+      ? headerNavItems.map((item) => {
+          const link = asRecord(asRecord(item).link ?? item)
+          return {
+            label: asString(link.label) || asString(link.title) || 'Link',
+            href: asString(link.url) || asString(link.href) || '#',
+          }
+        })
+      : navigationLinks(asRecord(navDoc.data).links)
+
+  const travellingData = asRecord(travellingDoc.data)
+  const gameserversData = asRecord(gameserversDoc.data)
 
   return {
     home: {
-      eyebrow: (homeDoc as any).eyebrow,
-      title: (homeDoc as any).title,
-      lead: (homeDoc as any).lead,
-      ...(((homeDoc as any).data as Record<string, unknown>) || {}),
-      focus: (homeDoc as any).focus || ((homeDoc as any).data as any)?.focus,
+      eyebrow: homeDoc.eyebrow,
+      title: homeDoc.title,
+      lead: homeDoc.lead,
+      ...asRecord(homeDoc.data),
+      focus: focusOf(homeDoc.focus ?? asRecord(homeDoc.data).focus),
     },
     work: {
-      eyebrow: (workDoc as any).eyebrow,
-      title: (workDoc as any).title,
-      ...(((workDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: workDoc.eyebrow,
+      title: workDoc.title,
+      ...asRecord(workDoc.data),
     },
     experiencePage: {
-      eyebrow: (expPageDoc as any).eyebrow,
-      title: (expPageDoc as any).title,
-      ...(((expPageDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: expPageDoc.eyebrow,
+      title: expPageDoc.title,
+      ...asRecord(expPageDoc.data),
     },
     contact: {
-      eyebrow: (contactDoc as any).eyebrow,
-      title: (contactDoc as any).title,
-      lead: (contactDoc as any).lead,
-      ...(((contactDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: contactDoc.eyebrow,
+      title: contactDoc.title,
+      lead: contactDoc.lead,
+      ...asRecord(contactDoc.data),
     },
     travelling: {
-      eyebrow: (travellingDoc as any).eyebrow,
-      title: (travellingDoc as any).title,
-      lead: (travellingDoc as any).lead,
-      ...(((travellingDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: travellingDoc.eyebrow,
+      title: travellingDoc.title,
+      lead: travellingDoc.lead,
+      ...travellingData,
       // include top-level liveUrl if present on the page doc (sidebar field)
-      liveUrl: (travellingDoc as any).liveUrl || (((travellingDoc as any).data as any)?.liveUrl),
-      focus: (travellingDoc as any).focus || ((travellingDoc as any).data as any)?.focus,
+      liveUrl: asString(travellingDoc.liveUrl) || asString(travellingData.liveUrl),
+      focus: focusOf(travellingDoc.focus ?? travellingData.focus),
     },
     gameservers: {
-      eyebrow: (gameserversDoc as any).eyebrow,
-      title: (gameserversDoc as any).title,
-      lead: (gameserversDoc as any).lead,
-      ...(((gameserversDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: gameserversDoc.eyebrow,
+      title: gameserversDoc.title,
+      lead: gameserversDoc.lead,
+      ...gameserversData,
       // include top-level archviewUrl if present on the page doc (sidebar field)
-      archviewUrl: (gameserversDoc as any).archviewUrl || (((gameserversDoc as any).data as any)?.archviewUrl),
-      focus: (gameserversDoc as any).focus || ((gameserversDoc as any).data as any)?.focus,
+      archviewUrl: asString(gameserversDoc.archviewUrl) || asString(gameserversData.archviewUrl),
+      focus: focusOf(gameserversDoc.focus ?? gameserversData.focus),
     },
     architecture: {
-      eyebrow: (archDoc as any).eyebrow,
-      title: (archDoc as any).title,
-      ...(((archDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: archDoc.eyebrow,
+      title: archDoc.title,
+      ...asRecord(archDoc.data),
     },
     commits: {
-      eyebrow: (commitsDoc as any).eyebrow,
-      title: (commitsDoc as any).title,
-      ...(((commitsDoc as any).data as Record<string, unknown>) || {}),
+      eyebrow: commitsDoc.eyebrow,
+      title: commitsDoc.title,
+      ...asRecord(commitsDoc.data),
     },
     navigation: {
-      ...(((navDoc as any).data as Record<string, unknown>) || {}),
+      ...asRecord(navDoc.data),
       links: navLinks,
     },
     navItems: navLinks,
