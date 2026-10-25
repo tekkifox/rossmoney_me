@@ -25,6 +25,17 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // These page trees wrap their whole render in try/catch by design; flagging every JSX node there is noise.
+    files: [
+      'src/app/(frontend)/templates/travelling.tsx',
+      'src/app/(frontend)/templates/game-servers.tsx',
+      'src/app/(frontend)/[[]slug[]]/page.tsx',
+    ],
+    rules: {
+      'react-hooks/error-boundaries': 'off',
+    },
+  },
+  {
     ignores: ['.next/', 'src/payload-types.ts', 'src/payload-generated-schema.ts'],
   },
 ])
