@@ -153,7 +153,6 @@ export default buildConfig({
               { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
               { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
               { link: { type: 'custom', label: 'CV', url: '/cv' } },
-              { link: { type: 'custom', label: 'Services', url: '/services' } },
               { link: { type: 'custom', label: 'Contact', url: '/contact' } },
             ],
           };
