@@ -18,7 +18,7 @@ describe('CV document', () => {
   it('downloads the document selected in the CMS CV field', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
 
-    render(
+    const { getByRole } = render(
       React.createElement(CVViewer, {
         cvFile: {
           id: 'current-cv',
@@ -30,15 +30,15 @@ describe('CV document', () => {
       }),
     )
 
-    expect(screen.getByRole('link', { name: 'Download CV (DOCX)' }).getAttribute('href'))
+    expect(getByRole('link', { name: 'Download CV (DOCX)' }).getAttribute('href'))
       .toBe('/media/current-cv.docx')
   })
 
   it('shows a graceful unavailable state when the CMS CV field is empty', () => {
-    render(React.createElement(CVViewer, { cvFile: null }))
+    const { getByText, queryByRole } = render(React.createElement(CVViewer, { cvFile: null }))
 
-    expect(screen.getByText('CV document is not available right now.')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: 'Download CV (DOCX)' })).toBeNull()
+    expect(getByText('CV document is not available right now.')).toBeTruthy()
+    expect(queryByRole('link', { name: 'Download CV (DOCX)' })).toBeNull()
   })
 
   it('keeps media public for reads while requiring authentication for writes', () => {
