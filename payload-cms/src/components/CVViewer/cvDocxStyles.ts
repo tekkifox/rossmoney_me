@@ -70,8 +70,8 @@ export function normalizeCVDocxXml(xmlText: string): string {
   }
 
   // The benchmark draws section-heading rules with a thick paragraph bottom
-  // border. Mammoth ignores paragraph borders, so expose those paragraphs as a
-  // class the CV stylesheet can draw.
+  // border and experience separators with a thin one. Mammoth ignores paragraph
+  // borders, so expose those paragraphs as classes the CV stylesheet can draw.
   const paragraphs = document.getElementsByTagNameNS(WORD_NAMESPACE, 'p')
   for (const paragraph of Array.from(paragraphs)) {
     const paragraphProperties = wordChild(paragraph, 'pPr')
@@ -82,7 +82,10 @@ export function normalizeCVDocxXml(xmlText: string): string {
 
     const value = bottom.getAttributeNS(WORD_NAMESPACE, 'val')
     const size = Number(bottom.getAttributeNS(WORD_NAMESPACE, 'sz') ?? 0)
-    if (value !== 'single' || size < 8) continue
+    if (value !== 'single' || size <= 0) continue
+    // Thick borders draw section headings; thin ones are the empty separator
+    // paragraphs between experience entries (w:sz="2" in the benchmark).
+    const ruleStyle = size < 8 ? 'cvEntryRule' : 'cvSectionRule'
 
     let paragraphStyle = wordChild(paragraphProperties, 'pStyle')
     const existingParagraphStyle = paragraphStyle?.getAttributeNS(WORD_NAMESPACE, 'val')
@@ -92,7 +95,7 @@ export function normalizeCVDocxXml(xmlText: string): string {
       paragraphStyle = document.createElementNS(WORD_NAMESPACE, 'w:pStyle')
       paragraphProperties.insertBefore(paragraphStyle, paragraphProperties.firstChild)
     }
-    paragraphStyle.setAttributeNS(WORD_NAMESPACE, 'w:val', 'cvSectionRule')
+    paragraphStyle.setAttributeNS(WORD_NAMESPACE, 'w:val', ruleStyle)
     changed = true
   }
 
@@ -150,6 +153,7 @@ const CV_TEXT_COLOR_OPTIONS: Array<string | null> = [
 export const cvDocxStyleMap = [
   'u => u',
   'p.cvSectionRule => p.docx-section-rule:fresh',
+  'p.cvEntryRule => p.docx-entry-rule:fresh',
   ...CV_FONT_SIZE_OPTIONS.flatMap((fontSize) =>
     CV_FONT_FAMILY_OPTIONS.flatMap((fontFamily) =>
       CV_TEXT_COLOR_OPTIONS.flatMap((color) => {
@@ -187,4 +191,23 @@ export function applyCVDocxRunStyle(run: MammothRun): MammothRun {
   if (styleId === 'cv') return run
 
   return { ...run, styleId }
+}
+
+export async function convertCVDocxToHtml(arrayBuffer: ArrayBuffer): Promise<string> {
+  const mammoth = await import('mammoth')
+  const result = await mammoth.convertToHtml(
+    // The browser Mammoth build reads `arrayBuffer` while the Node build reads
+    // `buffer`; pass both so the viewer and the jsdom tests share this path.
+    { arrayBuffer, buffer: arrayBuffer } as Parameters<typeof mammoth.convertToHtml>[0],
+    {
+      styleMap: cvDocxStyleMap,
+      transformDocument: mammoth.transforms.run(applyCVDocxRunStyle),
+      // Experience separators are empty paragraphs. Mammoth drops those by
+      // default, which would discard the rules tagged in normalizeCVDocxXml();
+      // keep them and let local-styles.css hide every empty paragraph except
+      // the rule classes.
+      ignoreEmptyParagraphs: false,
+    },
+  )
+  return result.value ?? ''
 }
