@@ -4,6 +4,7 @@ import type { Media } from '@/payload-types'
 import {
   applyCVDocxRunStyle,
   cvDocxStyleMap,
+  normalizeCVDocxForRendering,
 } from './cvDocxStyles'
 
 type Props = {
@@ -31,7 +32,7 @@ export default function CVViewer({ cvFile }: Props) {
         if (!res.ok) throw new Error(`Failed to fetch CV (${res.status})`)
         const blob = await res.blob()
 
-        const arrayBuffer = await blob.arrayBuffer()
+        const arrayBuffer = await normalizeCVDocxForRendering(await blob.arrayBuffer())
         // dynamic import to avoid build-time dependency problems
         const mammoth = await import('mammoth')
         // convert DOCX to HTML
