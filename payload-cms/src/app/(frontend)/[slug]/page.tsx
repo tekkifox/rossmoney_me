@@ -84,48 +84,28 @@ export default async function Page({ params: paramsPromise }: Args) {
 
   const collections = page.slug === 'work' || page.slug === 'experience-page' ? await loadCollections() : null
 
-  try {
-    return (
-      <article id="page-root" className="pt-16 pb-24" data-architecture-api={((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') ? (((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') + '/api/architecture') : '/api/architecture'}>
-        <PageMeta page={page} />
-        <PageClient />
-        {/* Allows redirects for valid pages too */}
-        <PayloadRedirects disableNotFound url={url} />
+  return (
+    <article id="page-root" className="pt-16 pb-24" data-architecture-api={((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') ? (((page as any).archviewUrl || (page as any).data?.archviewUrl || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || '').replace(/\/$/, '') + '/api/architecture') : '/api/architecture'}>
+      <PageMeta page={page} />
+      <PageClient />
+      {/* Allows redirects for valid pages too */}
+      <PayloadRedirects disableNotFound url={url} />
 
-        {draft && <LivePreviewListener />}
+      {draft && <LivePreviewListener />}
 
-        {page.slug === 'home' && <HomeTemplate page={page} />}
-        {page.slug === 'contact' && <ContactTemplate page={page} />}
-        {page.slug === 'travelling' && <TravellingTemplate page={page} />}
-        {page.slug === 'architecture' && <ArchitectureTemplate page={page} />}
-        {page.slug === 'commits' && <CommitsTemplate page={page} />}
-        {page.slug === 'work' && <WorkTemplate page={page} projects={collections?.projects || []} />}
-        {page.slug === 'experience-page' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
-        {page.slug === 'navigation' && <NavigationTemplate page={page} />}
-        {page.slug === 'cv' && <CVTemplate page={page} />}
-        {page.slug === 'services' && <ServicesTemplate page={page} />}
-        {(page.slug === 'game-servers' || page.slug === 'gameservers') && <GameServersTemplate page={page} />}
-      </article>
-    )
-  } catch (err: unknown) {
-    // Prevent a server-render exception from returning a 500. Render a minimal fallback
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    // Log on the server console so developers can inspect the stack trace in logs
-    // eslint-disable-next-line no-console
-    console.error('Page render error for', url, err)
-
-    return (
-      <article className="pt-16 pb-24">
-        <div className="container">
-          <div className="card">
-            <h2>Page unavailable</h2>
-            <p className="text-muted">An error occurred while rendering this page.</p>
-            <pre className="diagram-view">{message}</pre>
-          </div>
-        </div>
-      </article>
-    )
-  }
+      {page.slug === 'home' && <HomeTemplate page={page} />}
+      {page.slug === 'contact' && <ContactTemplate page={page} />}
+      {page.slug === 'travelling' && <TravellingTemplate page={page} />}
+      {page.slug === 'architecture' && <ArchitectureTemplate page={page} />}
+      {page.slug === 'commits' && <CommitsTemplate page={page} />}
+      {page.slug === 'work' && <WorkTemplate page={page} projects={collections?.projects || []} />}
+      {page.slug === 'experience-page' && <ExperiencePageTemplate page={page} experience={collections?.experience || []} />}
+      {page.slug === 'navigation' && <NavigationTemplate page={page} />}
+      {page.slug === 'cv' && <CVTemplate page={page} />}
+      {page.slug === 'services' && <ServicesTemplate page={page} />}
+      {(page.slug === 'game-servers' || page.slug === 'gameservers') && <GameServersTemplate page={page} />}
+    </article>
+  )
 }
 
 export async function generateMetadata({ params: paramsPromise }: Args): Promise<Metadata> {
