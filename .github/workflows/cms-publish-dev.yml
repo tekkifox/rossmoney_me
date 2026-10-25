@@ -7,7 +7,12 @@ on:
     paths:
       - 'payload-cms/**'
       - '.github/workflows/cms-publish-dev.yml'
+      - 'deploy/**'
   workflow_dispatch:
+
+concurrency:
+  group: cms-publish-dev
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -47,11 +52,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Trigger Portainer webhook
+      - name: Confirm Portainer deployment and prune host dangling images
         if: ${{ env.PORTAINER_WEBHOOK_URL != '' }}
-        run: |
-          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$PORTAINER_WEBHOOK_URL")
-          if [ "$status" != "200" ] && [ "$status" != "202" ] && [ "$status" != "204" ] && [ "$status" != "409" ]; then
-            echo "Portainer webhook failed with HTTP $status"
-            exit 1
-          fi
+        env:
+          PORTAINER_API_URL: ${{ secrets.PORTAINER_API_URL_DEV }}
+          PORTAINER_API_TOKEN: ${{ secrets.PORTAINER_API_TOKEN_DEV }}
+          PORTAINER_STACK_ID: ${{ secrets.PORTAINER_STACK_ID_DEV }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST_DEV }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER_DEV }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY_DEV }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS_DEV }}
+          PORTAINER_DEPLOY_TIMEOUT_SECONDS: '900'
+        run: python3 deploy/portainer_deploy.py
