@@ -1,6 +1,6 @@
 import type { RequiredDataFromCollectionSlug } from 'payload'
 
-export const home = {
+export const home: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'home',
   _status: 'published',
   hero: {
@@ -86,4 +86,4 @@ export const home = {
     title: 'Home',
     description: 'Ross Money — DevOps-focused developer. Building dependable systems, automation layers, and production-ready interfaces.'
   },
-} as any
+}

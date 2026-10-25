@@ -1,4 +1,6 @@
-export const travelling = {
+import type { RequiredDataFromCollectionSlug } from 'payload'
+
+export const travelling: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'travelling',
   _status: 'published',
   hero: {
@@ -63,4 +65,4 @@ export const travelling = {
     title: 'Travelling',
     description: 'A visual archive of the 2016 Southeast Asia trip and related route notes.'
   },
-} as any
+}
