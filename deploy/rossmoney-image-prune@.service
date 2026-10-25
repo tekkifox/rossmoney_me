@@ -1,0 +1,30 @@
+[Unit]
+Description=Prune dangling Docker images after successful Portainer deployment (%i)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/rossmoney-image-prune/%i.env
+ExecStart=/usr/bin/python3 -I /opt/rossmoney-image-prune/portainer_image_prune.py
+Restart=on-failure
+RestartSec=10s
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/var/lib/rossmoney-image-prune
+
+[Install]
+WantedBy=multi-user.target

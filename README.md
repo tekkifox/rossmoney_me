@@ -106,6 +106,37 @@ The first block is for the CMS and telemetry services; the remaining socket-prox
 
 Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing images.
 
+GitHub Actions only triggers the existing Portainer webhook; its HTTP response means the request was accepted, not that deployment completed. It rejects HTTP 409 and does not connect to the deployment host. A host-local systemd worker polls Portainer's read-only stack API and runs cleanup only when it observes a new `Deploying` → `Active` status sequence. Portainer's `Active` status confirms the deployment operation completed without error; it does not guarantee application-level health.
+
+An administrator must install Python 3 and the Docker CLI on the deployment host. Install the worker and service unit as root-owned, non-writable files, then create the root-only configuration and state directories:
+
+```sh
+sudo install -d -o root -g root -m 0755 /opt/rossmoney-image-prune
+sudo install -o root -g root -m 0644 deploy/portainer_image_prune.py /opt/rossmoney-image-prune/portainer_image_prune.py
+sudo install -o root -g root -m 0644 'deploy/rossmoney-image-prune@.service' /etc/systemd/system/rossmoney-image-prune@.service
+sudo install -d -o root -g root -m 0700 /etc/rossmoney-image-prune
+sudo install -d -o root -g root -m 0700 /var/lib/rossmoney-image-prune
+```
+
+Create one root-owned, mode-`0600` environment file per Portainer stack (`/etc/rossmoney-image-prune/production.env` and `development.env`) with:
+
+```ini
+PORTAINER_API_URL=https://portainer.example
+PORTAINER_API_TOKEN=replace-with-a-read-only-token
+PORTAINER_STACK_ID=123
+PORTAINER_POLL_INTERVAL_SECONDS=15
+```
+
+Use an HTTPS Portainer URL and a dedicated API token whose account has read-only access to the Docker environment containing the corresponding stack. The token stays on the host; no Portainer API credentials or host access credentials are required in GitHub Actions. Enable one service instance per configured stack:
+
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now rossmoney-image-prune@production.service
+sudo systemctl enable --now rossmoney-image-prune@development.service
+```
+
+The service runs locally as root because access to the Docker daemon is effectively root-equivalent. It exposes no listener, only makes outbound HTTPS requests to Portainer and uses the local Docker CLI. Its systemd sandbox limits filesystem writes to the state directory. On first start it records the currently observed deployment as a baseline without pruning; install and start it before expecting cleanup after a deployment. Portainer deployment event times have second-level precision, so an event that cannot be distinguished from the last processed success is skipped rather than treated as confirmed. Failed prune attempts are logged and retried on the next poll. The only Docker operation is `docker image prune -f`; tagged images, containers, volumes, and networks are not pruned.
+
 ## Notes
 
 The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is still a separate Go service backed by Docker and accessible at port 8080.
