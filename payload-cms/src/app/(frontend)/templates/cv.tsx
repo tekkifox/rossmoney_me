@@ -10,7 +10,7 @@ export default function CVTemplate({ page }: { page: PageDoc }) {
           <p className="eyebrow">Curriculum Vitae</p>
           <h2>Curriculum Vitae</h2>
         </div>
-        <CVViewer />
+        <CVViewer cvFile={page.cvFile} />
       </section>
       <RenderLayout page={page} />
     </main>
