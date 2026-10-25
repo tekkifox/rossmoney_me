@@ -1,4 +1,5 @@
 import React from 'react'
+import Link from 'next/link'
 import { PageDoc, RenderLayout, ContactPanel, PageMeta } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 import { buildFacts, buildHighlights, renderDiagram, extractDockerImages, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
@@ -78,7 +79,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
               <a className="btn btn-primary" href={href} target="_blank" rel="noopener noreferrer">Open live site</a>
             )
           })()}
-          <a className="btn btn-secondary" href="/">Back to portfolio</a>
+          <Link className="btn btn-secondary" href="/">Back to portfolio</Link>
         </div>
 
         <div className="hero-metrics" id="travelling-metrics" aria-label="Project highlights">

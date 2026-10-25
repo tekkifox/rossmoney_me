@@ -18,12 +18,12 @@ export function getCVFileUrl(cvFile: Props['cvFile']) {
 
 export default function CVViewer({ cvFile }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; url: string } | null>(null)
   const cvUrl = getCVFileUrl(cvFile)
+  const errorMessage = error && error.url === cvUrl ? error.message : null
 
   useEffect(() => {
     let cancelled = false
-    setError(null)
 
     async function renderDoc() {
       try {
@@ -118,7 +118,9 @@ export default function CVViewer({ cvFile }: Props) {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('CV render failed', err)
-        if (!cancelled) setError(String((err as any)?.message ?? String(err)))
+        if (!cancelled && cvUrl) {
+          setError({ message: String((err as any)?.message ?? String(err)), url: cvUrl })
+        }
       }
     }
 
@@ -132,9 +134,9 @@ export default function CVViewer({ cvFile }: Props) {
         <article className="card" style={{ padding: 20 }}>
           <p className="text-muted">CV document is not available right now.</p>
         </article>
-      ) : error ? (
+      ) : errorMessage ? (
         <article className="card" style={{ padding: 20 }}>
-          <p className="text-muted">Unable to render DOCX: {error}</p>
+          <p className="text-muted">Unable to render DOCX: {errorMessage}</p>
           <p><a href={cvUrl} download>Download CV</a></p>
         </article>
       ) : (
