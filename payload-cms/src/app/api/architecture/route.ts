@@ -47,7 +47,6 @@ export async function GET(req: Request) {
       return new NextResponse(text, { headers: { 'content-type': contentType } })
     } catch (e) {
       // try next candidate host
-      // eslint-disable-next-line no-console
       console.warn('ArchView fetch attempt failed for', host, e instanceof Error ? e.message : e)
       continue
     }

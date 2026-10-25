@@ -1,11 +1,13 @@
 import { test, expect, Page } from '@playwright/test'
 
 test.describe('Frontend', () => {
-  let page: Page
+  // Kept for parity with the original setup: the smoke test itself uses
+  // Playwright's per-test `page` fixture, so this context is never asserted on.
+  let _page: Page
 
-  test.beforeAll(async ({ browser }, testInfo) => {
+  test.beforeAll(async ({ browser }, _testInfo) => {
     const context = await browser.newContext()
-    page = await context.newPage()
+    _page = await context.newPage()
   })
 
   test('can load homepage', async ({ page }) => {

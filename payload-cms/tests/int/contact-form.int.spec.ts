@@ -41,15 +41,16 @@ describe('Contact form', () => {
 
   it('seeds the contact fields the form block renders', async () => {
     const form = await payload.findByID({ collection: 'forms', id: formID, depth: 0 })
-    const fieldNames = (form.fields || [])
-      .map((field: any) => field.name)
-      .filter((name: string | undefined): name is string => Boolean(name))
+    const namedFields = (form.fields || []).filter((field) => 'name' in field)
+    const fieldNames = namedFields
+      .map((field) => field.name)
+      .filter((name): name is string => Boolean(name))
 
     expect(fieldNames).toEqual(expect.arrayContaining(['full-name', 'email', 'phone', 'message']))
 
-    const required = (form.fields || [])
-      .filter((field: any) => field.required)
-      .map((field: any) => field.name)
+    const required = namedFields
+      .filter((field) => field.required)
+      .map((field) => field.name)
       .filter(Boolean)
 
     expect(required).toEqual(expect.arrayContaining(['full-name', 'email', 'message']))
@@ -226,8 +227,9 @@ describe('Contact form', () => {
       payload.create({
         collection: 'form-submissions',
         data: {
+          form: '',
           submissionData: [{ field: 'message', value: 'Orphaned submission' }],
-        } as any,
+        },
         depth: 0,
         overrideAccess: false,
       }),
