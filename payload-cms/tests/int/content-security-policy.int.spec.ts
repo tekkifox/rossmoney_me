@@ -8,7 +8,7 @@ import {
 } from '@/utilities/contentSecurityPolicy'
 
 const policy = (overrides: Partial<Parameters<typeof buildContentSecurityPolicy>[0]> = {}) =>
-  buildContentSecurityPolicy({ nonce: 'abc123', ...overrides })
+  buildContentSecurityPolicy({ nonce: 'abc123', vercelToolbar: false, ...overrides })
 
 const directive = (value: string, name: string) =>
   value
@@ -99,6 +99,38 @@ describe('buildContentSecurityPolicy', () => {
     const value = policy({ isAdmin: true })
     expect(directive(value, 'frame-src')).toBe("frame-src 'self'")
     expect(directive(value, 'script-src')).not.toContain('www.google.com')
+  })
+
+  it('keeps the Vercel Toolbar out of the normal policy', () => {
+    const value = policy()
+    expect(value).not.toContain('vercel.live')
+    expect(value).not.toContain('vercel.com')
+    expect(value).not.toContain('pusher.com')
+    expect(directive(value, 'style-src-elem')).toBe("style-src-elem 'self'")
+  })
+
+  it('allows the documented Vercel Toolbar sources on preview deployments', () => {
+    const value = policy({ vercelToolbar: true })
+    expect(directive(value, 'frame-src')).toBe(
+      'frame-src https://www.google.com https://vercel.live',
+    )
+    expect(directive(value, 'style-src')).toBe(
+      "style-src 'self' https://vercel.live 'unsafe-inline'",
+    )
+    expect(directive(value, 'style-src-elem')).toBe(
+      "style-src-elem 'self' https://vercel.live 'unsafe-inline'",
+    )
+    expect(directive(value, 'connect-src')).toContain('https://vercel.live')
+    expect(directive(value, 'connect-src')).toContain('wss://ws-us3.pusher.com')
+    expect(directive(value, 'img-src')).toContain('https://vercel.com')
+    expect(directive(value, 'font-src')).toContain('https://assets.vercel.com')
+    expect(directive(value, 'script-src')).toContain('https://vercel.live')
+  })
+
+  it('allows the Vercel Toolbar frame in the admin preview policy too', () => {
+    const value = policy({ isAdmin: true, vercelToolbar: true })
+    expect(directive(value, 'frame-src')).toBe("frame-src 'self' https://vercel.live")
+    expect(directive(value, 'frame-ancestors')).toBe("frame-ancestors 'none'")
   })
 
   it('allows only same-origin framing for Live Preview and never in the admin', () => {
