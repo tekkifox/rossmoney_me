@@ -150,8 +150,13 @@ export function buildContentSecurityPolicy({
     "media-src 'self' blob:",
     `worker-src 'self' blob:${adminSources}`,
     "manifest-src 'self'",
-    `frame-src ${isAdmin ? "'none'" : 'https://www.google.com'}`,
-    "frame-ancestors 'none'",
+    // The admin frames its own origin for Payload's Live Preview. Public pages
+    // only need reCAPTCHA's challenge frame.
+    `frame-src ${isAdmin ? "'self'" : 'https://www.google.com'}`,
+    // Public pages allow only their own origin as an ancestor so Payload's
+    // Live Preview can frame the page being edited. The admin itself stays
+    // un-frameable. Cross-origin framing remains blocked on both surfaces.
+    `frame-ancestors ${isAdmin ? "'none'" : "'self'"}`,
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",

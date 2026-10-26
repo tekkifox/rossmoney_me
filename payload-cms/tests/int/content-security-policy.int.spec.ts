@@ -57,7 +57,7 @@ describe('buildContentSecurityPolicy', () => {
     const value = policy()
     expect(directive(value, 'object-src')).toBe("object-src 'none'")
     expect(directive(value, 'base-uri')).toBe("base-uri 'none'")
-    expect(directive(value, 'frame-ancestors')).toBe("frame-ancestors 'none'")
+    expect(directive(value, 'frame-ancestors')).toBe("frame-ancestors 'self'")
     expect(directive(value, 'form-action')).toBe("form-action 'self'")
   })
 
@@ -97,8 +97,18 @@ describe('buildContentSecurityPolicy', () => {
 
   it('does not allow reCAPTCHA frames or scripts in the admin policy', () => {
     const value = policy({ isAdmin: true })
-    expect(directive(value, 'frame-src')).toBe("frame-src 'none'")
+    expect(directive(value, 'frame-src')).toBe("frame-src 'self'")
     expect(directive(value, 'script-src')).not.toContain('www.google.com')
+  })
+
+  it('allows only same-origin framing for Live Preview and never in the admin', () => {
+    const publicValue = policy()
+    expect(directive(publicValue, 'frame-src')).toBe('frame-src https://www.google.com')
+    expect(directive(publicValue, 'frame-ancestors')).toBe("frame-ancestors 'self'")
+
+    const adminValue = policy({ isAdmin: true })
+    expect(directive(adminValue, 'frame-src')).toBe("frame-src 'self'")
+    expect(directive(adminValue, 'frame-ancestors')).toBe("frame-ancestors 'none'")
   })
 
   it('does not add upgrade-insecure-requests on HTTP', () => {
