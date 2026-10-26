@@ -74,6 +74,7 @@ export interface Config {
     projects: Project;
     experience: Experience;
     media: Media;
+    'error-logs': ErrorLog;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -97,6 +98,7 @@ export interface Config {
     projects: ProjectsSelect<false> | ProjectsSelect<true>;
     experience: ExperienceSelect<false> | ExperienceSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    'error-logs': ErrorLogsSelect<false> | ErrorLogsSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -804,6 +806,46 @@ export interface Experience {
   createdAt: string;
 }
 /**
+ * Runtime errors captured from the public site and the Next.js server. Oldest rows are removed automatically at 2,000 entries.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "error-logs".
+ */
+export interface ErrorLog {
+  id: string;
+  level: 'warning' | 'error' | 'fatal';
+  source: 'client' | 'react' | 'server';
+  message: string;
+  /**
+   * Scrubbed and truncated to 8,000 characters.
+   */
+  stack?: string | null;
+  /**
+   * Short hash used to group repeats. Repeats increment Occurrences.
+   */
+  fingerprint: string;
+  occurrences: number;
+  route?: string | null;
+  /**
+   * URL without query string or fragment.
+   */
+  url?: string | null;
+  environment?: string | null;
+  /**
+   * Commit or deployment identifier, when the platform exposes one.
+   */
+  release?: string | null;
+  userAgent?: string | null;
+  /**
+   * First occurrence.
+   */
+  timestamp: string;
+  /**
+   * Most recent occurrence.
+   */
+  lastSeen: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
@@ -989,6 +1031,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: string | Media;
+      } | null)
+    | ({
+        relationTo: 'error-logs';
+        value: string | ErrorLog;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1390,6 +1436,25 @@ export interface MediaSelect<T extends boolean = true> {
               filename?: T;
             };
       };
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "error-logs_select".
+ */
+export interface ErrorLogsSelect<T extends boolean = true> {
+  level?: T;
+  source?: T;
+  message?: T;
+  stack?: T;
+  fingerprint?: T;
+  occurrences?: T;
+  route?: T;
+  url?: T;
+  environment?: T;
+  release?: T;
+  userAgent?: T;
+  timestamp?: T;
+  lastSeen?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

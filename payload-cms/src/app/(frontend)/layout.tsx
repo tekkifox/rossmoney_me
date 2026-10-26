@@ -8,6 +8,7 @@ import { GeistSans } from 'geist/font/sans'
 import React from 'react'
 
 import { AdminBar } from '@/components/AdminBar'
+import { ErrorReporter } from '@/components/ErrorReporter'
 // Footer removed per request: site uses a minimal branded footer in templates
 import { Header } from '@/Header/Component'
 import { Providers } from '@/providers'
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body>
+        <ErrorReporter />
         <Providers>
           <AdminBar
             adminBarProps={{
