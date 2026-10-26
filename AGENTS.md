@@ -23,6 +23,13 @@ pnpm --dir payload-cms lint:tokens
   so it does not need a live MongoDB.
 - No new dependencies are needed for the token guard; it is plain Node.
 
+## Server URL
+
+Payload builds absolute URLs (media, password resets) from
+`payload-cms/src/utilities/serverURL.ts`. Precedence: explicit `SERVER_URL` or
+`NEXT_PUBLIC_SERVER_URL`, then Vercel's `VERCEL_URL` (the deployment itself),
+then `VERCEL_PROJECT_PRODUCTION_URL`, then `http://localhost:8082`.
+
 ## Design-system rules
 
 1. `payload-cms/src/styles/tokens.css` is the **only** place a colour, radius,
