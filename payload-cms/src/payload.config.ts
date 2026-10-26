@@ -21,6 +21,7 @@ import { Experience } from './collections/Experience';
 import { Media } from './collections/Media';
 import { Posts } from './collections/Posts';
 import { Categories } from './collections/Categories';
+import { ErrorLogs } from './collections/ErrorLogs';
 import { architecture } from './endpoints/seed/architecture-page';
 import { commits } from './endpoints/seed/commits-page';
 import { experiencePage } from './endpoints/seed/experience-page';
@@ -118,7 +119,7 @@ export default buildConfig({
       ],
     },
   },
-  collections: [Users, Pages, Posts, Categories, Projects, Experience, Media],
+  collections: [Users, Pages, Posts, Categories, Projects, Experience, Media, ErrorLogs],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   email: emailAdapter,
