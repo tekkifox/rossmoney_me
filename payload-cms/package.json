@@ -23,7 +23,8 @@
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "test": "pnpm run test:int && pnpm run test:e2e",
     "test:e2e": "cross-env NODE_OPTIONS=\"--no-deprecation --import=tsx/esm\" playwright test --config=playwright.config.ts",
-    "test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts"
+    "test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts",
+    "verify:rate-limit": "cross-env NODE_OPTIONS=\"--no-deprecation --import=tsx/esm\" tsx ./scripts/verify-shared-rate-limit.mts"
   },
   "dependencies": {
     "@payloadcms/admin-bar": "3.90.2",
@@ -53,6 +54,7 @@
     "graphql": "^16.8.2",
     "lucide-react": "0.563.0",
     "mammoth": "^1.4.20",
+    "mongodb": "6.20.0",
     "next": "16.4.3",
     "next-sitemap": "^4.2.3",
     "payload": "3.90.2",

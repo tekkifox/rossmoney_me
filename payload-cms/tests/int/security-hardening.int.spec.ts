@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { browserArchitectureApi } from '@/utilities/architectureURL'
 import { sessionCookieIsSecure } from '@/collections/Users'
 import { OG_INPUT_LIMITS, sanitizeOgParams, sanitizeOgText } from '@/utilities/ogSanitize'
-import { FixedWindowRateLimiter } from '@/utilities/rateLimit'
+import {
+  FixedWindowRateLimiter,
+  SharedFixedWindowRateLimiter,
+} from '@/utilities/rateLimit'
+import type { RateLimitStore } from '@/utilities/rateLimitStore'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 describe('FixedWindowRateLimiter', () => {
@@ -42,6 +46,58 @@ describe('FixedWindowRateLimiter', () => {
     limiter.take('c', 2)
 
     expect(limiter.size).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('SharedFixedWindowRateLimiter', () => {
+  const store = (overrides: Partial<RateLimitStore> = {}): RateLimitStore => {
+    let count = 0
+    const resetAt = Date.now() + 60_000
+
+    return {
+      increment: async () => ({ count: ++count, resetAt }),
+      ...overrides,
+    }
+  }
+
+  it('takes its budget from the shared store', async () => {
+    const limiter = new SharedFixedWindowRateLimiter('test', 2, 60_000, store(), 100)
+
+    expect((await limiter.take('ip')).allowed).toBe(true)
+    expect((await limiter.take('ip')).allowed).toBe(true)
+
+    const blocked = await limiter.take('ip')
+    expect(blocked.allowed).toBe(false)
+    expect(blocked.retryAfter).toBeGreaterThanOrEqual(1)
+  })
+
+  it('falls back to in-memory limiting when the store throws', async () => {
+    const failing = store({
+      increment: async () => {
+        throw new Error('database is down')
+      },
+    })
+    const limiter = new SharedFixedWindowRateLimiter('test', 1, 60_000, failing, 100)
+
+    expect((await limiter.take('ip')).allowed).toBe(true)
+    expect((await limiter.take('ip')).allowed).toBe(false)
+  })
+
+  it('falls back to in-memory limiting when the store is slow', async () => {
+    const slow = store({
+      increment: () => new Promise(() => undefined),
+    })
+    const limiter = new SharedFixedWindowRateLimiter('test', 1, 60_000, slow, 10)
+
+    expect((await limiter.take('ip')).allowed).toBe(true)
+    expect((await limiter.take('ip')).allowed).toBe(false)
+  })
+
+  it('uses the in-memory limiter directly when no store is configured', async () => {
+    const limiter = new SharedFixedWindowRateLimiter('test', 1, 60_000, null)
+
+    expect((await limiter.take('ip')).allowed).toBe(true)
+    expect((await limiter.take('ip')).allowed).toBe(false)
   })
 })
 
