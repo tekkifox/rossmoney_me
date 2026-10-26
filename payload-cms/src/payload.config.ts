@@ -135,23 +135,29 @@ export default buildConfig({
   },
   onInit: async (payload: Payload) => {
     // Ensure public/media directory exists and is writable when possible.
-    try {
-      const publicMedia = path.resolve(process.cwd(), 'public', 'media')
-      if (!fs.existsSync(publicMedia)) {
-        try {
-          fs.mkdirSync(publicMedia, { recursive: true })
-          // try to set permissive mode on POSIX systems
-          if (os.platform() !== 'win32') {
-            try { fs.chmodSync(publicMedia, 0o755) } catch { /* ignore */ }
+    // Blob storage owns uploads when a token is present, so the local directory
+    // is not needed there (and the Vercel filesystem is read-only anyway).
+    // Every filesystem call below is guarded, so this stays harmless on a
+    // read-only filesystem.
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const publicMedia = path.resolve(process.cwd(), 'public', 'media')
+        if (!fs.existsSync(publicMedia)) {
+          try {
+            fs.mkdirSync(publicMedia, { recursive: true })
+            // try to set permissive mode on POSIX systems
+            if (os.platform() !== 'win32') {
+              try { fs.chmodSync(publicMedia, 0o755) } catch { /* ignore */ }
+            }
+            if (payload.logger?.info) payload.logger.info(`Created public media directory at ${publicMedia}`)
+          } catch (e) {
+            if (payload.logger?.warn) payload.logger.warn(`Could not create public media directory: ${e}`)
           }
-          if (payload.logger?.info) payload.logger.info(`Created public media directory at ${publicMedia}`)
-        } catch (e) {
-          if (payload.logger?.warn) payload.logger.warn(`Could not create public media directory: ${e}`)
         }
+      } catch (err) {
+        // ignore any file-system errors here; upload will fail later with a clearer error
+        console.warn('public media dir check failed', err)
       }
-    } catch (err) {
-      // ignore any file-system errors here; upload will fail later with a clearer error
-      console.warn('public media dir check failed', err)
     }
     try {
       const pClient = payload;

@@ -41,8 +41,12 @@ export const validateCVFile: CollectionBeforeChangeHook<Page> = async ({ req, da
   }
 }
 
-// Copy the uploaded media file to public/media/rossmoney_cv.docx for static access
+// Copy the uploaded media file to public/media/rossmoney_cv.docx for static access.
+// When Vercel Blob owns uploads there is no durable local filesystem to write to,
+// and the CV link resolves through `media.url` instead (see CVViewer), so skip it.
 export const syncCVToPublic: CollectionAfterChangeHook<Page> = async ({ req, doc }) => {
+  if (process.env.BLOB_READ_WRITE_TOKEN) return
+
   try {
     const id = cvMediaID(doc?.cvFile)
     if (!id) return
