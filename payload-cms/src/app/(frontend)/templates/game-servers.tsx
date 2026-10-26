@@ -17,6 +17,7 @@ import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
+import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 type SitePayload = {
   gameservers?: unknown
@@ -44,7 +45,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
     const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
     const r = await fetch(url, { cache: 'no-store' })
-    if (r.ok) archPayload = await r.json()
+    if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {
     console.warn('Failed to fetch architecture for gameservers', err)

@@ -3,6 +3,7 @@ import React from 'react'
 
 import { RenderBlocks } from '@/blocks/RenderBlocks'
 import { getSafePayload } from '@/utilities/getSafePayload'
+import { browserArchitectureApi } from '@/utilities/architectureURL'
 
 export type PageDoc = RequiredDataFromCollectionSlug<'pages'>
 
@@ -180,8 +181,7 @@ import Head from 'next/head'
 export function PageMeta({ page }: { page: PageDoc }) {
   const data = readPageData(page)
   const archview = page.archviewUrl || readString(data.archviewUrl) || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
-  const base = archview ? String(archview).replace(/\/$/, '') : ''
-  const api = base ? `${base}/api/architecture` : '/api/architecture'
+  const api = browserArchitectureApi(archview)
   return (
     <Head>
       <meta name="architecture-api" content={api} />
