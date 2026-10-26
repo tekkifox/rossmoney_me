@@ -64,3 +64,36 @@ declare module 'mammoth/lib/unzip' {
     buffer: ArrayBuffer
   }): Promise<MammothZip>
 }
+
+declare module 'mammoth/browser/unzip' {
+  export interface MammothZip {
+    read(path: string, encoding?: string): Promise<string>
+    write(path: string, contents: string): void
+    toArrayBuffer(): Promise<ArrayBuffer>
+  }
+
+  export function openZip(options: {
+    arrayBuffer: ArrayBuffer
+    buffer?: ArrayBuffer
+  }): Promise<MammothZip>
+}
+
+declare module 'mammoth/mammoth.browser' {
+  import type {
+    MammothElement,
+    MammothInput,
+    MammothMessage,
+    MammothOptions,
+    MammothRun,
+  } from 'mammoth'
+
+  export function convertToHtml(
+    input: MammothInput | ArrayBuffer | Uint8Array,
+    options?: MammothOptions,
+  ): Promise<{ value: string; messages?: MammothMessage[] }>
+
+  export const transforms: {
+    run: (transform: (run: MammothRun) => MammothRun) =>
+      (document: MammothElement) => MammothElement
+  }
+}

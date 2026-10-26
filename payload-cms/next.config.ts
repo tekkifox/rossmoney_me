@@ -24,11 +24,11 @@ const nextConfig: NextConfig = {
             key: 'X-Frame-Options',
             value: 'DENY', // Use 'SAMEORIGIN' if you need your own iframes
           },
-          {
-            key: 'Content-Security-Policy',
-            // frame-ancestors 'none' blocks all framing (modern standard)
-            value: "frame-ancestors 'none';",
-          },
+          // Content-Security-Policy is emitted per request by `src/proxy.ts`,
+          // which also puts the nonce on the forwarded request so Next.js can
+          // nonce its own scripts. Do not add a second CSP here: multiple
+          // policies intersect, and a static one would block every nonced
+          // script.
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
@@ -94,6 +94,15 @@ const nextConfig: NextConfig = {
   redirects,
   turbopack: {
     root: path.resolve(dirname),
+    // Mammoth's browser zip reader imports `jszip`, and Turbopack otherwise
+    // resolves jszip's Node entry point. That pulls in `readable-stream` and
+    // Next's `util` polyfill, which feature-detects generators with
+    // `Function(...)` at module load and trips a nonce-only CSP. JSZip only
+    // needs a stream implementation for `generateNodeStream`, which the CV
+    // viewer never calls, so a browser shim is sufficient.
+    resolveAlias: {
+      'readable-stream': './src/shims/readable-stream.ts',
+    },
   },
 }
 

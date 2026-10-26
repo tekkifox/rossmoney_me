@@ -1,5 +1,4 @@
 import type { MammothRun } from 'mammoth'
-import { openZip } from 'mammoth/lib/unzip'
 
 const CV_FONT_SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 13.5, 14, 22] as const
 const WORD_NAMESPACE = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -103,6 +102,13 @@ export function normalizeCVDocxXml(xmlText: string): string {
 }
 
 export async function normalizeCVDocxForRendering(arrayBuffer: ArrayBuffer): Promise<ArrayBuffer> {
+  // Import the browser zip reader lazily. The Node entry point pulls in Node's
+  // `fs`/`util` polyfills, and Next's `util` polyfill feature-detects generators
+  // with `Function(...)` at module load — a CSP `eval` violation on a page that
+  // otherwise never evaluates strings. The browser entry point reads the zip
+  // from an in-memory buffer; JSZip's unused stream import is shimmed in
+  // `next.config.ts`.
+  const { openZip } = await import('mammoth/browser/unzip')
   // Mammoth drops run colours, so record the benchmark colours as run styles.
   // An omitted w:u val means "no underline" in the benchmark (as in LibreOffice
   // and Mammoth); explicit values such as "single" are preserved by Mammoth.
@@ -194,7 +200,11 @@ export function applyCVDocxRunStyle(run: MammothRun): MammothRun {
 }
 
 export async function convertCVDocxToHtml(arrayBuffer: ArrayBuffer): Promise<string> {
-  const mammoth = await import('mammoth')
+  // `mammoth.browser` is mammoth's prebuilt browser bundle. The package main
+  // entry point resolves to the Node build, which drags in jszip's Node
+  // `readable-stream` and Next's `util` polyfill; that polyfill calls
+  // `Function(...)` at import time and is incompatible with a nonce-only CSP.
+  const mammoth = await import('mammoth/mammoth.browser')
   const result = await mammoth.convertToHtml(
     // The browser Mammoth build reads `arrayBuffer` while the Node build reads
     // `buffer`; pass both so the viewer and the jsdom tests share this path.
