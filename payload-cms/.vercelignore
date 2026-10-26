@@ -1,0 +1,26 @@
+# Uploaded source does not need local installs, build output, secrets or tests.
+# Vercel installs dependencies and builds from the lockfile itself.
+node_modules
+.next
+.vercel
+.env
+.env.*
+!.env.example
+
+# Test-only files; the Vercel build never runs these.
+tests
+playwright.config.ts
+playwright-report
+test-results
+blob-report
+playwright
+vitest.config.mts
+vitest.global-setup.ts
+vitest.setup.ts
+vitest.setup-db.ts
+vitest-db-handoff.ts
+test.env
+tsconfig.tsbuildinfo
+
+# Local uploads live in Vercel Blob or a mounted volume, never in the bundle.
+public/media
