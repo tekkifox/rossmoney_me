@@ -89,6 +89,9 @@ importers:
       mammoth:
         specifier: ^1.4.20
         version: 1.13.0
+      mongodb:
+        specifier: 6.20.0
+        version: 6.20.0
       next:
         specifier: 16.4.3
         version: 16.4.3(@babel/core@7.29.7)(@playwright/test@1.58.2)(@types/node@22.19.9)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sass@1.77.4)

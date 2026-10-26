@@ -4,6 +4,7 @@ import Link from 'next/link'
 import React, { useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { reportReactError } from '@/utilities/reportClientError'
 
 export default function Error({
   error,
@@ -15,6 +16,7 @@ export default function Error({
   useEffect(() => {
     // Keep the technical detail in the console, never in the visitor-facing UI.
     console.error('Page render error', error)
+    reportReactError(error)
   }, [error])
 
   return (
