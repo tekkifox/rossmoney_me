@@ -170,10 +170,13 @@ node scripts/audit-production.mjs \
 `--today` is only for testing review-date expiry. Normal CI runs use the real
 date.
 
-## What this PR does not do
+## What was and was not verified
 
-- It does not change any dependency version.
-- It cannot install the Renovate GitHub App.
-- It cannot run a real GitHub Actions job. The workflow and script were run
-  locally with the pinned pnpm version; GitHub-hosted execution, branch
-  protection, and the Renovate app's first PR remain unverified here.
+- The audit workflow ran on GitHub for both draft PRs (one against `dev`, one
+  against `main`) and the `audit` job passed in both runs.
+- The gate was also run locally with the pinned pnpm version, including the
+  deliberately vulnerable scratch case described above.
+- The Renovate app was **not** installed or run. A repo admin must install it
+  before Renovate opens its first PR; branch protection and that first PR remain
+  unverified here.
+- No dependency version is changed by this tooling.
