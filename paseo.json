@@ -1,6 +1,6 @@
 {
   "worktree": {
-    "setup": "npm install",
+    "setup": "pnpm --dir payload-cms install --frozen-lockfile --prefer-offline",
     "teardown": "docker compose down"
   },
   "metadataGeneration": {
