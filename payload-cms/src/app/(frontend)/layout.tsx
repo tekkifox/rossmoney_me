@@ -14,6 +14,7 @@ import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
 import { draftMode } from 'next/headers'
 
 import './globals.css'
+import '../../styles/tokens.css'
 import './local-styles.css'
 import { getServerSideURL } from '@/utilities/getURL'
 
