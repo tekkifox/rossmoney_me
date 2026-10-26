@@ -34,6 +34,17 @@ export const plugins: Plugin[] = [
     collections: {
       media: true,
     },
+    // Vercel caps a serverless request body at 4.5 MB, so large media cannot
+    // travel through the Payload route. With client uploads the admin instead
+    // asks Payload for a short-lived, receipt-backed Vercel Blob token and the
+    // browser PUTs the bytes straight to Blob. Access is still enforced twice:
+    // Payload checks this collection's `access.create` and the plugin's
+    // default access requires a signed-in user.
+    //
+    // The async route this adds (`/api/vercel-blob-client-upload-route`) only
+    // exists when a token is configured, so the no-token Portainer path keeps
+    // using ordinary local-disk form uploads.
+    clientUploads: true,
     token: process.env.BLOB_READ_WRITE_TOKEN,
   }),
   redirectsPlugin({
