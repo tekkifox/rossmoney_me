@@ -22,6 +22,7 @@ import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
 import { loadCollections, PageMeta, isRecord, readString } from '../templates/shared'
+import { browserArchitectureApi } from '@/utilities/architectureURL'
 
 // This page intentionally uses dynamic data from internal APIs (architecture, commits)
 // Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
@@ -85,8 +86,7 @@ export default async function Page({ params: paramsPromise }: Args) {
   const collections = page.slug === 'work' || page.slug === 'experience-page' ? await loadCollections() : null
   const pageData = isRecord(page.data) ? page.data : {}
   const archviewSource = page.archviewUrl || readString(pageData.archviewUrl) || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
-  const architectureBase = archviewSource ? String(archviewSource).replace(/\/$/, '') : ''
-  const architectureApi = architectureBase ? `${architectureBase}/api/architecture` : '/api/architecture'
+  const architectureApi = browserArchitectureApi(archviewSource)
 
   return (
     <article id="page-root" className="pt-16 pb-24" data-architecture-api={architectureApi}>

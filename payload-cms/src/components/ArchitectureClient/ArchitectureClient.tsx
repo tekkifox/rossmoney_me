@@ -1,6 +1,7 @@
 "use client"
 import React, { useEffect } from 'react'
 import { buildFacts, buildHighlights, renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 interface Props {
   project?: string
@@ -73,7 +74,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const rawEl = document.getElementById('architecture-raw')
         const updatedEl = document.getElementById('architecture-updated')
 
-        const arch: ArchitecturePayload = payload || {}
+        const arch: ArchitecturePayload = redactInternalEndpoints(payload || {})
 
         if (titleEl) titleEl.textContent = titleFromPayload(arch)
         if (descEl) descEl.textContent = descriptionFromPayload(arch)
