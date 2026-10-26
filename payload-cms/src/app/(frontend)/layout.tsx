@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { cn } from '@/utilities/ui'
 import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
@@ -42,6 +44,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Header />
           {children}
         </Providers>
+        {/*
+          Vercel Web Analytics and Speed Insights. Both render nothing and only
+          inject a deferred script on the client, so this has no visual effect.
+
+          Gated on VERCEL (the same env var next.config.ts uses for `output`) so
+          the self-hosted Portainer stack stays inert: it has no /_vercel/*
+          endpoints, so rendering these there would only produce 404s.
+        */}
+        {process.env.VERCEL ? (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
+        ) : null}
       </body>
     </html>
   )
