@@ -5,6 +5,13 @@ import {
   buildContentSecurityPolicy,
   createNonce,
 } from '@/utilities/contentSecurityPolicy'
+import { sanitizeOgParams } from '@/utilities/ogSanitize'
+import {
+  clientAddress,
+  loginRateLimiter,
+  ogGlobalRateLimiter,
+  ogIpRateLimiter,
+} from '@/utilities/rateLimit'
 
 /**
  * Two jobs, both domain-specific:
@@ -27,8 +34,16 @@ import {
  * forwarded request and the response. The policy itself is built in
  * `utilities/contentSecurityPolicy.ts`.
  *
+ * 3. Put a cheap application-level guard in front of the two expensive public
+ * endpoints: the login handler (Payload's account lockout alone lets one source
+ * keep the only admin locked out) and the Open Graph image renderer (the
+ * query-string values are rewritten to bounded, control-character-free input
+ * before Payload's generator sees them).
+ *
  * @see ../utilities/adminOrigin.ts
  * @see ../utilities/contentSecurityPolicy.ts
+ * @see ../utilities/rateLimit.ts
+ * @see ../utilities/ogSanitize.ts
  */
 export function proxy(request: NextRequest) {
   const headers = new Headers(request.headers)
@@ -80,9 +95,68 @@ export function proxy(request: NextRequest) {
     forwarded = true
   }
 
+  // Payload's lockout is per account, so it can be used to deny the single admin
+  // service. Bound the attempts from one address as well; the lockout itself is
+  // deliberately left untouched.
+  if (pathname === '/api/users/login' && request.method === 'POST') {
+    const limited = loginRateLimiter.take(clientAddress(headers))
+    if (!limited.allowed) {
+      return tooManyRequests(limited.retryAfter, csp)
+    }
+  }
+
+  // `/api/og` is public and renders a PNG in Node. Cap the interpolated strings
+  // and bound the render rate before the generated Payload route runs.
+  if (pathname === '/api/og' && request.method === 'GET') {
+    const address = clientAddress(headers)
+    const perAddress = ogIpRateLimiter.take(address)
+    const perProcess = ogGlobalRateLimiter.take('global')
+
+    if (!perAddress.allowed || !perProcess.allowed) {
+      const retryAfter = Math.max(perAddress.retryAfter, perProcess.retryAfter)
+      return tooManyRequests(retryAfter, csp)
+    }
+
+    const ogUrl = request.nextUrl.clone()
+    const { params, changed } = sanitizeOgParams(ogUrl.searchParams)
+
+    if (changed) {
+      for (const [name, value] of Object.entries(params)) {
+        if (value !== undefined) {
+          ogUrl.searchParams.set(name, value)
+        }
+      }
+
+      const response = NextResponse.rewrite(ogUrl, { request: { headers } })
+      if (csp) {
+        response.headers.set('Content-Security-Policy', csp)
+      }
+      return response
+    }
+  }
+
   const response = forwarded
     ? NextResponse.next({ request: { headers } })
     : NextResponse.next()
+
+  if (csp) {
+    response.headers.set('Content-Security-Policy', csp)
+  }
+
+  return response
+}
+
+function tooManyRequests(retryAfter: number, csp: string | null): NextResponse {
+  const response = NextResponse.json(
+    { errors: [{ message: 'Too many requests. Try again later.' }] },
+    {
+      status: 429,
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Retry-After': String(Math.max(1, retryAfter)),
+      },
+    },
+  )
 
   if (csp) {
     response.headers.set('Content-Security-Policy', csp)

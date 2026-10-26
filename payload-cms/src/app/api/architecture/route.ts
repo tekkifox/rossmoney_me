@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
+
 const CANDIDATE_HOSTS = [
   process.env.ARCHVIEW_URL,
   process.env.ARCHVIEW_HOST && (process.env.ARCHVIEW_HOST.startsWith('http') ? process.env.ARCHVIEW_HOST : `http://${process.env.ARCHVIEW_HOST}`),
@@ -40,11 +42,13 @@ export async function GET(req: Request) {
 
       if (contentType.includes('application/json')) {
         const data = await res.json()
-        return NextResponse.json(data)
+        return NextResponse.json(redactInternalEndpoints(data))
       }
 
       const text = await res.text()
-      return new NextResponse(text, { headers: { 'content-type': contentType } })
+      return new NextResponse(redactInternalEndpoints(text), {
+        headers: { 'content-type': contentType },
+      })
     } catch (e) {
       // try next candidate host
       console.warn('ArchView fetch attempt failed for', host, e instanceof Error ? e.message : e)
