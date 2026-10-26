@@ -24,19 +24,18 @@ const generateURL: GenerateURL<Post | Page> = ({ doc }) => {
 }
 
 export const plugins: Plugin[] = [
-  // Vercel Blob is optional: it is only wired in when the deployment provides a
-  // token. Without `BLOB_READ_WRITE_TOKEN` (self-hosted Portainer) Payload keeps
-  // using local disk storage in `public/media`.
-  ...(process.env.BLOB_READ_WRITE_TOKEN
-    ? [
-        vercelBlobStorage({
-          collections: {
-            media: true,
-          },
-          token: process.env.BLOB_READ_WRITE_TOKEN,
-        }),
-      ]
-    : []),
+  // Always register the plugin, even without a token. Its client upload handler
+  // is added to the admin import map unconditionally (to keep dev and prod
+  // import maps identical), so registering it only when a token exists makes
+  // the admin config reference a component the committed import map lacks.
+  // Without `BLOB_READ_WRITE_TOKEN` the plugin disables itself and Payload keeps
+  // using local disk storage in `public/media` (self-hosted Portainer).
+  vercelBlobStorage({
+    collections: {
+      media: true,
+    },
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+  }),
   redirectsPlugin({
     collections: ['pages', 'posts'],
     overrides: {
