@@ -44,7 +44,7 @@ media-src 'self' blob:;
 worker-src 'self' blob:;
 manifest-src 'self';
 frame-src https://www.google.com;
-frame-ancestors 'none';
+frame-ancestors 'self';
 object-src 'none';
 base-uri 'none';
 form-action 'self'
@@ -65,11 +65,27 @@ img-src ... https://www.gravatar.com https://secure.gravatar.com https://cdn.jsd
 font-src 'self' data: https://cdn.jsdelivr.net;
 worker-src 'self' blob: https://cdn.jsdelivr.net;
 connect-src ... https://cdn.jsdelivr.net;
-frame-src 'none'
+frame-src 'self';
+frame-ancestors 'none'
 ```
 
 The admin does not get the Google reCAPTCHA sources and public pages do not get
 Gravatar/jsDelivr.
+
+## Live Preview
+
+Payload's admin renders the page being edited in a same-origin `<iframe>`. That
+needs two allowances, one on each policy:
+
+- the **admin** policy must allow `frame-src 'self'`, because the iframe belongs
+  to the admin document;
+- the **public** policy must allow `frame-ancestors 'self'`, because the page
+  document inside the iframe is served with the public policy and would
+  otherwise refuse to be framed at all.
+
+Both are same-origin only. Cross-origin pages still cannot frame the site, and
+the admin still cannot be framed by anyone (`frame-ancestors 'none'`), so the
+clickjacking protection is unchanged for every origin except this app's own.
 
 ## Why a nonce, not a static allowlist
 
@@ -99,7 +115,11 @@ against a production build and finished with zero `securitypolicyviolation`
 events on the home page, the CV page (DOCX viewer), a page with an image, the
 contact page (including the reCAPTCHA flow), `/admin` from first paint through
 login through editing/saving, and the 404 page. The admin save was verified by
-reading the changed field back, and an upload returned `201`.
+reading the changed field back, and an upload returned `201`. After the Live
+Preview allowance was added, the same production-build check also opened a Page
+in Live Preview, confirmed the iframe rendered the page (in both Chromium and
+Firefox), and finished with zero violations on the public pages and in the
+admin.
 
 A report-only period would have been appropriate if the app were larger or if
 we could not exercise the admin. Here the app is small, the surfaces are known,
@@ -148,16 +168,37 @@ Shipping report-only after that would only delay protection.
 - **`worker-src 'self' blob:`.** Monaco's workers; jsDelivr is the admin
   fallback. reCAPTCHA's worker runs inside its own frame.
 - **`manifest-src 'self'`.** `site.webmanifest`.
-- **`frame-src https://www.google.com`.** reCAPTCHA v3's invisible anchor /
-  bframe. The admin gets `'none'`.
-- **`frame-ancestors 'none'`.** Nobody may frame the site. This is the same
-  clickjacking protection the app had via `X-Frame-Options: DENY`, now also in
-  CSP. It intentionally keeps Payload's live-preview iframe blocked (that was
-  already the case before this change).
+- **`frame-src https://www.google.com` / `'self'`.** reCAPTCHA v3's invisible
+  anchor / bframe is the only third-party frame on public pages. The admin
+  additionally allows `'self'` for Payload's Live Preview iframe.
+- **`frame-ancestors 'self'` on public pages, `'none'` on the admin.** Public
+  pages may only be framed by their own origin, which is what Live Preview
+  needs; every other site is still refused, which is the same clickjacking
+  protection the app had via `X-Frame-Options: DENY`. The admin itself is never
+  frameable. (Before this change the public policy used `'none'`, which also
+  blocked Live Preview.)
 - **`object-src 'none'`, `base-uri 'none'`, `form-action 'self'`.** No plugins,
   no `<base>` rewriting, and forms may only submit to this origin. Payload's
   admin forms are same-origin; the public contact form uses `fetch` to
   `/api/form-submissions`.
+
+## Prefetch hints and `prefetch-src`
+
+Firefox reports a document prefetch such as `<link rel="prefetch" href="/">`
+(or `rel="next"`) against `default-src`, because the experimental
+`prefetch-src` directive never shipped in Firefox and was removed from the CSP
+specification. With `default-src 'none'` such a hint is blocked and logs:
+
+```text
+Content-Security-Policy: The page's settings blocked the loading of a resource (default-src) at https://example.test/ because it violates the following directive: "default-src 'none'"
+```
+
+`prefetch-src 'self'` does **not** fix that message: no current browser
+implements the directive. If a prefetch hint is ever added to a page, remove the
+hint (or make it unnecessary); do not widen `default-src` for it. The public
+home page currently emits no `prefetch`/`next`/`prerender` link (the App Router
+prefetches routes with `fetch`, which `connect-src 'self'` already allows), so
+there is no prefetch allowance in the policy.
 
 ## Development
 
