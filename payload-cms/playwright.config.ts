@@ -11,6 +11,10 @@ import 'dotenv/config'
  */
 export default defineConfig({
   testDir: './tests/e2e',
+  // Payload's admin route compiles lazily under `next dev`; on a cold server the
+  // first login can take longer than Playwright's 30s default. The wait is
+  // compilation, not a stalled test, so allow it.
+  timeout: 120_000,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
