@@ -14,6 +14,11 @@ import { authenticated } from '../access/authenticated'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+// Vercel Blob owns uploads when a token is present (see `src/plugins/index.ts`).
+// Without a token the collection keeps writing to local disk, which is what the
+// self-hosted Portainer deployment relies on.
+const blobStorageEnabled = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+
 export const Media: CollectionConfig = {
   slug: 'media',
   folders: true,
@@ -40,8 +45,12 @@ export const Media: CollectionConfig = {
     },
   ],
   upload: {
-    // Upload to the public/media directory in Next.js making them publicly accessible even outside of Payload
-    staticDir: path.resolve(dirname, '../../public/media'),
+    // With Vercel Blob active the adapter owns the files; never write them to
+    // local disk as well. Otherwise upload to the public/media directory in
+    // Next.js, making them publicly accessible even outside of Payload.
+    ...(blobStorageEnabled
+      ? { disableLocalStorage: true }
+      : { staticDir: path.resolve(dirname, '../../public/media') }),
     adminThumbnail: 'thumbnail',
     focalPoint: true,
     imageSizes: [

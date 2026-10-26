@@ -102,6 +102,12 @@ LOG_LEVEL=info
 
 The first block is for the CMS and telemetry services; the remaining socket-proxy variables are passed through to the Docker API proxy. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side.
 
+### Media storage
+
+Media uploads are stored on the deployment's local filesystem by default. On Vercel that filesystem is ephemeral, so set `BLOB_READ_WRITE_TOKEN` (created by Vercel when Blob storage is added to the project) to store media in Vercel Blob instead.
+
+The variable is optional. When it is absent, the CMS keeps writing uploads to `payload-cms/public/media` and builds/tests do not need any Vercel credentials. The self-hosted Portainer stack (`www.rossmoney.me`) must leave it unset so it keeps using its `payload-media` volume.
+
 ## Portainer webhook
 
 Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing images.
