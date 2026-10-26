@@ -4,6 +4,7 @@ import {
   archviewOrigins,
   buildContentSecurityPolicy,
   createNonce,
+  VERCEL_BLOB_API_ORIGIN,
   VERCEL_BLOB_ORIGIN,
 } from '@/utilities/contentSecurityPolicy'
 
@@ -65,6 +66,21 @@ describe('buildContentSecurityPolicy', () => {
     const value = policy()
     expect(directive(value, 'img-src')).toContain(VERCEL_BLOB_ORIGIN)
     expect(directive(value, 'connect-src')).toContain(VERCEL_BLOB_ORIGIN)
+  })
+
+  it('allows the Vercel Blob upload API only in the admin connect-src', () => {
+    const adminConnect = directive(policy({ isAdmin: true }), 'connect-src') ?? ''
+    expect(adminConnect.split(/\s+/)).toContain(VERCEL_BLOB_API_ORIGIN)
+
+    const publicConnect = directive(policy(), 'connect-src') ?? ''
+    expect(publicConnect.split(/\s+/)).not.toContain(VERCEL_BLOB_API_ORIGIN)
+  })
+
+  it('does not widen the Blob API origin into any other directive', () => {
+    const value = policy({ isAdmin: true })
+    for (const name of ['default-src', 'script-src', 'img-src', 'style-src', 'font-src']) {
+      expect(directive(value, name) ?? '').not.toContain(VERCEL_BLOB_API_ORIGIN)
+    }
   })
 
   it('does not allow admin-only hosts on public pages', () => {
