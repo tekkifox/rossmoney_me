@@ -86,6 +86,21 @@ const nextConfig: NextConfig = {
     return webpackConfig
   },
   reactStrictMode: true,
+  // Vercel runs x64 glibc Node functions, but the traced dependency tree still
+  // carries sharp's musl native binaries (installed for the Alpine Docker
+  // image). Excluding only the musl packages on Vercel keeps the Docker build
+  // untouched while removing ~18 MB of unused native code per function.
+  outputFileTracingExcludes: process.env.VERCEL
+    ? {
+        '/*': [
+          'node_modules/.pnpm/@img+sharp-libvips-linuxmusl-*/**',
+          'node_modules/.pnpm/@img+sharp-linuxmusl-*/**',
+          // Also drop the pnpm symlinks so the packager cannot follow them.
+          '**/@img/sharp-libvips-linuxmusl-*',
+          '**/@img/sharp-linuxmusl-*',
+        ],
+      }
+    : undefined,
   // Vercel builds with its own adapter and does not need a standalone server.
   // Next.js 16.3 leaves out `.next/next-server.js.nft.json` when an adapter and
   // `output: 'standalone'` are combined (vercel/next.js#96646), which fails the
