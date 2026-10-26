@@ -9,6 +9,7 @@ import { Footer } from './Footer/config'
 import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
+import { resolveServerURL } from './utilities/serverURL'
 import { resendAdapter } from '@payloadcms/email-resend'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
 import { contactForm as contactFormData } from './endpoints/seed/contact-form';
@@ -79,7 +80,7 @@ const emailAdapter = resendAdapter({
 });
 
 export default buildConfig({
-  serverURL: process.env.SERVER_URL || process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:8082',
+  serverURL: resolveServerURL(),
   editor: lexicalEditor(),
   admin: {
     components: {
