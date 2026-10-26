@@ -1,0 +1,42 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "timezone": "Europe/London",
+  "schedule": ["before 6am on monday"],
+  "dependencyDashboard": true,
+  "semanticCommits": "enabled",
+  "rangeStrategy": "bump",
+  "rebaseWhen": "conflicted",
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "labels": ["dependencies"],
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on monday"],
+    "automerge": false
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security", "dependencies"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["@payloadcms/**", "payload"],
+      "groupName": "Payload",
+      "separateMajorMinor": false,
+      "automerge": false
+    },
+    {
+      "matchPackageNames": ["next", "eslint-config-next"],
+      "groupName": "Next.js",
+      "separateMajorMinor": false,
+      "automerge": false
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major"]
+    }
+  ]
+}

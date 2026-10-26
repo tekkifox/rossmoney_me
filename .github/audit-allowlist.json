@@ -1,0 +1,53 @@
+{
+  "entries": [
+    {
+      "id": "GHSA-cg2g-xh64-v4q7",
+      "package": "dompurify",
+      "severity": "critical",
+      "reason": "Transitive via @payloadcms/ui > @monaco-editor/react > monaco-editor. Resolved dompurify 3.4.8; the fix needs >=3.4.17. Wait for a Payload/monaco-editor release rather than adding an override in this tooling PR.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-mrv2-3pqr-j5jr",
+      "package": "dompurify",
+      "severity": "high",
+      "reason": "Same transitive dompurify 3.4.8 path via @payloadcms/ui > @monaco-editor/react > monaco-editor; patched only in >=3.4.17. Follow the Payload dependency update.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-rfgv-xxqx-mfg5",
+      "package": "undici",
+      "severity": "high",
+      "reason": "Transitive via payload@3.90.2, which resolves undici 7.29.0; this advisory is patched in >=7.29.1. A Payload update or a pnpm override is required.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-w293-vg96-wgc3",
+      "package": "undici",
+      "severity": "high",
+      "reason": "Transitive via payload@3.90.2, which resolves undici 7.29.0; this advisory is patched in >=7.29.1. Follow the Payload dependency update.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-xjj6-f33q-929c",
+      "package": "undici",
+      "severity": "high",
+      "reason": "Transitive via payload@3.90.2, which resolves undici 7.29.0; this advisory is patched in >=7.30.1. Follow the Payload dependency update.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-834v-8h66-3h79",
+      "package": "happy-dom",
+      "severity": "high",
+      "reason": "Transitive via @payloadcms/richtext-lexical > @lexical/headless, which resolves happy-dom 20.14.5; patched in >=21.0.4. Wait for a Payload/Lexical release.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-68fv-2mgg-jv7q",
+      "package": "source-map-js",
+      "severity": "high",
+      "reason": "Transitive via @payloadcms/next > sass, which resolves source-map-js 1.2.1; patched in >=1.2.2. Wait for the Payload/sass dependency update.",
+      "reviewBy": "2026-11-30"
+    }
+  ]
+}

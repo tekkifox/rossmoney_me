@@ -147,6 +147,13 @@ The service runs locally as root because access to the Docker daemon is effectiv
 
 The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is still a separate Go service backed by Docker and accessible at port 8080.
 
+## Dependency updates and audit
+
+Renovate opens grouped dependency PRs, and a CI workflow fails on high or
+critical advisories in production dependencies. The rules, the exact audit
+command, and the process for accepting a known-unfixable advisory are documented
+in [`DEPENDENCY-UPDATES.md`](./DEPENDENCY-UPDATES.md).
+
 ## Robots and SEO
 
 Robots are generated during the site build by next-sitemap (see `payload-cms/next-sitemap.config.cjs`). By default the generator blocks admin and API endpoints and allows public media. If you prefer a static file, copy `payload-cms/public/robots-template.txt` to `payload-cms/public/robots.txt` and update the Sitemap line with your production domain.
