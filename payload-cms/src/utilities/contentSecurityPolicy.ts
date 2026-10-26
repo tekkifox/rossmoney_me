@@ -20,6 +20,17 @@ import { normaliseOrigin } from './adminOrigin'
 export const VERCEL_BLOB_ORIGIN = 'https://*.public.blob.vercel-storage.com'
 
 /**
+ * Vercel Blob's browser upload API.
+ *
+ * Payload's client-upload handler calls `@vercel/blob/client`, which PUTs the
+ * file bytes to `https://vercel.com/api/blob/?pathname=…` — the API origin, not
+ * the public store host above. Vercel may then redirect that request to the
+ * store host, which `connect-src` already allows. Only the admin ever performs
+ * a client upload, so this source is added to the admin policy alone.
+ */
+export const VERCEL_BLOB_API_ORIGIN = 'https://vercel.com'
+
+/**
  * Payload's admin renders the signed-in user's Gravatar. Only the admin policy
  * allows it; public pages never request an avatar.
  */
@@ -137,6 +148,9 @@ export function buildContentSecurityPolicy({
     .filter((source): source is string => Boolean(source))
 
   const adminSources = isAdmin ? ` ${MONACO_CDN_ORIGIN}` : ''
+  // Browser-direct Blob uploads are an admin-only flow; public pages never
+  // connect to the Blob API.
+  const adminConnectSources = isAdmin ? ` ${VERCEL_BLOB_API_ORIGIN}` : ''
   const adminImages = isAdmin
     ? ` ${GRAVATAR_ORIGINS.join(' ')} ${MONACO_CDN_ORIGIN}`
     : ''
@@ -192,7 +206,7 @@ export function buildContentSecurityPolicy({
     // requests the signed-in user's Gravatar and Monaco's codicon images.
     `img-src 'self' data: blob: ${VERCEL_BLOB_ORIGIN}${publicImageSources}${adminImages}${toolbarImages}`,
     `font-src 'self' data:${adminSources}${toolbarFonts}`,
-    `connect-src ${[...new Set(connectSources)].join(' ')}${publicConnectSources}${adminSources}${toolbarConnect}`,
+    `connect-src ${[...new Set(connectSources)].join(' ')}${publicConnectSources}${adminSources}${toolbarConnect}${adminConnectSources}`,
     "media-src 'self' blob:",
     `worker-src 'self' blob:${adminSources}`,
     "manifest-src 'self'",

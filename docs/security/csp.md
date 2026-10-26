@@ -66,7 +66,7 @@ style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
 img-src ... https://www.gravatar.com https://secure.gravatar.com https://cdn.jsdelivr.net;
 font-src 'self' data: https://cdn.jsdelivr.net;
 worker-src 'self' blob: https://cdn.jsdelivr.net;
-connect-src ... https://cdn.jsdelivr.net;
+connect-src ... https://cdn.jsdelivr.net https://vercel.com;
 frame-src 'self';
 frame-ancestors 'none'
 ```
@@ -188,12 +188,23 @@ Shipping report-only after that would only delay protection.
   The admin's Monaco codicon font comes from jsDelivr.
 - **`connect-src 'self'`.** The public site fetches its own API, the CV DOCX,
   the architecture API and same-origin Vercel Analytics beacons. The Blob host
-  is the direct-to-blob upload path. `archview.vortexservers.co.uk` is the
-  browser-side architecture snapshot used by the gameservers page; the list is
-  explicit rather than `https:` so a compromised page cannot exfiltrate to an
-  arbitrary HTTPS origin. `ARCHVIEW_URL`/`ARCHVIEW_HOST` can add public HTTPS
-  origins without a code change; internal HTTP hosts are filtered out. Google
-  and gstatic are reCAPTCHA's token/challenge endpoints.
+  is where uploaded media is served from. `archview.vortexservers.co.uk`
+  is the browser-side architecture snapshot used by the gameservers page; the
+  list is explicit rather than `https:` so a compromised page cannot exfiltrate
+  to an arbitrary HTTPS origin. `ARCHVIEW_URL`/`ARCHVIEW_HOST` can add public
+  HTTPS origins without a code change; internal HTTP hosts are filtered out.
+  Google and gstatic are reCAPTCHA's token/challenge endpoints.
+- **`https://vercel.com` in the admin `connect-src` only.** Vercel's serverless
+  request-body limit is 4.5 MB, so large media uses Payload's client uploads:
+  the admin obtains an upload token from `/api/vercel-blob-client-upload-route`
+  and `@vercel/blob/client` then PUTs the file to
+  `https://vercel.com/api/blob/?pathname=…`. That is the Blob **API** origin,
+  distinct from the `*.public.blob.vercel-storage.com` store host already
+  allowed for reads; Vercel may redirect the upload to the store host, which the
+  existing wildcard covers. The public site never uploads, so the source is
+  behind `isAdmin` and is not added to any other directive. A full origin (not
+  a path) is used deliberately: CSP path matching is brittle across browsers
+  and a missed upload is silent data loss.
 - **`media-src 'self' blob:`.** Uploaded audio/video and admin previews.
 - **`worker-src 'self' blob:`.** Monaco's workers; jsDelivr is the admin
   fallback. reCAPTCHA's worker runs inside its own frame.
