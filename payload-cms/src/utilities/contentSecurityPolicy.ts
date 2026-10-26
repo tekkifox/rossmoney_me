@@ -54,6 +54,25 @@ const RECAPTCHA_ORIGINS = ['https://www.google.com', 'https://www.gstatic.com']
 const KNOWN_ARCHVIEW_ORIGINS = ['https://archview.vortexservers.co.uk']
 
 /**
+ * Vercel Toolbar sources. Vercel injects the toolbar (and its feedback iframe)
+ * into preview deployments for signed-in Vercel users. The list is taken from
+ * Vercel's documented CSP requirements; it is only added when the request runs
+ * on a preview deployment, never on the production site.
+ *
+ * @see https://vercel.com/docs/vercel-toolbar/managing-toolbar#using-a-content-security-policy
+ */
+const VERCEL_TOOLBAR_ORIGIN = 'https://vercel.live'
+const VERCEL_TOOLBAR_CONNECT_ORIGINS = [
+  'https://vercel.live',
+  'wss://ws-us3.pusher.com',
+]
+const VERCEL_TOOLBAR_IMAGE_ORIGINS = ['https://vercel.live', 'https://vercel.com']
+const VERCEL_TOOLBAR_FONT_ORIGINS = [
+  'https://vercel.live',
+  'https://assets.vercel.com',
+]
+
+/**
  * A nonce with 122 bits of entropy. Hex is accepted by Next.js' nonce parser
  * (`^'nonce-[A-Za-z0-9+/_-]+={0,2}'$`) and avoids any base64 padding questions.
  */
@@ -87,17 +106,26 @@ export type ContentSecurityPolicyOptions = {
   connectOrigins?: string[]
   /** Adds sources only the Payload admin needs (the user's Gravatar). */
   isAdmin?: boolean
+  /**
+   * Adds the Vercel Toolbar's documented sources. Only enable this on Vercel
+   * preview deployments, where the toolbar is injected.
+   */
+  vercelToolbar?: boolean
 }
 
 /**
- * Build the header value. Kept pure so the policy can be unit-tested without a
- * request or a Next.js server.
+ * Build the header value. Kept free of request and Next.js state so the policy
+ * can be unit-tested with plain environment overrides.
  */
 export function buildContentSecurityPolicy({
   nonce,
   isHttps = false,
   connectOrigins = [],
   isAdmin = false,
+  // Vercel injects its Toolbar into preview deployments for signed-in Vercel
+  // users. Detected here (rather than in `proxy.ts`) because the builder owns
+  // the policy and proxy is shared with another change.
+  vercelToolbar = process.env.VERCEL_ENV === 'preview',
 }: ContentSecurityPolicyOptions): string {
   const connectSources = [
     "'self'",
@@ -119,24 +147,42 @@ export function buildContentSecurityPolicy({
   const publicConnectSources = isAdmin ? '' : ` ${RECAPTCHA_ORIGINS.join(' ')}`
   const publicImageSources = isAdmin ? '' : ' https://www.gstatic.com'
 
+  const toolbarScript = vercelToolbar ? ` ${VERCEL_TOOLBAR_ORIGIN}` : ''
+  // The toolbar's feedback script injects inline <style> elements, so a public
+  // preview policy has to allow inline stylesheet text. The admin policy
+  // already carries `'unsafe-inline'`.
+  const toolbarStyle = vercelToolbar
+    ? ` ${VERCEL_TOOLBAR_ORIGIN}${isAdmin ? '' : " 'unsafe-inline'"}`
+    : ''
+  const toolbarConnect = vercelToolbar
+    ? ` ${VERCEL_TOOLBAR_CONNECT_ORIGINS.join(' ')}`
+    : ''
+  const toolbarImages = vercelToolbar
+    ? ` ${VERCEL_TOOLBAR_IMAGE_ORIGINS.join(' ')}`
+    : ''
+  const toolbarFonts = vercelToolbar
+    ? ` ${VERCEL_TOOLBAR_FONT_ORIGINS.join(' ')}`
+    : ''
+  const toolbarFrame = vercelToolbar ? ` ${VERCEL_TOOLBAR_ORIGIN}` : ''
+
   const directives = [
     "default-src 'none'",
     // `strict-dynamic` lets the nonced Next.js bootstrap load its chunks and
     // lets the analytics packages insert their same-origin script tags. `'self'`
     // remains for browsers that do not implement strict-dynamic, and the
     // jsDelivr host is the CSP2 fallback for Payload's Monaco loader.
-    `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'${publicScriptSources}${adminSources}`,
+    `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'${publicScriptSources}${adminSources}${toolbarScript}`,
     // Public pages use inline `style` *attributes* (React `style` props) but no
     // inline `<style>` elements, so they can allow attributes without allowing
     // inline stylesheet text. Payload's admin also injects `<style>` elements,
     // so the admin keeps `'unsafe-inline'` there. Monaco's stylesheet is the
     // only external stylesheet the admin loads.
     isAdmin
-      ? `style-src 'self' 'unsafe-inline'${adminSources}`
-      : "style-src 'self'",
+      ? `style-src 'self' 'unsafe-inline'${adminSources}${toolbarStyle}`
+      : `style-src 'self'${toolbarStyle}`,
     isAdmin
-      ? `style-src-elem 'self' 'unsafe-inline'${adminSources}`
-      : "style-src-elem 'self'",
+      ? `style-src-elem 'self' 'unsafe-inline'${adminSources}${toolbarStyle}`
+      : `style-src-elem 'self'${toolbarStyle}`,
     "style-src-attr 'unsafe-inline'",
     // React does not use inline event-handler attributes; blocking them closes
     // the most common use of `unsafe-inline` without affecting the app.
@@ -144,15 +190,15 @@ export function buildContentSecurityPolicy({
     // `data:` and `blob:` cover admin thumbnails and the DOCX viewer's images;
     // the Blob host covers media uploaded on Vercel. The admin additionally
     // requests the signed-in user's Gravatar and Monaco's codicon images.
-    `img-src 'self' data: blob: ${VERCEL_BLOB_ORIGIN}${publicImageSources}${adminImages}`,
-    `font-src 'self' data:${adminSources}`,
-    `connect-src ${[...new Set(connectSources)].join(' ')}${publicConnectSources}${adminSources}`,
+    `img-src 'self' data: blob: ${VERCEL_BLOB_ORIGIN}${publicImageSources}${adminImages}${toolbarImages}`,
+    `font-src 'self' data:${adminSources}${toolbarFonts}`,
+    `connect-src ${[...new Set(connectSources)].join(' ')}${publicConnectSources}${adminSources}${toolbarConnect}`,
     "media-src 'self' blob:",
     `worker-src 'self' blob:${adminSources}`,
     "manifest-src 'self'",
     // The admin frames its own origin for Payload's Live Preview. Public pages
     // only need reCAPTCHA's challenge frame.
-    `frame-src ${isAdmin ? "'self'" : 'https://www.google.com'}`,
+    `frame-src ${isAdmin ? "'self'" : 'https://www.google.com'}${toolbarFrame}`,
     // Public pages allow only their own origin as an ancestor so Payload's
     // Live Preview can frame the page being edited. The admin itself stays
     // un-frameable. Cross-origin framing remains blocked on both surfaces.

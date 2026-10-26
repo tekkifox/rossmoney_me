@@ -51,7 +51,9 @@ form-action 'self'
 ```
 
 On HTTPS responses `upgrade-insecure-requests` is appended. It is omitted on
-local HTTP so `next start` on `http://localhost` still works.
+local HTTP so `next start` on `http://localhost` still works. Preview
+deployments add the Vercel Toolbar sources described below; the block above is
+the production policy.
 
 ## Admin policy
 
@@ -86,6 +88,34 @@ needs two allowances, one on each policy:
 Both are same-origin only. Cross-origin pages still cannot frame the site, and
 the admin still cannot be framed by anyone (`frame-ancestors 'none'`), so the
 clickjacking protection is unchanged for every origin except this app's own.
+
+## Vercel Toolbar on preview deployments
+
+Vercel injects its Toolbar (Comments / feedback) into preview deployments for
+signed-in Vercel users. Its feedback iframe and inline styles need sources the
+public policy would otherwise refuse, so when `VERCEL_ENV=preview` the builder
+adds the documented Vercel Toolbar set:
+
+```text
+script-src ... https://vercel.live;
+style-src ... https://vercel.live 'unsafe-inline';
+style-src-elem ... https://vercel.live 'unsafe-inline';
+img-src ... https://vercel.live https://vercel.com;
+font-src ... https://vercel.live https://assets.vercel.com;
+connect-src ... https://vercel.live wss://ws-us3.pusher.com;
+frame-src ... https://vercel.live
+```
+
+`'unsafe-inline'` is required for stylesheet text because the toolbar's
+feedback script injects `<style>` elements without a nonce, and their contents
+change with the toolbar version, so hashes would be brittle. It is applied only
+on preview deployments; production (`VERCEL_ENV=production`, and the Portainer
+site with no Vercel environment) keeps `style-src-elem 'self'`. The toolbar is a
+platform feature, not an app dependency: if it is disabled in the Vercel
+project, these sources are simply unused.
+
+Source list:
+<https://vercel.com/docs/vercel-toolbar/managing-toolbar#using-a-content-security-policy>.
 
 ## Why a nonce, not a static allowlist
 
