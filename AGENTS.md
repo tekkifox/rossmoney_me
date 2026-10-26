@@ -27,8 +27,12 @@ pnpm --dir payload-cms lint:tokens
 
 Payload builds absolute URLs (media, password resets) from
 `payload-cms/src/utilities/serverURL.ts`. Precedence: explicit `SERVER_URL` or
-`NEXT_PUBLIC_SERVER_URL`, then Vercel's `VERCEL_URL` (the deployment itself),
-then `VERCEL_PROJECT_PRODUCTION_URL`, then `http://localhost:8082`.
+`NEXT_PUBLIC_SERVER_URL`, then `http://localhost:8082` everywhere except Vercel.
+On Vercel the value is left unset — `VERCEL_URL` is the deployment's own
+protected hostname, not the domain a person browses, so using it pointed the
+admin's API requests and every media URL at a foreign origin. Unset keeps the
+admin same-origin and media URLs relative; see `src/utilities/adminOrigin.ts`
+for why that needs the small `src/proxy.ts` origin normalisation.
 
 ## Design-system rules
 
