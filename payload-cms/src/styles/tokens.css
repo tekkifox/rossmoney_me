@@ -1,0 +1,286 @@
+/* ==========================================================================
+   rossmoney.me — design tokens
+   ==========================================================================
+   This is the single source of truth for every design value on the public
+   site: colour, type, spacing, radii, shadows and background graphics.
+
+   Tier 1 — primitives
+     Raw values only. Nothing in a component should reference these directly;
+     they exist so a theme can be retuned in one place.
+
+   Tier 2 — semantics
+     The roles components and utilities consume. The blocks below preserve the
+     exact cascade that the site shipped with:
+
+       1. the shadcn/Tailwind token set (light) that used to live in globals.css
+       2. the shadcn/Tailwind token set (dark) that used to live in globals.css
+       3. the local light palette that used to live in local-styles.css
+       4. the light-theme remap that used to live in local-styles.css
+
+     Step 4 must stay after steps 1–3: the public site deliberately keeps its
+     light palette when the OS/browser asks for dark. See DESIGN.md.
+
+   Values are copied from the shipped CSS; do not "tidy" them.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Tier 1 — primitives
+   -------------------------------------------------------------------------- */
+:root {
+  /* Base palette -------------------------------------------------------- */
+  --primitive-white: #ffffff;
+  --primitive-gray-50: #f8f9fa;
+  --primitive-gray-100: #f1f3f5;
+  --primitive-gray-150: #eef2f6;
+  --primitive-gray-200: #e9ecef;
+  --primitive-gray-500: #6c757d;
+  --primitive-gray-550: #555555;
+  --primitive-gray-800: #212529;
+  --primitive-gray-850: #0b1220;
+  --primitive-gray-900: #111111;
+  --primitive-blue-300: #6ea8fe;
+  --primitive-blue-450: #2386f5;
+  --primitive-blue-500: #0d6efd;
+  --primitive-blue-600: #0b5ed7;
+  --primitive-slate-400: #94a3b8;
+
+  /* Translucent colour primitives --------------------------------------- */
+  --primitive-blue-tint-06: rgba(13, 110, 253, 0.06);
+  --primitive-blue-tint-08: rgba(13, 110, 253, 0.08);
+  --primitive-blue-tint-12: rgba(13, 110, 253, 0.12);
+  --primitive-blue-glow-08: rgba(59, 130, 246, 0.08);
+  --primitive-blue-glow-40: rgba(59, 130, 246, 0.4);
+  --primitive-green-glow-08: rgba(16, 185, 129, 0.08);
+  --primitive-green-glow-40: rgba(16, 185, 129, 0.4);
+  --primitive-indigo-glow-03: rgba(99, 102, 241, 0.03);
+  --primitive-grid-stroke: rgba(148, 163, 184, 0.15);
+  --primitive-shadow-card: rgba(33, 37, 41, 0.04);
+  --primitive-shadow-metric: rgba(16, 24, 40, 0.04);
+  --primitive-docx-rule: rgba(17, 17, 17, 0.2);
+
+  /* Type families -------------------------------------------------------- */
+  --primitive-font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial;
+  --primitive-font-mono: monospace;
+  --primitive-font-brand: Georgia, serif;
+  --primitive-font-docx: Arial, sans-serif;
+  --primitive-font-docx-emoji: "Segoe UI Emoji", sans-serif;
+  --primitive-font-docx-unicode: "Arial Unicode MS", Arial, sans-serif;
+  --primitive-font-docx-serif: "Times New Roman", serif;
+
+  /* Type scale ----------------------------------------------------------- */
+  --primitive-font-size-75: 0.75rem;
+  --primitive-font-size-78: 0.78rem;
+  --primitive-font-size-80: 0.8rem;
+  --primitive-font-size-85: 0.85rem;
+  --primitive-font-size-90: 0.9rem;
+  --primitive-font-size-95: 0.95rem;
+  --primitive-font-size-98: 0.98rem;
+  --primitive-font-size-105: 1.05rem;
+  --primitive-font-size-125: 1.25rem;
+  --primitive-font-size-180: 1.8rem;
+  --primitive-font-size-240: 2.4rem;
+  --primitive-line-height-1: 1;
+  --primitive-line-height-105: 1.05;
+  --primitive-line-height-12: 1.2;
+  --primitive-line-height-125: 1.25;
+  --primitive-line-height-14: 1.4;
+  --primitive-font-weight-600: 600;
+  --primitive-font-weight-700: 700;
+  --primitive-font-weight-800: 800;
+  --primitive-tracking-008: 0.08em;
+  --primitive-tracking-012: 0.12em;
+
+  /* Spacing scale -------------------------------------------------------- */
+  --primitive-space-1: 4px;
+  --primitive-space-15: 6px;
+  --primitive-space-2: 8px;
+  --primitive-space-25: 10px;
+  --primitive-space-3: 12px;
+  --primitive-space-35: 14px;
+  --primitive-space-4: 16px;
+  --primitive-space-45: 18px;
+  --primitive-space-5: 20px;
+  --primitive-space-6: 24px;
+  --primitive-space-8: 32px;
+  --primitive-space-10: 40px;
+  --primitive-space-11: 44px;
+  --primitive-space-12: 48px;
+  --primitive-space-21: 84px;
+
+  /* Radii ---------------------------------------------------------------- */
+  --primitive-radius-8: 8px;
+  --primitive-radius-10: 10px;
+  --primitive-radius-12: 12px;
+  --primitive-radius-pill: 999px;
+
+  /* Shadows -------------------------------------------------------------- */
+  --primitive-shadow-card-value: 0 6px 18px var(--primitive-shadow-card);
+  --primitive-shadow-metric-value: 0 6px 12px var(--primitive-shadow-metric);
+
+  /* Background graphics -------------------------------------------------- */
+  --primitive-glow-blue: radial-gradient(
+    circle at 20% 10%,
+    var(--primitive-blue-glow-08) 0%,
+    transparent 40%
+  );
+  --primitive-glow-green: radial-gradient(
+    circle at 80% 90%,
+    var(--primitive-green-glow-08) 0%,
+    transparent 40%
+  );
+  --primitive-glow-indigo: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--primitive-indigo-glow-03) 100%
+  );
+  --primitive-grid-opacity: 0.4;
+  /* SVG data URIs cannot interpolate custom properties. The stroke and point
+     colours are embedded here, in the one place colour values are allowed. */
+  --primitive-grid-pattern: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 10 L100 10 M10 0 L10 100 M0 50 L100 50 M50 0 L50 100' stroke='rgba(148,163,184,0.15)' stroke-width='0.5'/%3E%3Ccircle cx='10' cy='10' r='1' fill='rgba(59,130,246,0.4)'/%3E%3Ccircle cx='50' cy='50' r='1' fill='rgba(16,185,129,0.4)'/%3E%3C/svg%3E");
+}
+
+/* --------------------------------------------------------------------------
+   Tier 2 — semantics
+   -------------------------------------------------------------------------- */
+
+/* shadcn/Tailwind tokens — light (formerly globals.css :root) -------------- */
+:root {
+  --background: oklch(100% 0 0deg);
+  --foreground: oklch(14.5% 0 0deg);
+  --card: oklch(96.5% 0.005 265deg);
+  --card-foreground: oklch(14.5% 0 0deg);
+  --popover: oklch(100% 0 0deg);
+  --popover-foreground: oklch(14.5% 0 0deg);
+  --primary: oklch(20.5% 0 0deg);
+  --primary-foreground: oklch(98.5% 0 0deg);
+  --secondary: oklch(97% 0 0deg);
+  --secondary-foreground: oklch(20.5% 0 0deg);
+  --muted: oklch(97% 0 0deg);
+  --muted-foreground: oklch(55.6% 0 0deg);
+  --accent: oklch(97% 0 0deg);
+  --accent-foreground: oklch(20.5% 0 0deg);
+  --destructive: oklch(57.7% 0.245 27.325deg);
+  --destructive-foreground: oklch(57.7% 0.245 27.325deg);
+  --border: oklch(92.2% 0 0deg);
+  --input: oklch(92.2% 0 0deg);
+  --ring: oklch(70.8% 0 0deg);
+  --chart-1: oklch(64.6% 0.222 41.116deg);
+  --chart-2: oklch(60% 0.118 184.704deg);
+  --chart-3: oklch(39.8% 0.07 227.392deg);
+  --chart-4: oklch(82.8% 0.189 84.429deg);
+  --chart-5: oklch(76.9% 0.188 70.08deg);
+  --radius: 0.625rem;
+  --sidebar: oklch(98.5% 0 0deg);
+  --sidebar-foreground: oklch(14.5% 0 0deg);
+  --sidebar-primary: oklch(20.5% 0 0deg);
+  --sidebar-primary-foreground: oklch(98.5% 0 0deg);
+  --sidebar-accent: oklch(97% 0 0deg);
+  --sidebar-accent-foreground: oklch(20.5% 0 0deg);
+  --sidebar-border: oklch(92.2% 0 0deg);
+  --sidebar-ring: oklch(70.8% 0 0deg);
+  --success: oklch(78% 0.08 200deg);
+  --warning: oklch(89% 0.1 75deg);
+  --error: oklch(75% 0.15 25deg);
+}
+
+/* shadcn/Tailwind tokens — dark (formerly globals.css [data-theme='dark']) - */
+[data-theme='dark'] {
+  --background: oklch(14.5% 0 0deg);
+  --foreground: oklch(98.5% 0 0deg);
+  --card: oklch(17% 0 0deg);
+  --card-foreground: oklch(98.5% 0 0deg);
+  --popover: oklch(14.5% 0 0deg);
+  --popover-foreground: oklch(98.5% 0 0deg);
+  --primary: oklch(98.5% 0 0deg);
+  --primary-foreground: oklch(20.5% 0 0deg);
+  --secondary: oklch(26.9% 0 0deg);
+  --secondary-foreground: oklch(98.5% 0 0deg);
+  --muted: oklch(26.9% 0 0deg);
+  --muted-foreground: oklch(70.8% 0 0deg);
+  --accent: oklch(26.9% 0 0deg);
+  --accent-foreground: oklch(98.5% 0 0deg);
+  --destructive: oklch(39.6% 0.141 25.723deg);
+  --destructive-foreground: oklch(63.7% 0.237 25.331deg);
+  --border: oklch(26.9% 0 0deg);
+  --input: oklch(26.9% 0 0deg);
+  --ring: oklch(43.9% 0 0deg);
+  --chart-1: oklch(48.8% 0.243 264.376deg);
+  --chart-2: oklch(69.6% 0.17 162.48deg);
+  --chart-3: oklch(76.9% 0.188 70.08deg);
+  --chart-4: oklch(62.7% 0.265 303.9deg);
+  --chart-5: oklch(64.5% 0.246 16.439deg);
+  --sidebar: oklch(20.5% 0 0deg);
+  --sidebar-foreground: oklch(98.5% 0 0deg);
+  --sidebar-primary: oklch(48.8% 0.243 264.376deg);
+  --sidebar-primary-foreground: oklch(98.5% 0 0deg);
+  --sidebar-accent: oklch(26.9% 0 0deg);
+  --sidebar-accent-foreground: oklch(98.5% 0 0deg);
+  --sidebar-border: oklch(26.9% 0 0deg);
+  --sidebar-ring: oklch(43.9% 0 0deg);
+  --success: oklch(28% 0.1 200deg);
+  --warning: oklch(35% 0.08 70deg);
+  --error: oklch(45% 0.1 25deg);
+}
+
+/* Local light palette (formerly local-styles.css :root) -------------------- */
+:root {
+  --bg: var(--primitive-gray-50);
+  --card-bg: var(--primitive-white);
+  --muted: var(--primitive-gray-500);
+  --text: var(--primitive-gray-800);
+  --primary: var(--primitive-blue-500);
+  --primary-hover: var(--primitive-blue-600);
+  --border: var(--primitive-gray-200);
+  --radius: var(--primitive-radius-12);
+  --container-max: 1140px;
+  --gutter: 16px;
+}
+
+/* Light-theme remap (formerly local-styles.css :root, [data-theme='dark']).
+   Deliberately wins over the dark block above so the public site stays light. */
+:root,
+[data-theme='dark'] {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--card-bg);
+  --card-foreground: var(--text);
+  --popover: var(--card-bg);
+  --popover-foreground: var(--text);
+  --primary-foreground: var(--primitive-white);
+  --secondary: var(--primitive-gray-150);
+  --secondary-foreground: var(--text);
+  --muted-foreground: var(--primitive-gray-500);
+  --accent: var(--primitive-gray-200);
+  --accent-foreground: var(--text);
+  --input: var(--primitive-gray-200);
+  --ring: var(--primary);
+}
+
+/* Component roles ---------------------------------------------------------- */
+:root {
+  --on-primary: var(--primitive-white);
+  --button-secondary-bg: var(--card-bg);
+  --shadow-card: var(--primitive-shadow-card-value);
+  --shadow-metric: var(--primitive-shadow-metric-value);
+  --brand-mark-gradient: linear-gradient(
+    135deg,
+    var(--primary),
+    var(--primitive-blue-300)
+  );
+  --status-pill-bg: var(--primitive-blue-tint-08);
+  --status-pill-border: var(--primitive-blue-tint-12);
+  --tint-primary-06: var(--primitive-blue-tint-06);
+  --tint-primary-12: var(--primitive-blue-tint-12);
+  --diagram-bg: var(--primitive-gray-100);
+  --diagram-text: var(--primitive-gray-850);
+  --docx-text: var(--primitive-gray-550);
+  --docx-heading: var(--primitive-gray-900);
+  --docx-accent: var(--primitive-blue-450);
+  --docx-rule: var(--primitive-docx-rule);
+  --docx-section-rule: var(--primitive-gray-900);
+  --surface-glow: var(--primitive-glow-blue), var(--primitive-glow-green),
+    var(--primitive-glow-indigo);
+  --background-grid: var(--primitive-grid-pattern);
+  --background-grid-opacity: var(--primitive-grid-opacity);
+}
