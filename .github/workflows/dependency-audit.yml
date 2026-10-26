@@ -1,0 +1,40 @@
+name: Dependency audit
+
+on:
+  pull_request:
+  schedule:
+    # Catch advisories published after the last PR, even when nothing changed.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        working-directory: payload-cms
+        run: corepack pnpm@10.11.0 install --frozen-lockfile --prefer-offline
+
+      - name: Audit production dependencies
+        working-directory: payload-cms
+        run: corepack pnpm@10.11.0 run audit:prod
