@@ -157,6 +157,25 @@ and the violations found during the build were all fixed (see
 [the audit's before/after list](./audit-2026-10-26.md#csp-before-and-after)).
 Shipping report-only after that would only delay protection.
 
+## Automated browser smoke suite
+
+The browser evidence above is now reproducible in CI. `tests/e2e/support/csp.ts`
+exports a Playwright fixture that installs a `securitypolicyviolation` listener
+at document start in every frame (including Payload's Live Preview iframe) and
+fails the test at teardown with the directive, blocked URI and source file.
+`tests/e2e/smoke/` covers the public routes (`/`, `/cv`, `/contact`,
+`/travelling`, `/game-servers`), admin login/dashboard/list, a real page create
+and publish, Live Preview rendering, and the production scoping rule (no Vercel
+Toolbar sources on public pages, no public `style-src-elem 'unsafe-inline'`;
+the admin `https://vercel.com` Blob API source stays confined to `connect-src`).
+Chromium and Firefox both run it.
+
+The suite must target `next start`, not `next dev`: the proxy deliberately omits
+the policy in development, and the header assertion fails if it is missing.
+`pnpm build && pnpm start` is the local path (`pnpm dev:prod` wraps it);
+`.github/workflows/browser-smoke.yml` runs the same suite on pull requests and
+on `main`/`dev` with a disposable MongoDB service.
+
 ## Directive and source justifications
 
 - **`default-src 'none'`.** Everything not named below is denied. This is the
