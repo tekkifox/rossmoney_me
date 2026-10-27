@@ -54,6 +54,53 @@ export const cleanupSmokeUser = async (): Promise<void> => {
   })
 }
 
+/**
+ * Creates a published page to edit in the admin. Seeding it through the local
+ * API avoids the create view's autosave window, which can replace the form
+ * before a browser-filled title reaches the server.
+ */
+export const seedSmokePage = async (
+  slug: string,
+  title = 'CSP smoke seed',
+): Promise<string | number> => {
+  const client = await payload()
+
+  await client.delete({
+    collection: 'pages',
+    where: { slug: { equals: slug } },
+    context: { disableRevalidate: true },
+  })
+
+  const page = await client.create({
+    collection: 'pages',
+    data: {
+      title,
+      slug,
+      _status: 'published',
+      hero: {
+        type: 'none',
+      },
+    },
+    draft: false,
+    context: { disableRevalidate: true },
+  })
+
+  return page.id
+}
+
+/** Reads the persisted title so a save can be verified independently of UI state. */
+export const readSmokePageTitle = async (id: string | number): Promise<string> => {
+  const client = await payload()
+  const page = await client.findByID({
+    collection: 'pages',
+    id,
+    draft: true,
+    depth: 0,
+  })
+
+  return typeof page.title === 'string' ? page.title : ''
+}
+
 /** Removes any pages a previous (possibly failed) smoke run left behind. */
 export const cleanupSmokePages = async (): Promise<void> => {
   const client = await payload()
