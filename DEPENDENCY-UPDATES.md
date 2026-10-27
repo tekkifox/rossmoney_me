@@ -11,34 +11,59 @@ Config: [`renovate.json`](./renovate.json).
 
 Renovate is used instead of Dependabot because this repo needs one update PR
 across the thirteen `@payloadcms/*` packages plus `payload` itself, a separate
-lockstep PR for `next` and `eslint-config-next`, and weekly pnpm lockfile
-maintenance. Renovate expresses all of that in `packageRules` and keeps the
-lockfile in the same PR as the manifest change. Dependabot can group updates,
-but it groups within its own rules and does not give the same lockfile-only
-maintenance control.
+lockstep PR for `next` and `eslint-config-next`, and pnpm lockfile maintenance.
+Renovate expresses all of that in `packageRules` and keeps the lockfile in the
+same PR as the manifest change. Dependabot can group updates, but it groups
+within its own rules and does not give the same lockfile-only maintenance
+control.
 
 ### Rules encoded in `renovate.json`
 
-| Rule                                             | Config                                                                                                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@payloadcms/*` and `payload` update in one PR   | `packageRules` group `Payload`, `separateMajorMinor: false`                                                                                 |
-| `next` and `eslint-config-next` stay in lockstep | `packageRules` group `Next.js`, `separateMajorMinor: false`                                                                                 |
-| pnpm lockfile is updated                         | Renovate's npm/pnpm manager updates `payload-cms/pnpm-lock.yaml` in the same PR; `lockFileMaintenance` also opens a weekly lockfile-only PR |
-| Weekly schedule                                  | `schedule: ["before 6am on monday"]`, `timezone: "Europe/London"`                                                                           |
-| Concurrent PR cap                                | `prConcurrentLimit: 3`, `prHourlyLimit: 2`                                                                                                  |
-| Rebase policy                                    | `rebaseWhen: "conflicted"`                                                                                                                  |
-| No automerge, especially majors                  | `automerge: false` globally and in every group; the major rule repeats it                                                                   |
-| Vulnerability PRs                                | `vulnerabilityAlerts.enabled: true`                                                                                                         |
+| Rule                                             | Config                                                                                                                                   |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `@payloadcms/*` and `payload` update in one PR   | `packageRules` group `Payload`, `separateMajorMinor: false`                                                                              |
+| `next` and `eslint-config-next` stay in lockstep | `packageRules` group `Next.js`, `separateMajorMinor: false`                                                                              |
+| pnpm lockfile is updated                         | Renovate's npm/pnpm manager updates `payload-cms/pnpm-lock.yaml` in the same PR; `lockFileMaintenance` also opens lockfile-only PRs      |
+| No calendar window (deliberate)                  | No `schedule` at the top level or on `lockFileMaintenance`; `timezone: "Europe/London"` still sets the zone for anything scheduled later |
+| Throttle is concurrency, not the calendar        | `prConcurrentLimit: 3`, `prHourlyLimit: 2` — these cap the PR flood, so updates can be raised on any day                                 |
+| Rebase policy                                    | `rebaseWhen: "conflicted"`                                                                                                               |
+| No automerge, especially majors                  | `automerge: false` globally and in every group; the major rule repeats it                                                                |
+| Vulnerability PRs                                | `vulnerabilityAlerts.enabled: true` with `schedule: ["at any time"]`, so security fixes never wait                                       |
 
 `separateMajorMinor: false` is deliberate in both groups. Renovate otherwise
 splits major from minor updates even inside a group, which is exactly the split
 Payload minor we do not want. Major PRs still cannot merge without a human
 because automerge is off.
 
+### Why there is no calendar window
+
+There is deliberately no weekly `schedule` window, and `lockFileMaintenance`
+has none either. Renovate may act on any day it runs.
+
+A weekly window is a bad throttle and a worse diagnostic:
+
+- **It hides misconfiguration.** If the config or the app installation is
+  broken, a once-a-week window means the breakage goes unnoticed for up to seven
+  days — the repo simply looks quiet, which is exactly what a healthy week looks
+  like too. With no window, a missing dashboard/PR after the first run is an
+  immediate signal that something is wrong.
+- **It delays security fixes.** A vulnerability published on Tuesday should not
+  wait until next Monday. `vulnerabilityAlerts.schedule` is `["at any time"]`
+  for the same reason, and the general config now matches it.
+
+The flood protection is `prConcurrentLimit: 3` and `prHourlyLimit: 2`, which
+bound how many PRs exist at once and how many are opened per hour regardless of
+when Renovate runs. The calendar never contributed to that bound; it only
+postponed work. If updates ever need to be paused, disable them or use a short,
+intentional window — do not reintroduce a standing weekly gate.
+
 Renovate reads its config from the default branch. **A repo admin must install
 the Renovate app for `tekkifox/rossmoney_me` before any of this runs.** The
 hosted app is free for public repositories; check the Mend plan if this repo is
-private. That installation is outside this PR and was not exercised here.
+private. That access grant is outside this repository, so no config here can
+compensate for it. The first run can take a while after installation; the
+**Dependency Dashboard issue** is the signal that Renovate has processed this
+repo. Until that issue exists, nothing is being updated yet.
 
 ## Audit gate
 
@@ -157,6 +182,17 @@ corepack pnpm@10.11.0 install --frozen-lockfile --prefer-offline
 corepack pnpm@10.11.0 run audit:prod
 ```
 
+Validate the Renovate config against the published schema before changing it —
+a schema error silently disables every update:
+
+```bash
+npx --yes --package renovate renovate-config-validator \
+  --no-global --strict renovate.json
+```
+
+`--no-global` validates it as repo config, and `--strict` fails on warnings, not
+just schema errors.
+
 The script accepts test-only overrides:
 
 ```bash
@@ -176,7 +212,8 @@ date.
   against `main`) and the `audit` job passed in both runs.
 - The gate was also run locally with the pinned pnpm version, including the
   deliberately vulnerable scratch case described above.
-- The Renovate app was **not** installed or run. A repo admin must install it
-  before Renovate opens its first PR; branch protection and that first PR remain
-  unverified here.
+- The Renovate app is installed, but a run was not observed while making this
+  change. The first run can take a while after installation; the **Dependency
+  Dashboard issue** is the signal that Renovate has processed the repo. Branch
+  protection and the first update PR remain unverified here.
 - No dependency version is changed by this tooling.
