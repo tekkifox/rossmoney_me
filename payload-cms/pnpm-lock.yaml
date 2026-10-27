@@ -117,7 +117,7 @@ importers:
         specifier: 0.35.5
         version: 0.35.5(@types/node@22.19.9)
       tailwind-merge:
-        specifier: ^3.4.0
+        specifier: ^3.7.0
         version: 3.7.0
     devDependencies:
       '@playwright/test':
