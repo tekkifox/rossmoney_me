@@ -169,7 +169,7 @@ importers:
         specifier: ^3.4.2
         version: 3.9.6
       tailwindcss:
-        specifier: ^4.1.18
+        specifier: ^4.3.3
         version: 4.3.3
       tsx:
         specifier: 4.22.4
