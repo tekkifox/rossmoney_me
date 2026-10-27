@@ -1,0 +1,88 @@
+name: Browser smoke
+
+on:
+  pull_request:
+    paths:
+      - 'payload-cms/**'
+      - '.github/workflows/browser-smoke.yml'
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'payload-cms/**'
+      - '.github/workflows/browser-smoke.yml'
+
+concurrency:
+  group: browser-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      CI: true
+      # The production server and the Playwright worker must see the same
+      # database: the worker seeds the admin account directly through Payload.
+      MONGODB_URI: mongodb://127.0.0.1:27017/rossmoney_smoke
+      NEXT_PUBLIC_SERVER_URL: http://localhost:3000
+      PAYLOAD_SECRET: browser-smoke-ci-secret
+      # Live Preview builds this into the iframe URL and checks it on the
+      # preview route, so both processes need the same value.
+      PREVIEW_SECRET: browser-smoke-preview-secret
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies (payload-cms)
+        run: corepack pnpm@10.11.0 --dir payload-cms install --frozen-lockfile
+
+      - name: Build production app
+        run: corepack pnpm@10.11.0 --dir payload-cms build
+
+      - name: Install Playwright browsers
+        run: >-
+          corepack pnpm@10.11.0 --dir payload-cms exec playwright install
+          --with-deps chromium firefox
+
+      # Playwright starts the production server itself (see webServer in
+      # payload-cms/playwright.config.ts). `CI=true` selects `pnpm start` and
+      # disables reusing a stray dev server.
+      - name: Run browser smoke suite
+        run: corepack pnpm@10.11.0 --dir payload-cms test:e2e
+
+      - name: Upload Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            payload-cms/playwright-report
+            payload-cms/test-results
+          if-no-files-found: ignore
+          retention-days: 7
