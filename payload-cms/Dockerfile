@@ -3,14 +3,21 @@
 
 FROM node:26.12.1-alpine AS base
 
+# Node 26 no longer bundles corepack, so install it from npm at a pinned version
+# before it is used. The pnpm version itself comes from `packageManager` in
+# package.json; corepack reads that, so it must not be pinned here.
+RUN npm i -g corepack@0.36.0 && corepack enable pnpm
+
 # Install dependencies only when needed
 FROM base AS deps
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies with pnpm
-COPY package.json pnpm-lock.yaml ./
+# Install dependencies with pnpm. pnpm-workspace.yaml carries the pnpm 12
+# supply-chain settings (minimumReleaseAge, allowBuilds); without it the
+# frozen install fails.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable pnpm && pnpm i --frozen-lockfile
 
 
