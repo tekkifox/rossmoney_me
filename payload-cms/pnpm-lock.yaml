@@ -124,7 +124,7 @@ importers:
         specifier: 1.58.2
         version: 1.58.2
       '@tailwindcss/postcss':
-        specifier: ^4.1.18
+        specifier: ^4.3.3
         version: 4.3.3
       '@tailwindcss/typography':
         specifier: ^0.5.19
