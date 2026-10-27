@@ -59,6 +59,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=payload-main
+          cache-to: type=gha,mode=max,scope=payload-main
 
       - name: Trigger Portainer webhook
         if: ${{ env.PORTAINER_WEBHOOK_URL != '' }}
