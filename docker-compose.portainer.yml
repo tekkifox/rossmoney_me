@@ -20,7 +20,7 @@ services:
       - payload-media:/app/public/media:rw
 
   mongo:
-    image: mongo:7
+    image: mongo:9
     restart: unless-stopped
     env_file:
       - stack.env
