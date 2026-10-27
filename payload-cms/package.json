@@ -80,7 +80,7 @@
     "eslint-config-next": "16.4.3",
     "jsdom": "28.1.0",
     "mongodb-memory-server": "10.4.3",
-    "postcss": "^8.4.38",
+    "postcss": "^8.5.32",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.3.3",
     "tsx": "4.22.4",
