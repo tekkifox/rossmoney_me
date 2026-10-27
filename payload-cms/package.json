@@ -78,7 +78,7 @@
     "autoprefixer": "^10.6.2",
     "eslint": "^9.16.0",
     "eslint-config-next": "16.4.3",
-    "jsdom": "28.0.0",
+    "jsdom": "28.1.0",
     "mongodb-memory-server": "10.4.3",
     "postcss": "^8.4.38",
     "prettier": "^3.4.2",
