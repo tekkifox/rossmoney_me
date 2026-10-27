@@ -1,7 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "timezone": "Europe/London",
-  "schedule": ["before 6am on monday"],
   "dependencyDashboard": true,
   "semanticCommits": "enabled",
   "rangeStrategy": "bump",
@@ -12,7 +11,6 @@
   "automerge": false,
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 6am on monday"],
     "automerge": false
   },
   "vulnerabilityAlerts": {
