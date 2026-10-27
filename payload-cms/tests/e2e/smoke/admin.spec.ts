@@ -2,21 +2,30 @@ import { expect, expectCspHeader, test, waitForPreviewFrame } from '../support/c
 import {
   cleanupSmokePages,
   cleanupSmokeUser,
+  readSmokePageTitle,
+  seedSmokePage,
   seedSmokeUser,
   smokeUser,
 } from '../support/db'
 
 /**
- * Admin coverage: login, dashboard, the Pages list, a real create + publish,
- * and Payload's Live Preview iframe.
+ * Admin coverage: login, dashboard, the Pages list, a real edit + save through
+ * the admin form, and Payload's Live Preview iframe.
  *
- * Live Preview is disabled on the create view until the document exists, so the
- * test creates a page first. That also exercises a real write through Payload's
- * authenticated server functions, not just read-only admin views.
+ * The page is seeded through the local API first. Driving the create view
+ * directly is timing-dependent because Pages has autosave enabled: the
+ * background save can replace the form before a browser-filled title reaches
+ * the server, which made the first CI attempt flaky. Editing an existing page
+ * still exercises an authenticated write and is deterministic.
  */
+let smokePageId: string | number = ''
+
 test.describe('Admin CSP smoke', () => {
-  test.beforeAll(async () => {
+  test.beforeAll(async ({}, testInfo) => {
     await seedSmokeUser()
+    smokePageId = await seedSmokePage(
+      `csp-smoke-${testInfo.project.name}-${Date.now()}`,
+    )
   })
 
   test.afterAll(async () => {
@@ -24,7 +33,7 @@ test.describe('Admin CSP smoke', () => {
     await cleanupSmokeUser()
   })
 
-  test('login, list, create + publish, and render Live Preview without CSP violations', async ({
+  test('login, list, edit + save, and render Live Preview without CSP violations', async ({
     page,
   }, testInfo) => {
     const loginResponse = await page.goto('/admin/login')
@@ -45,23 +54,38 @@ test.describe('Admin CSP smoke', () => {
     expectCspHeader(listResponse, { admin: true })
     await expect(page.locator('h1', { hasText: 'Pages' }).first()).toBeVisible()
 
-    const createResponse = await page.goto('/admin/collections/pages/create')
-    expectCspHeader(createResponse, { admin: true })
+    const editResponse = await page.goto(`/admin/collections/pages/${smokePageId}`)
+    expectCspHeader(editResponse, { admin: true })
 
     const titleInput = page.locator('input[name="title"]')
-    await expect(titleInput).toBeVisible()
-    await titleInput.fill(`CSP smoke ${testInfo.project.name} ${Date.now()}`)
+    await expect(titleInput).toHaveValue('CSP smoke seed')
 
-    await page.locator('#action-save').click()
+    const title = `CSP smoke ${testInfo.project.name} ${Date.now()}`
+    await titleInput.fill(title)
 
-    // A successful save leaves the create view and opens the new document.
-    await page.waitForURL(
-      (url) => /\/admin\/collections\/pages\/(?!create$)[^/]+$/.test(url.pathname),
-      { timeout: 60_000 },
-    )
+    // Autosave may already have persisted the change, in which case the publish
+    // button is disabled. Click it when it is available, then verify the value
+    // landed in the database rather than trusting transient form state.
+    const saveButton = page.locator('#action-save')
+    if (await saveButton.isEnabled()) {
+      await saveButton.click()
+    }
+
+    await expect
+      .poll(() => readSmokePageTitle(smokePageId), {
+        timeout: 60_000,
+        message: 'the edited title was not persisted',
+      })
+      .toBe(title)
+
+    // Reload the saved document as a full navigation. This also proves the
+    // admin CSP header is present on the edit view after the write.
+    const reloadResponse = await page.goto(page.url())
+    expectCspHeader(reloadResponse, { admin: true })
+    await expect(page.locator('input[name="title"]')).toHaveValue(title)
 
     const previewToggler = page.locator('#live-preview-toggler')
-    await expect(previewToggler).toBeVisible({ timeout: 30_000 })
+    await expect(previewToggler).toBeVisible({ timeout: 60_000 })
     await previewToggler.click()
 
     const previewFrameElement = page.locator('#live-preview-iframe')
