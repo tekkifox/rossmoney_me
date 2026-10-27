@@ -87,7 +87,7 @@ importers:
         specifier: 0.563.0
         version: 0.563.0(react@19.2.6)
       mammoth:
-        specifier: ^1.4.20
+        specifier: ^1.13.0
         version: 1.13.0
       mongodb:
         specifier: 6.20.0
