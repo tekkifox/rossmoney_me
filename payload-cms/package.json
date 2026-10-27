@@ -76,7 +76,7 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "4.7.0",
     "autoprefixer": "^10.6.2",
-    "eslint": "^9.39.5",
+    "eslint": "^10.13.0",
     "eslint-config-next": "16.4.3",
     "jsdom": "28.1.0",
     "mongodb-memory-server": "10.4.3",
