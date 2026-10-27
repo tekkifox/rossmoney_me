@@ -5,7 +5,8 @@ import { defaultTheme, themeLocalStorageKey } from '../ThemeSelector/types'
 
 export const InitTheme: React.FC = () => {
   return (
-    // eslint-disable-next-line @next/next/no-before-interactive-script-outside-document
+    // App Router root layout is the documented place for a beforeInteractive
+    // script; the rule's pages/_document.html advice does not apply here.
     <Script
       dangerouslySetInnerHTML={{
         __html: `

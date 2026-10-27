@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "eslint",
+    "typescript",
+    "unicorn",
+    "oxc",
+    "react",
+    "nextjs",
+    "import",
+    "promise",
+    "vitest",
+    "jsx-a11y"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "ignoreRestSiblings": false,
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "destructuredArrayIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^(_|ignore)"
+      }
+    ],
+    "typescript/no-explicit-any": "warn",
+    "typescript/ban-ts-comment": "warn",
+    "typescript/no-empty-object-type": "warn",
+    // The rule only knows about pages/_document. This app uses the App Router,
+    // where the root layout is the documented place for beforeInteractive scripts.
+    "nextjs/no-before-interactive-script-outside-document": "off"
+  },
+  "ignorePatterns": [
+    ".next/**",
+    "src/payload-types.ts",
+    "src/payload-generated-schema.ts",
+    "next-env.d.ts"
+  ]
+}

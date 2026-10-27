@@ -23,7 +23,9 @@ export const OG_INPUT_LIMITS = {
  * characters that can be used to visually spoof a rendered card. Whitespace is
  * kept, then outer whitespace is trimmed.
  */
-const CONTROL_AND_FORMATTING = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
+const CONTROL_AND_FORMATTING =
+  // oxlint-disable-next-line no-control-regex -- Deliberately matches control/formatting characters so they can be stripped from OG text.
+  /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g
 
 export function sanitizeOgText(value: string, maxLength: number): string {
   const cleaned = value.replace(CONTROL_AND_FORMATTING, '').trim()
