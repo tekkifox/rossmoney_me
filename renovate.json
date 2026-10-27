@@ -32,6 +32,12 @@
       "automerge": false
     },
     {
+      "groupName": "toolchain",
+      "matchPackageNames": ["node", "pnpm", "corepack", "mongo"],
+      "matchDatasources": ["docker", "npm"],
+      "automerge": false
+    },
+    {
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "labels": ["dependencies", "major"]

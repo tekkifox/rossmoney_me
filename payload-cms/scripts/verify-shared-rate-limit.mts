@@ -1,7 +1,7 @@
 /**
  * Proves that two independent Node processes share one rate-limit budget.
  *
- *   corepack pnpm@10.11.0 verify:rate-limit
+ *   corepack pnpm@12.15.0 verify:rate-limit
  *
  * The parent starts a disposable MongoDB and then runs this file twice as a
  * child process, so each run has its own module graph, MongoClient and

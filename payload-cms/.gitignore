@@ -20,3 +20,6 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# TypeScript incremental build state is machine-specific and must not be committed.
+tsconfig.tsbuildinfo

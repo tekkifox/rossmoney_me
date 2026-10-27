@@ -1,0 +1,22 @@
+# pnpm 12 reads dependency-resolution and supply-chain settings only from this
+# file; .npmrc is limited to auth, registry, TLS, proxy and local-address.
+#
+# `minimumReleaseAge` is pnpm 12's cooling-off window, in minutes, before a
+# published version may be installed. The default of 1440 (24h) rejects the
+# committed lockfile: Renovate merged three majors the day they were published
+# (autoprefixer@10.6.2, lucide-react@1.62.0, postcss@8.5.32), so CI fails with
+# ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION. 720 (12h) keeps a real cooling-off
+# period against freshly hijacked or typo-squatted releases while still
+# allowing same-day majors that have been reviewed and merged here. This is an
+# explicit relaxation, not a disable: releases younger than 12h are still
+# refused.
+minimumReleaseAge: 720
+
+# pnpm 12 no longer reads `pnpm.onlyBuiltDependencies` from package.json, and
+# refuses to run dependency build scripts unless they are allowed here. These
+# are the same packages that were allow-listed before the upgrade.
+allowBuilds:
+  esbuild: true
+  mongodb-memory-server: true
+  sharp: true
+  unrs-resolver: true
