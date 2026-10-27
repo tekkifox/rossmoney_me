@@ -164,11 +164,11 @@ exports a Playwright fixture that installs a `securitypolicyviolation` listener
 at document start in every frame (including Payload's Live Preview iframe) and
 fails the test at teardown with the directive, blocked URI and source file.
 `tests/e2e/smoke/` covers the public routes (`/`, `/cv`, `/contact`,
-`/travelling`, `/game-servers`), admin login/dashboard/list, a real page create
-and publish, Live Preview rendering, and the production scoping rule (no Vercel
-Toolbar sources on public pages, no public `style-src-elem 'unsafe-inline'`;
-the admin `https://vercel.com` Blob API source stays confined to `connect-src`).
-Chromium and Firefox both run it.
+`/travelling`, `/game-servers`), admin login/dashboard/list, a real page edit
+and save through the admin form, Live Preview rendering, and the production
+scoping rule (no Vercel Toolbar sources on public pages, no public
+`style-src-elem 'unsafe-inline'`; the admin `https://vercel.com` Blob API source
+stays confined to `connect-src`). Chromium and Firefox both run it.
 
 The suite must target `next start`, not `next dev`: the proxy deliberately omits
 the policy in development, and the header assertion fails if it is missing.
