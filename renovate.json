@@ -4,6 +4,8 @@
   "dependencyDashboard": true,
   "semanticCommits": "enabled",
   "rangeStrategy": "bump",
+  "minimumReleaseAge": "12 hours",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
   "rebaseWhen": "conflicted",
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,

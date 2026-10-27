@@ -30,11 +30,54 @@ control.
 | Rebase policy                                    | `rebaseWhen: "conflicted"`                                                                                                               |
 | No automerge, especially majors                  | `automerge: false` globally and in every group; the major rule repeats it                                                                |
 | Vulnerability PRs                                | `vulnerabilityAlerts.enabled: true` with `schedule: ["at any time"]`, so security fixes never wait                                       |
+| Renovate honours pnpm's cooling-off              | `minimumReleaseAge: "12 hours"` (plus Renovate's default 30-minute buffer) and `minimumReleaseAgeBehaviour: "timestamp-optional"`          |
 
 `separateMajorMinor: false` is deliberate in both groups. Renovate otherwise
 splits major from minor updates even inside a group, which is exactly the split
 Payload minor we do not want. Major PRs still cannot merge without a human
 because automerge is off.
+
+### Why Renovate waits for the pnpm cooling-off window
+
+`minimumReleaseAge: 720` in `payload-cms/pnpm-workspace.yaml` is a pnpm policy,
+so pnpm enforces it inside the step where Renovate regenerates the lockfile.
+Renovate's npm manager runs
+
+```bash
+pnpm install --lockfile-only --ignore-scripts --ignore-pnpmfile --no-frozen-lockfile
+```
+
+in `payload-cms` after rewriting `package.json`. If the PR is for a release
+published minutes ago, that command refuses to resolve it
+(`ERR_PNPM_NO_MATURE_MATCHING_VERSION`) or refuses the lockfile entries it
+would need (`ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`). Renovate then reports
+**Artifact file update failure**, leaves `pnpm-lock.yaml` untouched, and the PR
+arrives with only `package.json` changed — so its `install --frozen-lockfile`
+check is red from the first second.
+
+Renovate has its own lookup-time `minimumReleaseAge`, which is a different
+mechanism: it decides whether an update is raised at all. Setting it to the same
+12 hours means Renovate simply does not open the PR until the release is old
+enough for pnpm to accept it. With the default `internalChecksFilter: strict`
+nothing is opened early — the update sits on the Dependency Dashboard until it
+matures, and only then is a branch created and its lockfile generated.
+
+Two details make that safe:
+
+- `minimumReleaseAgeBehaviour: "timestamp-optional"`. The window applies to
+  every datasource, and GitHub Actions (`github-tags`) and some container images
+  publish no release timestamp. The default `timestamp-required` would mark
+  those updates as pending forever. npm publishes a timestamp for every release,
+  so the npm cooling-off is still enforced in full, and Renovate still adds its
+  default 30-minute `minimumReleaseAgeBuffer` on top of the 12 hours.
+- `vulnerabilityAlerts` keeps Renovate's default `minimumReleaseAge: null`, so
+  security PRs are not delayed by this setting.
+
+The 720 in `pnpm-workspace.yaml` and the 12 hours in `renovate.json` are one
+policy expressed twice. If the pnpm window changes, change both, or the artifact
+step starts failing again. The visible consequence to expect: a release
+published an hour ago cannot become a green PR today — it becomes a PR once it
+has matured.
 
 ### Why there is no calendar window
 
@@ -80,6 +123,14 @@ That is expected, not corruption. pnpm 10 fails on it with
 `ERR_PNPM_BROKEN_LOCKFILE` because it cannot read the preamble — a version
 mismatch, not a damaged file.
 
+Renovate does not bundle a pnpm of its own. For the artifact step it derives the
+version from `payload-cms/package.json` `packageManager` (debug log: `Found pnpm
+constraint in package.json packageManager: 12.15.0`) and installs exactly that
+version, so the lockfile writer always matches the lockfile the repo commits.
+There is deliberately no second pin in `renovate.json` to drift out of date;
+`packageManager` stays the single source of truth, and the `toolchain` group
+already reviews changes to it.
+
 pnpm 12 also moved settings out of `.npmrc`: only auth, registry, TLS, proxy
 and local-address settings are read from there. Dependency and supply-chain
 settings live in `payload-cms/pnpm-workspace.yaml`:
@@ -88,7 +139,10 @@ settings live in `payload-cms/pnpm-workspace.yaml`:
   is 24h, which rejects the committed lockfile because Renovate merged
   `autoprefixer`, `lucide-react` and `postcss` majors on their publication day.
   12h still refuses releases younger than 12h; it is a relaxation, not a
-  disable.
+  disable. pnpm applies it twice: when resolving a new version, and when
+  verifying the entries already in the lockfile. `renovate.json` matches the
+  window with `minimumReleaseAge: "12 hours"` so Renovate never proposes a
+  version pnpm will refuse — see the cooling-off section above.
 - `allowBuilds` — replaces `pnpm.onlyBuiltDependencies` in `package.json`, which
   pnpm 12 ignores. Without it `install` fails with `ERR_PNPM_IGNORED_BUILDS`.
 
@@ -245,3 +299,16 @@ date.
   Dashboard issue** is the signal that Renovate has processed the repo. Branch
   protection and the first update PR remain unverified here.
 - No dependency version is changed by this tooling.
+- The cooling-off coupling above was verified by reproduction, not assumption:
+  Renovate 44.190.0 was run against this repo in `--dry-run=full`, and the
+  artifact step was then reproduced by hand with `corepack pnpm@12.15.0` in
+  copies of `payload-cms`. Bumping `payload` to a 5-hour-old release failed with
+  the same policy error Renovate posts on the PR. The `lockFileMaintenance`
+  case — delete `pnpm-lock.yaml`, run the same command under the real
+  720-minute policy — rewrote the lockfile from scratch (two documents,
+  `packageManagerDependencies: 12.15.0` intact) and the CI command
+  `corepack pnpm@12.15.0 install --frozen-lockfile --prefer-offline` then
+  passed.
+- Not verified here: the exact Renovate version the hosted app runs, that it
+  accepts `minimumReleaseAgeBehaviour`, and the next real artifact update. The
+  first dependency PR Renovate opens after this lands is the check.
