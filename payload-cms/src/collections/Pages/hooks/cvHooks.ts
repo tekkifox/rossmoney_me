@@ -25,19 +25,15 @@ function mediaFilename(media: Media): string {
 
 // Validate that the selected media is a .docx file
 export const validateCVFile: CollectionBeforeChangeHook<Page> = async ({ req, data }) => {
-  try {
-    const id = cvMediaID(data?.cvFile)
-    if (!id) return
+  const id = cvMediaID(data?.cvFile)
+  if (!id) return
 
-    const media = await req.payload.findByID({ collection: 'media', id, depth: 0, req, disableErrors: true })
-    if (!media) return
+  const media = await req.payload.findByID({ collection: 'media', id, depth: 0, req, disableErrors: true })
+  if (!media) return
 
-    const filename = mediaFilename(media)
-    if (!filename.toLowerCase().endsWith('.docx')) {
-      throw new Error('CV file must be a .docx file')
-    }
-  } catch (e) {
-    throw e
+  const filename = mediaFilename(media)
+  if (!filename.toLowerCase().endsWith('.docx')) {
+    throw new Error('CV file must be a .docx file')
   }
 }
 

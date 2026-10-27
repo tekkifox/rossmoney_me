@@ -18,10 +18,12 @@ afterEach(() => {
 
 const mockFetch = () => {
   const calls: Array<[string, RequestInit]> = []
-  const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
-    calls.push([url, init])
-    return Response.json({ ok: true }, { status: 202 })
-  })
+  const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(
+    async (url, init) => {
+      calls.push([url, init])
+      return Response.json({ ok: true }, { status: 202 })
+    },
+  )
   vi.stubGlobal('fetch', fetchMock)
   return { calls, fetchMock }
 }
@@ -103,7 +105,7 @@ describe('client error reporting', () => {
   })
 
   it('removes its listeners and never throws when the endpoint is down', async () => {
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn<() => Promise<never>>(async () => {
       throw new Error('network down')
     })
     vi.stubGlobal('fetch', fetchMock)
