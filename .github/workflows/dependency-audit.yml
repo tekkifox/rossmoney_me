@@ -26,15 +26,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "24.22.1"
+          node-version: "26.12.1"
 
+      # Node 26 no longer bundles corepack; install it explicitly, pinned.
+      # The pnpm version comes from `packageManager` in package.json.
       - name: Enable corepack
-        run: corepack enable
+        run: npm i -g corepack@0.36.0 && corepack enable
 
       - name: Install dependencies
         working-directory: payload-cms
-        run: corepack pnpm@10.11.0 install --frozen-lockfile --prefer-offline
+        run: corepack pnpm@12.15.0 install --frozen-lockfile --prefer-offline
 
       - name: Audit production dependencies
         working-directory: payload-cms
-        run: corepack pnpm@10.11.0 run audit:prod
+        run: corepack pnpm@12.15.0 run audit:prod

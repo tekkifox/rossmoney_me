@@ -240,8 +240,27 @@ function collectAdvisories(report) {
   return advisories
 }
 
+function resolvePnpmSpecifier(directory) {
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8'))
+  } catch (error) {
+    fail(`Could not read package.json in ${directory}: ${error.message}`)
+  }
+
+  const specifier = manifest.packageManager
+  if (typeof specifier !== 'string' || !specifier.startsWith('pnpm@')) {
+    fail(
+      'package.json must declare packageManager as "pnpm@<version>"; ' +
+        'the audit runs the same pnpm version as installs.',
+    )
+  }
+
+  return specifier
+}
+
 function runAudit(directory) {
-  const args = ['pnpm@10.11.0', 'audit', '--prod', '--audit-level', 'high', '--json']
+  const args = [resolvePnpmSpecifier(directory), 'audit', '--prod', '--audit-level', 'high', '--json']
   console.log(`Running: corepack ${args.join(' ')}`)
   console.log(`Directory: ${directory}`)
 

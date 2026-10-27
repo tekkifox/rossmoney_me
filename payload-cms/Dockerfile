@@ -1,7 +1,12 @@
 # To use this Dockerfile, you have to set `output: 'standalone'` in your next.config.js file.
 # From https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
 
-FROM node:22.17.0-alpine AS base
+FROM node:26.12.1-alpine AS base
+
+# Node 26 no longer bundles corepack, so install it from npm at a pinned version
+# before it is used. The pnpm version itself comes from `packageManager` in
+# package.json; corepack reads that, so it must not be pinned here.
+RUN npm i -g corepack@0.36.0 && corepack enable pnpm
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -9,8 +14,10 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies with pnpm
-COPY package.json pnpm-lock.yaml ./
+# Install dependencies with pnpm. pnpm-workspace.yaml carries the pnpm 12
+# supply-chain settings (minimumReleaseAge, allowBuilds); without it the
+# frozen install fails.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable pnpm && pnpm i --frozen-lockfile
 
 

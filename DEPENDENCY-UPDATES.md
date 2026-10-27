@@ -23,6 +23,7 @@ control.
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `@payloadcms/*` and `payload` update in one PR   | `packageRules` group `Payload`, `separateMajorMinor: false`                                                                              |
 | `next` and `eslint-config-next` stay in lockstep | `packageRules` group `Next.js`, `separateMajorMinor: false`                                                                              |
+| Toolchain versions are reviewed together          | `packageRules` group `toolchain`: `node`, `pnpm`, `corepack`, `mongo` (docker + npm datasources), `automerge: false`                     |
 | pnpm lockfile is updated                         | Renovate's npm/pnpm manager updates `payload-cms/pnpm-lock.yaml` in the same PR; `lockFileMaintenance` also opens lockfile-only PRs      |
 | No calendar window (deliberate)                  | No `schedule` at the top level or on `lockFileMaintenance`; `timezone: "Europe/London"` still sets the zone for anything scheduled later |
 | Throttle is concurrency, not the calendar        | `prConcurrentLimit: 3`, `prHourlyLimit: 2` — these cap the PR flood, so updates can be raised on any day                                 |
@@ -65,6 +66,32 @@ compensate for it. The first run can take a while after installation; the
 **Dependency Dashboard issue** is the signal that Renovate has processed this
 repo. Until that issue exists, nothing is being updated yet.
 
+## pnpm 12 and Node 26
+
+`packageManager` in `payload-cms/package.json` (`pnpm@12.15.0`) is the single
+source of truth for the pnpm version. Nothing hardcodes `pnpm@x` in CI or the
+Dockerfile; Node 26 no longer bundles corepack, so both install corepack from
+npm at a pinned version (`corepack@0.36.0`) and let corepack read
+`packageManager`.
+
+`payload-cms/pnpm-lock.yaml` is a pnpm 12 lockfile: two YAML documents, the
+first a preamble carrying `packageManagerDependencies`, then the main document.
+That is expected, not corruption. pnpm 10 fails on it with
+`ERR_PNPM_BROKEN_LOCKFILE` because it cannot read the preamble — a version
+mismatch, not a damaged file.
+
+pnpm 12 also moved settings out of `.npmrc`: only auth, registry, TLS, proxy
+and local-address settings are read from there. Dependency and supply-chain
+settings live in `payload-cms/pnpm-workspace.yaml`:
+
+- `minimumReleaseAge: 720` — an explicit 12h cooling-off window. pnpm's default
+  is 24h, which rejects the committed lockfile because Renovate merged
+  `autoprefixer`, `lucide-react` and `postcss` majors on their publication day.
+  12h still refuses releases younger than 12h; it is a relaxation, not a
+  disable.
+- `allowBuilds` — replaces `pnpm.onlyBuiltDependencies` in `package.json`, which
+  pnpm 12 ignores. Without it `install` fails with `ERR_PNPM_IGNORED_BUILDS`.
+
 ## Audit gate
 
 Workflow: [`.github/workflows/dependency-audit.yml`](./.github/workflows/dependency-audit.yml).
@@ -72,26 +99,27 @@ Script: [`payload-cms/scripts/audit-production.mjs`](./payload-cms/scripts/audit
 
 The workflow runs on every `pull_request`, on a weekly schedule
 (`0 6 * * 1`, Mondays 06:00 UTC), and on `workflow_dispatch`. It installs with
-`corepack pnpm@10.11.0`, then runs:
+`corepack pnpm@12.15.0`, then runs:
 
 ```bash
 cd payload-cms
-corepack pnpm@10.11.0 run audit:prod
+corepack pnpm@12.15.0 run audit:prod
 ```
 
 `audit:prod` calls:
 
 ```bash
-corepack pnpm@10.11.0 audit --prod --audit-level high --json
+corepack pnpm@12.15.0 audit --prod --audit-level high --json
 ```
 
 and then filters the JSON to `high` and `critical` advisories in production
 dependencies. Anything left after applying `.github/audit-allowlist.json`
 fails the job.
 
-### Verified pnpm 10.11.0 behaviour
+### Verified `pnpm audit` behaviour
 
-These checks were run locally with the pinned `corepack pnpm@10.11.0`:
+These checks were run locally with the then-pinned `corepack pnpm@10.11.0` and
+re-confirmed with the current `corepack pnpm@12.15.0`:
 
 - A scratch project with `lodash@4.17.15` as a production dependency:
   `pnpm audit --prod --audit-level high` exited `1`; the same audit with
@@ -103,7 +131,7 @@ These checks were run locally with the pinned `corepack pnpm@10.11.0`:
 - The current tree exits `1` from
   `pnpm audit --prod --audit-level high` because of the seven high/critical
   production advisories listed below.
-- pnpm 10.11.0 still prints lower-severity advisories, and includes them in the
+- pnpm still prints lower-severity advisories, and includes them in the
   JSON report, even when `--audit-level high` is set. That is why the gate does
   not rely on the flag for filtering: it filters the JSON itself, and uses the
   flag only so the standalone command has the expected exit behaviour.
@@ -178,8 +206,8 @@ cannot silently bypass the gate.
 
 ```bash
 cd payload-cms
-corepack pnpm@10.11.0 install --frozen-lockfile --prefer-offline
-corepack pnpm@10.11.0 run audit:prod
+corepack pnpm@12.15.0 install --frozen-lockfile --prefer-offline
+corepack pnpm@12.15.0 run audit:prod
 ```
 
 Validate the Renovate config against the published schema before changing it —
