@@ -38,7 +38,7 @@ jobs:
           pnpm generate:sitemap
 
       - name: Upload sitemap artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sitemap-files
           path: |
