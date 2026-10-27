@@ -23,7 +23,7 @@ jobs:
           node-version: '20.20.2'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v6
         with:
           version: 9.15.9
 
