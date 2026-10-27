@@ -4,7 +4,7 @@ import config from '@/payload.config'
 import { describe, it, beforeAll, afterAll, expect, vi } from 'vitest'
 
 vi.mock('@/utilities/verifyRecaptcha', () => ({
-  verifyRecaptchaToken: vi.fn(async () => true),
+  verifyRecaptchaToken: vi.fn<() => Promise<boolean>>(async () => true),
 }))
 
 import { contactForm as contactFormData } from '@/endpoints/seed/contact-form'
@@ -233,6 +233,6 @@ describe('Contact form', () => {
         depth: 0,
         overrideAccess: false,
       }),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/form/i)
   })
 })

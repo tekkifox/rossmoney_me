@@ -23,6 +23,7 @@ const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className,
 
 const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({ className, ...props }) => {
   return (
+    // oxlint-disable-next-line jsx-a11y/heading-has-content -- Slot component: callers supply the heading text via children.
     <h3
       data-slot="card-title"
       className={cn('text-2xl leading-none font-semibold tracking-tight', className)}

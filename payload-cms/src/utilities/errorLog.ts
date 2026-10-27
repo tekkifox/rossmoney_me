@@ -98,7 +98,9 @@ const INTERNAL_HOST = new RegExp(
   `\\b(?:${INTERNAL_HOSTS.join('|')}|localhost)(?::\\d{2,5})?\\b`,
   'g',
 )
-const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g
+const CONTROL_CHARACTERS =
+  // oxlint-disable-next-line no-control-regex -- Deliberately matches control characters so they can be stripped from logs.
+  /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g
 
 const asString = (value: unknown): string => {
   if (typeof value === 'string') {

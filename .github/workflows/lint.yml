@@ -1,0 +1,49 @@
+name: Lint
+
+on:
+  pull_request:
+    paths:
+      - 'payload-cms/**'
+      - '.github/workflows/lint.yml'
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'payload-cms/**'
+      - '.github/workflows/lint.yml'
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  oxlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "26.12.1"
+
+      # Node 26 no longer bundles corepack; install it explicitly, pinned.
+      # The pnpm version comes from `packageManager` in package.json.
+      - name: Enable Corepack
+        run: npm i -g corepack@0.36.0 && corepack enable
+
+      - name: Install dependencies (payload-cms)
+        run: corepack pnpm@12.15.0 --dir payload-cms install --frozen-lockfile --prefer-offline
+
+      - name: Run oxlint
+        run: corepack pnpm@12.15.0 --dir payload-cms lint
