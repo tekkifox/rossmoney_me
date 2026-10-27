@@ -22,7 +22,7 @@ services:
       - mongo
 
   mongo:
-    image: mongo:7
+    image: mongo:9
     restart: unless-stopped
     networks:
       - rossmoney-stack
