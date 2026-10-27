@@ -21,6 +21,9 @@ import {
 let smokePageId: string | number = ''
 
 test.describe('Admin CSP smoke', () => {
+  // Playwright requires this first argument to be destructured even though the
+  // hook uses no fixtures.
+  // oxlint-disable-next-line no-empty-pattern -- Playwright API, see above.
   test.beforeAll(async ({}, testInfo) => {
     await seedSmokeUser()
     smokePageId = await seedSmokePage(

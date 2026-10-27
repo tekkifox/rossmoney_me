@@ -31,8 +31,10 @@ describe('reCAPTCHA configuration', () => {
   })
 
   it('uses the runtime site key to request a contact-form token', async () => {
-    const execute = vi.fn(async () => 'verified-token')
-    const fetchMock = vi.fn(async () => Response.json({ siteKey: 'runtime-site-key' }))
+    const execute = vi.fn<() => Promise<string>>(async () => 'verified-token')
+    const fetchMock = vi.fn<() => Promise<Response>>(async () =>
+      Response.json({ siteKey: 'runtime-site-key' }),
+    )
     vi.stubGlobal('fetch', fetchMock)
     const appendScript = vi.spyOn(document.head, 'appendChild').mockImplementation((node) => {
       if (node instanceof HTMLScriptElement) {

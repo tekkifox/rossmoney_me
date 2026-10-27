@@ -11,7 +11,7 @@ Config: [`renovate.json`](./renovate.json).
 
 Renovate is used instead of Dependabot because this repo needs one update PR
 across the thirteen `@payloadcms/*` packages plus `payload` itself, a separate
-lockstep PR for `next` and `eslint-config-next`, and pnpm lockfile maintenance.
+PR for `next`, and pnpm lockfile maintenance.
 Renovate expresses all of that in `packageRules` and keeps the lockfile in the
 same PR as the manifest change. Dependabot can group updates, but it groups
 within its own rules and does not give the same lockfile-only maintenance
@@ -22,7 +22,7 @@ control.
 | Rule                                             | Config                                                                                                                                   |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `@payloadcms/*` and `payload` update in one PR   | `packageRules` group `Payload`, `separateMajorMinor: false`                                                                              |
-| `next` and `eslint-config-next` stay in lockstep | `packageRules` group `Next.js`, `separateMajorMinor: false`                                                                              |
+| `next` updates in its own PR                     | `packageRules` group `Next.js`, `separateMajorMinor: false`                                                                              |
 | Toolchain versions are reviewed together          | `packageRules` group `toolchain`: `node`, `pnpm`, `corepack`, `mongo` (docker + npm datasources), `automerge: false`                     |
 | pnpm lockfile is updated                         | Renovate's npm/pnpm manager updates `payload-cms/pnpm-lock.yaml` in the same PR; `lockFileMaintenance` also opens lockfile-only PRs      |
 | No calendar window (deliberate)                  | No `schedule` at the top level or on `lockFileMaintenance`; `timezone: "Europe/London"` still sets the zone for anything scheduled later |

@@ -17,6 +17,10 @@ pnpm --dir payload-cms lint:tokens
 ```
 
 - `test:int` starts a disposable MongoDB when no `MONGODB_URI` is configured.
+- `lint` is [oxlint](https://oxc.rs/), configured by `payload-cms/.oxlintrc.json`
+  (correctness rules plus react, react-hooks, nextjs, import, promise, vitest
+  and jsx-a11y). `lint:fix` applies its safe fixes. ESLint is gone: its
+  TypeScript parser cannot load TypeScript 7.
 - `test:e2e` needs a running app on `http://localhost:3000` and a database; it
   is not part of `test:int`.
 - The build uses Payload's no-op database adapter during the production build,

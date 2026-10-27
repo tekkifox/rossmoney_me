@@ -7,7 +7,6 @@ const SITE_URL =
 module.exports = {
   siteUrl: SITE_URL,
   generateRobotsTxt: true,
-  exclude: ['/posts-sitemap.xml', '/pages-sitemap.xml', '/*', '/posts/*'],
   exclude: ['/pages-sitemap.xml', '/*', '/posts/*'],
   robotsTxtOptions: {
     // Default policy for all crawlers: block admin and API endpoints, allow public media
