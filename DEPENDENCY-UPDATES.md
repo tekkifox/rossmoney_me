@@ -183,7 +183,7 @@ re-confirmed with the current `corepack pnpm@12.15.0`:
   `pnpm audit --prod --audit-level high` exited `0`; the same audit without
   `--prod` exited `1`. `--prod` excludes devDependencies.
 - The current tree exits `1` from
-  `pnpm audit --prod --audit-level high` because of the seven high/critical
+  `pnpm audit --prod --audit-level high` because of the nine high/critical
   production advisories listed below.
 - pnpm still prints lower-severity advisories, and includes them in the
   JSON report, even when `--audit-level high` is set. That is why the gate does
@@ -206,7 +206,9 @@ entry is one advisory, one package, a reason, and a review date.
 | `GHSA-rfgv-xxqx-mfg5` | `undici`        | high     | 2026-11-30 | Transitive via `payload@3.90.2`; resolved 7.29.0, fixed in 7.29.1                                                                       |
 | `GHSA-w293-vg96-wgc3` | `undici`        | high     | 2026-11-30 | Same `payload` path; fixed in 7.29.1                                                                                                    |
 | `GHSA-xjj6-f33q-929c` | `undici`        | high     | 2026-11-30 | Same `payload` path; fixed in 7.30.1                                                                                                    |
-| `GHSA-834v-8h66-3h79` | `happy-dom`     | high     | 2026-11-30 | Transitive via `@payloadcms/richtext-lexical > @lexical/headless`; resolved 20.14.5, fixed in 21.0.4                                    |
+| `GHSA-834v-8h66-3h79` | `happy-dom`     | high     | 2026-11-30 | Transitive via `@payloadcms/richtext-lexical > @lexical/headless`; resolved 20.14.6, fixed in 21.0.4                                    |
+| `GHSA-c8p4-j97h-3vg8` | `happy-dom`     | high     | 2026-11-30 | Same path; `@lexical/headless` allows `^20.9.0` only, fix needs a Lexical major (21.x)                                                  |
+| `GHSA-x8rm-f576-gq67` | `graphql-scalars` | high   | 2026-11-30 | `@payloadcms/graphql` pins 1.22.2 exactly; fix needs 2.0.1, a major bump Payload 3.92 is not tested against                            |
 | `GHSA-68fv-2mgg-jv7q` | `source-map-js` | high     | 2026-11-30 | Transitive via `@payloadcms/next > sass`; resolved 1.2.1, fixed in 1.2.2                                                                |
 
 `fast-uri` also has open advisories today, but they are moderate/low only
