@@ -178,10 +178,10 @@ export function RenderLayout({ page }: { page: PageDoc }) {
 
 import Head from 'next/head'
 
-export function PageMeta({ page }: { page: PageDoc }) {
+export function PageMeta({ page, architectureApi }: { page: PageDoc; architectureApi?: string }) {
   const data = readPageData(page)
   const archview = page.archviewUrl || readString(data.archviewUrl) || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
-  const api = browserArchitectureApi(archview)
+  const api = architectureApi || browserArchitectureApi(archview)
   return (
     <Head>
       <meta name="architecture-api" content={api} />

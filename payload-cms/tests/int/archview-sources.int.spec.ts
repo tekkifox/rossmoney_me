@@ -12,7 +12,9 @@ import {
   clearArchviewTokenCache,
   type ArchviewSourceCredentials,
 } from '@/utilities/archviewAuth'
-import { findEnabledArchviewSource } from '@/utilities/archviewSources'
+import { findEnabledArchviewSource, findEnabledArchviewSourceRecord } from '@/utilities/archviewSources'
+import { resolvePageArchviewSource } from '@/utilities/archviewPageSource'
+import { seedArchviewSources } from '@/endpoints/seed/archview-sources'
 import {
   decryptArchviewSecret,
   encryptArchviewSecret,
@@ -215,6 +217,214 @@ describe('ArchView sources collection', () => {
       }),
     ).resolves.toBeNull()
   })
+
+  it('keeps at most one default row', async () => {
+    const first = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('default-first', { isDefault: true }),
+      overrideAccess: true,
+    })
+    const second = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('default-second', { isDefault: true }),
+      overrideAccess: true,
+    })
+
+    const defaults = await payload.find({
+      collection: 'archview-sources',
+      overrideAccess: true,
+      where: { isDefault: { equals: true } },
+    })
+
+    expect(defaults.docs).toHaveLength(1)
+    expect(defaults.docs[0].id).toBe(second.id)
+    expect(defaults.docs[0].id).not.toBe(first.id)
+  })
+
+  it('resolves the default row when no source is requested', async () => {
+    const data = sourceData('default-request', { isDefault: true })
+    await payload.create({
+      collection: 'archview-sources',
+      data,
+      overrideAccess: true,
+    })
+    const env = { ARCHVIEW_URL: 'https://bootstrap.example.test' }
+
+    await expect(
+      resolveArchviewRequestSource(null, {
+        env,
+        lookupDefaultSource: () => Promise.resolve({ origin: data.origin }),
+      }),
+    ).resolves.toEqual({ origin: data.origin })
+
+    await expect(
+      resolveArchviewRequestSource('', {
+        env,
+        lookupDefaultSource: () => Promise.resolve(null),
+      }),
+    ).resolves.toBeNull()
+  })
+
+  it('resolves the page source by relation, legacy URL, default, then environment', async () => {
+    const relation = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('relation'),
+      overrideAccess: true,
+    })
+    const fallback = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('fallback-default', { isDefault: true }),
+      overrideAccess: true,
+    })
+    const env = { ARCHVIEW_URL: 'https://bootstrap.example.test' }
+    const legacy = 'https://legacy.example.test'
+
+    await expect(
+      resolvePageArchviewSource(
+        { archviewSource: relation.id, archviewUrl: legacy, data: {} },
+        null,
+        { env, payload },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'relation',
+      origin: relation.origin,
+      credentials: { origin: relation.origin, clientId: relation.clientId },
+    })
+
+    await expect(
+      resolvePageArchviewSource({ archviewUrl: legacy, data: {} }, null, {
+        env,
+        payload,
+      }),
+    ).resolves.toMatchObject({ kind: 'legacy', origin: legacy })
+
+    await expect(
+      resolvePageArchviewSource({ data: {} }, null, { env, payload }),
+    ).resolves.toMatchObject({ kind: 'default', origin: fallback.origin })
+
+    await payload.update({
+      collection: 'archview-sources',
+      id: fallback.id,
+      data: { isDefault: false },
+      overrideAccess: true,
+    })
+
+    await expect(
+      resolvePageArchviewSource({ data: {} }, null, { env, payload }),
+    ).resolves.toEqual({ kind: 'env', origin: env.ARCHVIEW_URL })
+  })
+
+  it('seeds the production and Vortexservers sources idempotently', async () => {
+    await payload.delete({
+      collection: 'archview-sources',
+      overrideAccess: true,
+      where: {
+        or: [
+          { name: { equals: 'Production' } },
+          { name: { equals: 'Vortexservers' } },
+          { origin: { equals: 'https://archview.vortexservers.co.uk' } },
+        ],
+      },
+    })
+
+    const seedEnv = {
+      ARCHVIEW_URL: 'https://seed-production.example.test',
+      ARCHVIEW_AUDIENCE: 'https://seed-production.example.test/api',
+      ARCHVIEW_TOKEN_URL: 'https://seed-identity.example.test/oauth/token',
+      ARCHVIEW_CLIENT_ID: 'seed-client',
+      ARCHVIEW_CLIENT_SECRET: 'seed-secret',
+      ARCHVIEW_SCOPE: 'archview:read',
+      ARCHVIEW_SECRET_KEY: KEY,
+    }
+
+    await seedArchviewSources(payload, seedEnv)
+    const secondRun = await seedArchviewSources(payload, seedEnv)
+
+    expect(secondRun.productionId).toBeDefined()
+    expect(secondRun.vortexserversId).toBeDefined()
+
+    const rows = await payload.find({
+      collection: 'archview-sources',
+      limit: 10,
+      overrideAccess: true,
+      where: {
+        or: [
+          { origin: { equals: 'https://seed-production.example.test' } },
+          { origin: { equals: 'https://archview.vortexservers.co.uk' } },
+        ],
+      },
+    })
+
+    expect(rows.docs).toHaveLength(2)
+
+    const production = rows.docs.find(
+      (row) => row.origin === 'https://seed-production.example.test',
+    )
+    const vortex = rows.docs.find(
+      (row) => row.origin === 'https://archview.vortexservers.co.uk',
+    )
+
+    expect(production?.isDefault).toBe(true)
+    expect(vortex?.isDefault).toBe(false)
+
+    const productionRaw = await payload.db.findOne<{
+      clientSecret?: string
+      id: string
+    }>({
+      collection: 'archview-sources',
+      where: { origin: { equals: 'https://seed-production.example.test' } },
+    })
+    expect(productionRaw?.clientSecret).toMatch(/^v1\./)
+
+    const vortexRaw = await payload.db.findOne<{
+      clientSecret?: string
+      id: string
+    }>({
+      collection: 'archview-sources',
+      where: { origin: { equals: 'https://archview.vortexservers.co.uk' } },
+    })
+    expect(vortexRaw?.clientSecret).toBeUndefined()
+    expect(
+      (
+        await findEnabledArchviewSourceRecord(
+          payload,
+          'https://archview.vortexservers.co.uk',
+        )
+      )?.credentials,
+    ).toBeUndefined()
+
+    await expect(
+      resolvePageArchviewSource(
+        { archviewSource: vortex?.id, data: {} },
+        null,
+        { env: { ARCHVIEW_URL: 'https://bootstrap.example.test' }, payload },
+      ),
+    ).resolves.toMatchObject({
+      kind: 'relation',
+      origin: 'https://archview.vortexservers.co.uk',
+      credentials: undefined,
+    })
+  })
+
+  it('skips seeding when the token URL is absent', async () => {
+    const before = await payload.count({ collection: 'archview-sources' })
+
+    await seedArchviewSources(payload, {
+      ARCHVIEW_URL: 'https://skipped-seed.example.test',
+      ARCHVIEW_CLIENT_ID: 'skipped-client',
+      ARCHVIEW_CLIENT_SECRET: 'skipped-secret',
+    })
+
+    const after = await payload.count({ collection: 'archview-sources' })
+    const skipped = await payload.find({
+      collection: 'archview-sources',
+      overrideAccess: true,
+      where: { origin: { equals: 'https://skipped-seed.example.test' } },
+    })
+
+    expect(after.totalDocs).toBe(before.totalDocs)
+    expect(skipped.docs).toHaveLength(0)
+  })
 })
 
 describe('architecture proxy source credentials', () => {
@@ -407,6 +617,69 @@ describe('architecture proxy source credentials', () => {
         'https://cms.example/api/architecture?source=https%3A%2F%2Fdisabled.example.test',
       ),
     )
+
+    expect(response.status).toBe(200)
+    const requests = architectureCalls(calls)
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe('https://default.example.test/api/architecture')
+    expect(requests[0].authorization).toBe('Bearer default-token')
+  })
+
+  it('accepts a source document ID as well as an origin', async () => {
+    const { calls, fetchImpl } = installFetch()
+    const sourceId = '6ae3a2f943f525aeb31885c4'
+    const GET = createArchitectureGet({
+      env,
+      fetchImpl,
+      lookupSource: async (ref) =>
+        ref === sourceId ? { origin: sourceOne.origin, credentials: sourceOne } : null,
+      lookupDefaultSource: async () => null,
+    })
+
+    const response = await GET(
+      new Request(`https://cms.example/api/architecture?source=${sourceId}`),
+    )
+
+    expect(response.status).toBe(200)
+    const requests = architectureCalls(calls)
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe(`${sourceOne.origin}/api/architecture`)
+    expect(requests[0].authorization).toBe('Bearer token-1')
+  })
+
+  it('uses the default source when no source is requested', async () => {
+    const { calls, fetchImpl } = installFetch()
+    const GET = createArchitectureGet({
+      env,
+      fetchImpl,
+      lookupSource: async () => null,
+      lookupDefaultSource: async () => ({
+        origin: sourceOne.origin,
+        credentials: sourceOne,
+      }),
+    })
+
+    const response = await GET(
+      new Request('https://cms.example/api/architecture?project=image-mosaic'),
+    )
+
+    expect(response.status).toBe(200)
+    const requests = architectureCalls(calls)
+    expect(requests).toHaveLength(1)
+    expect(requests[0].url).toBe(`${sourceOne.origin}/api/architecture?project=image-mosaic`)
+    expect(requests[0].authorization).toBe('Bearer token-1')
+  })
+
+  it('uses the environment bootstrap when no default source exists', async () => {
+    const { calls, fetchImpl } = installFetch()
+    const GET = createArchitectureGet({
+      env,
+      fetchImpl,
+      lookupSource: async () => null,
+      lookupDefaultSource: async () => null,
+    })
+
+    const response = await GET(new Request('https://cms.example/api/architecture'))
 
     expect(response.status).toBe(200)
     const requests = architectureCalls(calls)

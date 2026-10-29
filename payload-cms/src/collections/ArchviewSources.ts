@@ -2,14 +2,49 @@ import type {
   CollectionAfterReadHook,
   CollectionBeforeChangeHook,
   CollectionConfig,
+  Where,
 } from 'payload'
 
 import { authenticated } from '../access/authenticated'
-import { asRecord } from '../utilities/json'
+import { asRecord, asString } from '../utilities/json'
 import {
   decryptArchviewSecret,
   encryptArchviewSecret,
 } from '../utilities/archviewSourceSecret'
+
+/**
+ * Keeps at most one default row. The bulk write bypasses document hooks so it
+ * cannot recurse, and it intentionally runs before this row is saved.
+ */
+const enforceSingleDefault: CollectionBeforeChangeHook = async ({
+  data,
+  originalDoc,
+  req,
+}) => {
+  const next = data as Record<string, unknown>
+  if (next.isDefault !== true) {
+    return data
+  }
+
+  const currentId = asString(asRecord(originalDoc).id)
+  const where: Where =
+    currentId !== undefined
+      ? {
+          and: [
+            { isDefault: { equals: true } },
+            { id: { not_equals: currentId } },
+          ],
+        }
+      : { isDefault: { equals: true } }
+
+  await req.payload.db.updateMany({
+    collection: 'archview-sources',
+    data: { isDefault: false },
+    where,
+  })
+
+  return data
+}
 
 /**
  * Encrypts a submitted secret before it is written. The admin form cannot read
@@ -157,7 +192,7 @@ export const ArchviewSources: CollectionConfig = {
     update: authenticated,
   },
   hooks: {
-    beforeChange: [encryptSubmittedSecret],
+    beforeChange: [enforceSingleDefault, encryptSubmittedSecret],
     afterRead: [decryptStoredSecret],
   },
   fields: [
@@ -201,12 +236,14 @@ export const ArchviewSources: CollectionConfig = {
     {
       name: 'clientId',
       type: 'text',
-      required: true,
+      admin: {
+        description:
+          'Required together with the client secret. Leave both blank while this source is anonymous.',
+      },
     },
     {
       name: 'clientSecret',
       type: 'text',
-      required: true,
       admin: {
         disableListColumn: true,
         description:
@@ -224,6 +261,16 @@ export const ArchviewSources: CollectionConfig = {
       defaultValue: true,
       admin: {
         description: 'Disabled rows are ignored by the proxy; their credentials are not used.',
+      },
+    },
+    {
+      name: 'isDefault',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        position: 'sidebar',
+        description:
+          'The source used when a page names none. Setting this clears the flag on every other row.',
       },
     },
   ],

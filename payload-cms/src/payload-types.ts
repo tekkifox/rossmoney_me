@@ -288,9 +288,13 @@ export interface Page {
    */
   liveUrl?: string | null;
   /**
-   * Optional: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk).
+   * Legacy: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk). Prefer the ArchView source relation below.
    */
   archviewUrl?: string | null;
+  /**
+   * Which ArchView deployment this page's architecture panel reads
+   */
+  archviewSource?: (string | null) | ArchviewSource;
   publishedAt?: string | null;
   /**
    * When enabled, the slug will auto-generate from the title field on save and autosave.
@@ -769,6 +773,50 @@ export interface Form {
   createdAt: string;
 }
 /**
+ * Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-sources".
+ */
+export interface ArchviewSource {
+  id: string;
+  /**
+   * A short label for this instance, for example "Game servers".
+   */
+  name: string;
+  /**
+   * The instance root, for example https://archview.example.com. Its token is only ever sent to this origin.
+   */
+  origin: string;
+  /**
+   * The Auth0 API audience for this ArchView instance.
+   */
+  audience: string;
+  /**
+   * The identity provider token endpoint, for example https://tenant.auth0.com/oauth/token.
+   */
+  tokenUrl: string;
+  /**
+   * Required together with the client secret. Leave both blank while this source is anonymous.
+   */
+  clientId?: string | null;
+  /**
+   * Encrypted at rest with AES-256-GCM using ARCHVIEW_SECRET_KEY. Leave blank when editing to keep the current secret.
+   */
+  clientSecret?: string | null;
+  scope?: string | null;
+  /**
+   * Disabled rows are ignored by the proxy; their credentials are not used.
+   */
+  enabled?: boolean | null;
+  /**
+   * The source used when a page names none. Setting this clears the flag on every other row.
+   */
+  isDefault?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "projects".
  */
@@ -846,43 +894,6 @@ export interface ErrorLog {
    * Most recent occurrence.
    */
   lastSeen: string;
-}
-/**
- * Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "archview-sources".
- */
-export interface ArchviewSource {
-  id: string;
-  /**
-   * A short label for this instance, for example "Game servers".
-   */
-  name: string;
-  /**
-   * The instance root, for example https://archview.example.com. Its token is only ever sent to this origin.
-   */
-  origin: string;
-  /**
-   * The Auth0 API audience for this ArchView instance.
-   */
-  audience: string;
-  /**
-   * The identity provider token endpoint, for example https://tenant.auth0.com/oauth/token.
-   */
-  tokenUrl: string;
-  clientId: string;
-  /**
-   * Encrypted at rest with AES-256-GCM using ARCHVIEW_SECRET_KEY. Leave blank when editing to keep the current secret.
-   */
-  clientSecret: string;
-  scope?: string | null;
-  /**
-   * Disabled rows are ignored by the proxy; their credentials are not used.
-   */
-  enabled?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1231,6 +1242,7 @@ export interface PagesSelect<T extends boolean = true> {
   cvFile?: T;
   liveUrl?: T;
   archviewUrl?: T;
+  archviewSource?: T;
   publishedAt?: T;
   generateSlug?: T;
   slug?: T;
@@ -1512,6 +1524,7 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   clientSecret?: T;
   scope?: T;
   enabled?: T;
+  isDefault?: T;
   updatedAt?: T;
   createdAt?: T;
 }

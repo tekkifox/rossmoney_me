@@ -7,7 +7,11 @@ import {
   archviewSourceFetch,
   type ArchviewSourceCredentials,
 } from '@/utilities/archviewAuth'
-import { findEnabledArchviewSource } from '@/utilities/archviewSources'
+import {
+  findDefaultArchviewSourceRecord,
+  findEnabledArchviewSourceRecordByRef,
+  type ArchviewSourceRecord,
+} from '@/utilities/archviewSources'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 // ArchView runs as a separate stack (archview.rossmoney.me), so there is no
@@ -160,49 +164,92 @@ export type ArchviewRequestSource = {
   credentials?: ArchviewSourceCredentials
 }
 
+export type ArchviewSourceLookup = (
+  ref: string,
+) => Promise<ArchviewSourceRecord | ArchviewSourceCredentials | null>
+
+export type ArchviewDefaultSourceLookup = () => Promise<
+  ArchviewSourceRecord | ArchviewSourceCredentials | null
+>
+
 export type ArchviewSourceResolverDeps = {
   env?: ArchviewSourceEnv
-  lookupSource?: (origin: string) => Promise<ArchviewSourceCredentials | null>
+  lookupSource?: ArchviewSourceLookup
+  lookupDefaultSource?: ArchviewDefaultSourceLookup
   onLookupError?: (error: unknown) => void
 }
 
+const toResolved = (
+  value: ArchviewSourceRecord | ArchviewSourceCredentials | null,
+): ArchviewRequestSource | null => {
+  if (!value) {
+    return null
+  }
+
+  // A record always carries `credentials`; a bare credentials object does not.
+  // Check for credentials' own fields rather than the origin alone.
+  if ('clientId' in value && 'tokenUrl' in value) {
+    return { origin: value.origin, credentials: value }
+  }
+
+  return { origin: value.origin, credentials: value.credentials }
+}
+
 /**
- * Resolves `source` against the enabled collection rows first, then the
- * existing environment rules.
+ * Resolves the optional `source` value, which may be an origin or a
+ * collection row ID. With no value it resolves the default row.
  *
  * - `ARCHVIEW_URL` keeps its own credentials.
- * - An enabled row supplies that source's credentials.
+ * - An enabled row supplies that source's origin and (when complete)
+ *   credentials.
  * - An origin only in `ARCHVIEW_ALLOWED_SOURCES` stays anonymous.
  *
- * Disabled or unknown origins are not resolved. The caller falls back to the
- * configured deployment exactly as it did before the collection existed.
+ * Disabled or unknown values are not resolved. The caller falls back to the
+ * configured deployment.
  */
 export const resolveArchviewRequestSource = async (
   raw: string | null | undefined,
   deps: ArchviewSourceResolverDeps = {},
 ): Promise<ArchviewRequestSource | null> => {
-  const origin = parsePublicOrigin(raw)
-  if (!origin) {
+  const env = deps.env ?? process.env
+  const ref = readString(raw)
+
+  if (!ref) {
+    if (deps.lookupDefaultSource) {
+      try {
+        const resolved = toResolved(await deps.lookupDefaultSource())
+        if (resolved) {
+          return resolved
+        }
+      } catch (error) {
+        deps.onLookupError?.(error)
+      }
+    }
     return null
   }
 
-  const env = deps.env ?? process.env
-  const configured = originOf(env.ARCHVIEW_URL)
-  if (configured && configured === origin) {
-    return { origin }
-  }
+  const origin = parsePublicOrigin(ref)
 
   if (deps.lookupSource) {
     try {
-      const credentials = await deps.lookupSource(origin)
-      if (credentials) {
-        return { origin, credentials }
+      const resolved = toResolved(await deps.lookupSource(ref))
+      if (resolved) {
+        return resolved
       }
     } catch (error) {
       // A collection read failing must not take the existing environment rules
       // with it: note the failure and decide from `ARCHVIEW_ALLOWED_SOURCES`.
       deps.onLookupError?.(error)
     }
+  }
+
+  if (!origin) {
+    return null
+  }
+
+  const configured = originOf(env.ARCHVIEW_URL)
+  if (configured && configured === origin) {
+    return { origin }
   }
 
   return allowedSourceOrigins(env).has(origin) ? { origin } : null
@@ -218,10 +265,15 @@ const stripSource = (searchParams: URLSearchParams): string => {
 const originKey = (value: string): string => originOf(value) ?? value
 
 const lookupFromDatabase = async (
-  origin: string,
-): Promise<ArchviewSourceCredentials | null> => {
+  ref: string,
+): Promise<ArchviewSourceRecord | null> => {
   const payload = await getPayload({ config })
-  return findEnabledArchviewSource(payload, origin)
+  return findEnabledArchviewSourceRecordByRef(payload, ref)
+}
+
+const lookupDefaultFromDatabase = async (): Promise<ArchviewSourceRecord | null> => {
+  const payload = await getPayload({ config })
+  return findDefaultArchviewSourceRecord(payload)
 }
 
 const TIMEOUT_MS = 5000
@@ -251,13 +303,15 @@ const fetchCandidate = async (
 export type ArchitectureRouteDeps = {
   env?: ArchviewSourceEnv
   fetchImpl?: typeof fetch
-  lookupSource?: (origin: string) => Promise<ArchviewSourceCredentials | null>
+  lookupSource?: ArchviewSourceLookup
+  lookupDefaultSource?: ArchviewDefaultSourceLookup
 }
 
 export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   const env = deps.env ?? process.env
   const fetchImpl = deps.fetchImpl ?? fetch
   const lookupSource = deps.lookupSource ?? lookupFromDatabase
+  const lookupDefaultSource = deps.lookupDefaultSource ?? lookupDefaultFromDatabase
 
   return async function GET(req: Request): Promise<Response> {
     const url = new URL(req.url)
@@ -268,6 +322,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
       resolved = await resolveArchviewRequestSource(url.searchParams.get('source'), {
         env,
         lookupSource,
+        lookupDefaultSource,
         onLookupError: (error) => {
           console.warn(
             'ArchView source lookup failed:',

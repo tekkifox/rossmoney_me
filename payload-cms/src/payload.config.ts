@@ -31,6 +31,7 @@ import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
 import { cv } from './endpoints/seed/cv-page';
+import { seedArchviewSources, type SeededArchviewSources } from './endpoints/seed/archview-sources';
 import { asRecord } from './utilities/json';
 import type { Form } from './payload-types';
 import fs from 'fs'
@@ -215,6 +216,14 @@ export default buildConfig({
 
       payload.logger.info('Ensuring default Payload CMS documents exist...');
 
+      let seededArchviewSources: SeededArchviewSources = {};
+      try {
+        seededArchviewSources = await seedArchviewSources(payload);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        payload.logger.warn(`ArchView source seed note: ${message}`);
+      }
+
       const defaultPages = [
         home,
         contactPageData,
@@ -231,21 +240,39 @@ export default buildConfig({
       const existingPages = await pClient.find({ collection: 'pages', limit: 1000 });
       for (const pageData of defaultPages) {
         const found = existingPages.docs.find((p) => p.slug === pageData.slug);
+        const pageDataWithSource =
+          pageData.slug === 'game-servers' && seededArchviewSources.vortexserversId !== undefined
+            ? { ...pageData, archviewSource: seededArchviewSources.vortexserversId }
+            : pageData;
         try {
           if (found && forceSeed) {
             await pClient.update({
               collection: 'pages',
               id: found.id,
-              data: pageData,
+              data: pageDataWithSource,
               context: seedContext,
             });
           } else if (!found) {
             await pClient.create({
               collection: 'pages',
-              data: pageData,
+              data: pageDataWithSource,
               context: seedContext,
             });
             payload.logger.info(`Seeded default page: ${pageData.slug}`);
+          } else if (
+            found.slug === 'game-servers' &&
+            !found.archviewSource &&
+            seededArchviewSources.vortexserversId !== undefined
+          ) {
+            // Link existing game-servers pages to the seeded source without
+            // touching any other editor change.
+            await pClient.update({
+              collection: 'pages',
+              id: found.id,
+              data: { archviewSource: seededArchviewSources.vortexserversId },
+              context: seedContext,
+            });
+            payload.logger.info('Linked game-servers page to the Vortexservers ArchView source');
           } else if (found.slug === 'home') {
             // Narrow, idempotent correction: older databases still store the
             // homepage button as the retired in-page anchor. Only rewrite that
