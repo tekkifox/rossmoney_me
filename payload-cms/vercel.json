@@ -2,8 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "renovate/**": false
+      "*": false,
+      "main": true,
+      "dev": true
     }
   },
-  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in renovate/*) exit 0 ;; *) exit 1 ;; esac"
+  "ignoreCommand": "case \"$VERCEL_GIT_COMMIT_REF\" in main|dev) exit 1 ;; *) exit 0 ;; esac"
 }
