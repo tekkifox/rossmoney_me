@@ -13,9 +13,14 @@ import {
   readString,
 } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
-// Note: ARCHVIEW base will be resolved from page data (projectPayload) when available; fall back to env.
+// Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+<<<<<<< HEAD
 import { archviewFetch } from '@/utilities/archviewAuth'
+=======
+import { archviewFetchForPageSource, resolvePageArchviewSource } from '@/utilities/archviewPageSource'
+import { getSafePayload } from '@/utilities/getSafePayload'
+>>>>>>> origin/main
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
@@ -41,11 +46,21 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
 
   let archPayload: Record<string, unknown> | null = null
   try {
+<<<<<<< HEAD
     const archviewFromPage = readString(projectPayload.archviewUrl) || readString(projectPayload.archview) || readString(data.archviewUrl) || readString(data.archview)
     const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
     const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
     const r = await archviewFetch(url, { cache: 'no-store' })
+=======
+    const resolvedSource = await resolvePageArchviewSource(page, projectPayload, {
+      payload: await getSafePayload(),
+    })
+    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
+    const base = resolvedSource?.origin || envFallback
+    const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
+    const r = await archviewFetchForPageSource(url, { cache: 'no-store' }, resolvedSource)
+>>>>>>> origin/main
     if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {
