@@ -170,27 +170,31 @@ describe('redactInternalEndpoints', () => {
 })
 
 describe('browserArchitectureApi', () => {
-  it('keeps a public HTTPS ArchView origin', () => {
-    expect(browserArchitectureApi('https://archview.vortexservers.co.uk')).toBe(
-      'https://archview.vortexservers.co.uk/api/architecture',
-    )
+  const ownOrigin = { ARCHVIEW_URL: 'https://archview.rossmoney.me' }
+
+  it('uses the same-origin proxy for the deployment’s own origin', () => {
+    expect(browserArchitectureApi('https://archview.rossmoney.me', ownOrigin)).toBe('/api/architecture')
   })
 
-  it('uses the same-origin proxy for an internal Docker host', () => {
+  it('uses the same-origin proxy for a bare host', () => {
+    expect(browserArchitectureApi('archview.vortexservers.co.uk', ownOrigin)).toBe('/api/architecture')
+  })
+
+  it('uses the same-origin proxy for loopback and internal hosts', () => {
+    expect(browserArchitectureApi('http://127.0.0.1:4110')).toBe('/api/architecture')
+    expect(browserArchitectureApi('http://localhost:8080')).toBe('/api/architecture')
     expect(browserArchitectureApi('http://archview:8080')).toBe('/api/architecture')
   })
 
-  it('uses the same-origin proxy for loopback and HTTP values', () => {
-    expect(browserArchitectureApi('http://127.0.0.1:4110')).toBe('/api/architecture')
-    expect(browserArchitectureApi('http://localhost:8080')).toBe('/api/architecture')
-  })
-
-  it('adds HTTPS to a bare public host and falls back when unset', () => {
-    expect(browserArchitectureApi('archview.vortexservers.co.uk')).toBe(
-      'https://archview.vortexservers.co.uk/api/architecture',
-    )
+  it('falls back to the proxy path when unset', () => {
     expect(browserArchitectureApi('')).toBe('/api/architecture')
     expect(browserArchitectureApi(undefined)).toBe('/api/architecture')
+  })
+
+  it('carries a different public origin to the proxy as a source', () => {
+    expect(browserArchitectureApi('https://archview.vortexservers.co.uk', ownOrigin)).toBe(
+      '/api/architecture?source=https%3A%2F%2Farchview.vortexservers.co.uk',
+    )
   })
 })
 

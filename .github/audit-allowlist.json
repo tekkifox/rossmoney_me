@@ -43,6 +43,20 @@
       "reviewBy": "2026-11-30"
     },
     {
+      "id": "GHSA-c8p4-j97h-3vg8",
+      "package": "happy-dom",
+      "severity": "high",
+      "reason": "Same path: @payloadcms/richtext-lexical > @lexical/headless accepts ^20.9.0 only, so 20.14.6 is out of range for the fix in >=21.0.0. Forcing 21.x would need an override across a Lexical major. Overlaps GHSA-834v-8h66-3h79 (fixed in >=21.0.4); a Payload/Lexical release removes both entries.",
+      "reviewBy": "2026-11-30"
+    },
+    {
+      "id": "GHSA-x8rm-f576-gq67",
+      "package": "graphql-scalars",
+      "severity": "high",
+      "reason": "@payloadcms/graphql pins graphql-scalars 1.22.2 exactly, with no version range, and imports its scalars at runtime; the patch is >=2.0.1, a major bump Payload 3.92 is not tested against. A Payload release that moves to >=2.0.1 removes the entry.",
+      "reviewBy": "2026-11-30"
+    },
+    {
       "id": "GHSA-68fv-2mgg-jv7q",
       "package": "source-map-js",
       "severity": "high",
