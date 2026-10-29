@@ -21,8 +21,9 @@ import NavigationTemplate from '../templates/navigation'
 import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
-import { loadCollections, PageMeta, isRecord, readString } from '../templates/shared'
+import { loadCollections, PageMeta } from '../templates/shared'
 import { browserArchitectureApi } from '@/utilities/architectureURL'
+import { resolvePageArchviewSource } from '@/utilities/archviewPageSource'
 
 // This page intentionally uses dynamic data from internal APIs (architecture, commits)
 // Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
@@ -84,13 +85,17 @@ export default async function Page({ params: paramsPromise }: Args) {
   }
 
   const collections = page.slug === 'work' || page.slug === 'experience-page' ? await loadCollections() : null
-  const pageData = isRecord(page.data) ? page.data : {}
-  const archviewSource = page.archviewUrl || readString(pageData.archviewUrl) || process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || ''
-  const architectureApi = browserArchitectureApi(archviewSource)
+  const resolvedSource = await resolvePageArchviewSource(page, null, {
+    payload: await getSafePayload(),
+  })
+  const architectureApi = browserArchitectureApi(resolvedSource?.origin, process.env, {
+    forceSource:
+      resolvedSource?.kind === 'relation' || resolvedSource?.kind === 'default',
+  })
 
   return (
     <article id="page-root" className="pt-16 pb-24" data-architecture-api={architectureApi}>
-      <PageMeta page={page} />
+      <PageMeta page={page} architectureApi={architectureApi} />
       <PageClient />
       {/* Allows redirects for valid pages too */}
       <PayloadRedirects disableNotFound url={url} />

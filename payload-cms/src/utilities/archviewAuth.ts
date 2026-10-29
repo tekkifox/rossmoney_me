@@ -28,6 +28,20 @@ export type ArchviewEnv = {
   [key: string]: string | undefined
 }
 
+/**
+ * Credentials for one extra ArchView instance, normally a row in the
+ * `archview-sources` collection. The origin is part of the identity: a token
+ * minted for this instance is only ever sent back to it.
+ */
+export type ArchviewSourceCredentials = {
+  audience: string
+  clientId: string
+  clientSecret: string
+  origin: string
+  scope: string
+  tokenUrl: string
+}
+
 type ArchviewCredentials = {
   audience: string
   clientId: string
@@ -104,8 +118,9 @@ const cacheKey = (credentials: ArchviewCredentials): string =>
 const getCachedToken = async (
   credentials: ArchviewCredentials,
   fetchImpl: typeof fetch,
+  cacheKeyOverride?: string,
 ): Promise<string> => {
-  const key = cacheKey(credentials)
+  const key = cacheKeyOverride ?? cacheKey(credentials)
   let entry = tokenCache.get(key)
   if (!entry) {
     entry = {}
@@ -142,6 +157,14 @@ const getCachedToken = async (
   return entry.inFlight
 }
 
+const isSameOrigin = (target: string, origin: string): boolean => {
+  try {
+    return new URL(target).origin === new URL(origin).origin
+  } catch {
+    return false
+  }
+}
+
 const isConfiguredTarget = (target: string, env: ArchviewEnv): boolean => {
   const base = readString(env.ARCHVIEW_URL)
   // No configured deployment means no origin this credential belongs to. A
@@ -150,11 +173,7 @@ const isConfiguredTarget = (target: string, env: ArchviewEnv): boolean => {
     return false
   }
 
-  try {
-    return new URL(target).origin === new URL(base).origin
-  } catch {
-    return false
-  }
+  return isSameOrigin(target, base)
 }
 
 /**
@@ -210,26 +229,31 @@ const withHeaders = (init: RequestInit, extra: Record<string, string>): RequestI
   return { ...init, headers }
 }
 
+type MachineAuth = {
+  headers: () => Promise<Record<string, string>>
+  invalidate: () => void
+}
+
 /**
- * `fetch` for ArchView with the machine token attached. A `401` retries once
- * with a freshly exchanged token, which covers rotation and early revocation.
- * Requests to any other origin are sent without credentials.
+ * Attaches the headers from `auth` and retries once after a `401` with a fresh
+ * token, which covers rotation and early revocation. Requests with no
+ * credential are passed through untouched.
  */
-export const archviewFetch = async (
+const fetchWithRefresh = async (
   target: string,
-  init: RequestInit = {},
-  env: ArchviewEnv = process.env,
-  fetchImpl: typeof fetch = fetch,
+  init: RequestInit,
+  auth: MachineAuth,
+  fetchImpl: typeof fetch,
 ): Promise<Response> => {
-  const headers = await archviewAuthHeadersFor(target, env, fetchImpl)
+  const headers = await auth.headers()
   const response = await fetchImpl(target, withHeaders(init, headers))
 
   if (response.status !== 401 || !headers.Authorization) {
     return response
   }
 
-  invalidateToken(env)
-  const retryHeaders = await archviewAuthHeadersFor(target, env, fetchImpl)
+  auth.invalidate()
+  const retryHeaders = await auth.headers()
   if (!retryHeaders.Authorization) {
     return response
   }
@@ -243,3 +267,79 @@ export const archviewFetch = async (
 
   return fetchImpl(target, withHeaders(init, retryHeaders))
 }
+
+/**
+ * `fetch` for ArchView with the machine token attached. A `401` retries once
+ * with a freshly exchanged token, which covers rotation and early revocation.
+ * Requests to any other origin are sent without credentials.
+ */
+export const archviewFetch = async (
+  target: string,
+  init: RequestInit = {},
+  env: ArchviewEnv = process.env,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> => {
+  const auth: MachineAuth = {
+    headers: () => archviewAuthHeadersFor(target, env, fetchImpl),
+    invalidate: () => invalidateToken(env),
+  }
+  return fetchWithRefresh(target, init, auth, fetchImpl)
+}
+
+const sourceCredentials = (source: ArchviewSourceCredentials): ArchviewCredentials => ({
+  audience: readString(source.audience),
+  clientId: readString(source.clientId),
+  clientSecret: source.clientSecret,
+  scope: readString(source.scope) || DEFAULT_SCOPE,
+  tokenUrl: readString(source.tokenUrl),
+})
+
+/**
+ * The cache key is the source itself. Two instances never share a token, even
+ * when they happen to use the same identity provider and client.
+ */
+const sourceCacheKey = (source: ArchviewSourceCredentials): string =>
+  `source:${source.origin}\n${readString(source.tokenUrl)}\n${readString(source.clientId)}\n${readString(source.audience)}\n${readString(source.scope) || DEFAULT_SCOPE}`
+
+/**
+ * Headers for a request to one source's own origin. Like `archviewFetch`, a
+ * token for one instance is never attached to a different origin.
+ */
+export const archviewSourceAuthHeadersFor = async (
+  target: string,
+  source: ArchviewSourceCredentials,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Record<string, string>> => {
+  if (!isSameOrigin(target, source.origin)) {
+    return {}
+  }
+
+  return {
+    Authorization: `Bearer ${await getCachedToken(
+      sourceCredentials(source),
+      fetchImpl,
+      sourceCacheKey(source),
+    )}`,
+  }
+}
+
+/**
+ * `fetch` for one extra ArchView instance, with that instance's token. The
+ * retry behaviour and per-source cache match the configured deployment, but
+ * the token is only ever sent to `source.origin`.
+ */
+export const archviewSourceFetch = async (
+  target: string,
+  init: RequestInit,
+  source: ArchviewSourceCredentials,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> => {
+  const auth: MachineAuth = {
+    headers: () => archviewSourceAuthHeadersFor(target, source, fetchImpl),
+    invalidate: () => {
+      tokenCache.delete(sourceCacheKey(source))
+    },
+  }
+  return fetchWithRefresh(target, init, auth, fetchImpl)
+}
+

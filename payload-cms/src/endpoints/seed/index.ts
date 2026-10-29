@@ -14,6 +14,7 @@ import { travelling } from './travelling-page'
 import { gameservers } from './game-servers-page'
 import { services } from './services-page'
 import { cv } from './cv-page'
+import { seedArchviewSources } from './archview-sources'
 
 const collections: CollectionSlug[] = [
   'categories',
@@ -71,6 +72,9 @@ export const seed = async ({
       .filter((collection) => Boolean(payload.collections[collection].config.versions))
       .map((collection) => payload.db.deleteVersions({ collection, req, where: {} })),
   )
+
+  payload.logger.info(`— Seeding ArchView sources...`)
+  const seededArchviewSources = await seedArchviewSources(payload)
 
   payload.logger.info(`— Seeding demo author and user...`)
 
@@ -197,7 +201,10 @@ export const seed = async ({
 		payload.create({
 		  collection: 'pages',
 		  depth: 0,
-		  data: gameservers,
+		  data:
+		    seededArchviewSources.vortexserversId !== undefined
+		      ? { ...gameservers, archviewSource: seededArchviewSources.vortexserversId }
+		      : gameservers,
 		}),
             payload.create({
               collection: 'pages',
