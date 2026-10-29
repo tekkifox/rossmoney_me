@@ -17,9 +17,9 @@ own stack at `https://archview.rossmoney.me`. It is protected by OAuth/OIDC, so 
 person opening that hostname is sent through the identity provider's login before
 it serves a snapshot. There are no static API keys: the CMS never calls it
 anonymously. Server-side requests go through the CMS proxy
-`GET /api/architecture`, which forwards to `ARCHVIEW_URL` with an OAuth 2.0
-bearer token obtained with the `client_credentials` grant
-(`ARCHVIEW_CLIENT_ID`, `ARCHVIEW_CLIENT_SECRET`, `ARCHVIEW_TOKEN_URL`, and
+`GET /api/architecture`, which forwards to `ARCHVIEW_URL` with an Auth0 access
+token obtained with the `client_credentials` grant (`ARCHVIEW_CLIENT_ID`,
+`ARCHVIEW_CLIENT_SECRET`, `ARCHVIEW_TOKEN_URL`, `ARCHVIEW_AUDIENCE`, and
 `ARCHVIEW_SCOPE`, which defaults to `archview:read`). When the client credentials
 are unset (local development against `AUTH_MODE=none`), no credential is attached
 and the panels fall back to `http://localhost:8080`.
@@ -72,7 +72,7 @@ requires an OAuth login and exposes:
 - `/api/system`
 
 The CMS reaches the API server-side only, through its own `/api/architecture`
-proxy, using an OAuth 2.0 bearer token from its own client credentials.
+proxy, using an Auth0 access token from its own client credentials.
 
 Local (development) — exposes the CMS on port 8082:
 
@@ -86,7 +86,7 @@ Portainer stack (CI/production):
 docker compose -f docker-compose.portainer.yml config
 ```
 
-The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.rossmoney.me`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and OAuth 2.0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
+The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.rossmoney.me`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
 
 ## Environment file
 
@@ -101,15 +101,16 @@ NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
 RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key
 
 # ArchView lives in its own stack at https://archview.rossmoney.me and accepts
-# OAuth 2.0 client-credentials tokens (no static API keys).
+# Auth0 client-credentials tokens (no static API keys).
 ARCHVIEW_URL=https://archview.rossmoney.me
 ARCHVIEW_CLIENT_ID=cms
 ARCHVIEW_CLIENT_SECRET=your-archview-client-secret
-ARCHVIEW_TOKEN_URL=https://identity.example.com/oauth/token
+ARCHVIEW_TOKEN_URL=https://your-tenant.auth0.com/oauth/token
+ARCHVIEW_AUDIENCE=https://archview.rossmoney.me/api
 ARCHVIEW_SCOPE=archview:read
 ```
 
-The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment; `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with the identity provider, `ARCHVIEW_TOKEN_URL` is that provider's token endpoint, and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment; `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.rossmoney.me/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
 
 ### Media storage
 
@@ -154,7 +155,7 @@ The service runs locally as root because access to the Docker daemon is effectiv
 
 ## Notes
 
-The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is a separate Go service deployed at `https://archview.rossmoney.me` behind OAuth login; the CMS reads it server-side with an OAuth 2.0 bearer token from its own client credentials.
+The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is a separate Go service deployed at `https://archview.rossmoney.me` behind OAuth login; the CMS reads it server-side with an Auth0 access token from its own client credentials.
 
 ## Dependency updates and audit
 
@@ -189,8 +190,8 @@ If you prefer server-side conversion (avoid bundling mammoth in the browser), th
 
 ArchView is deployed separately at `https://archview.rossmoney.me`, where the
 login is handled by the service's own OAuth/OIDC flow. The CMS obtains a
-short-lived OAuth 2.0 token with the `client_credentials` grant and passes it as
-a bearer token on its server-side calls.
+short-lived Auth0 token with the `client_credentials` grant and passes it as a
+bearer token on its server-side calls.
 
 - The ArchView telemetry service (the Go project) now filters out exited containers and anonymous/digest-only images from snapshots returned to the frontend. This keeps the UI focused on active services and human-readable images.
 - Project-scoped image selection was improved so images referenced by project containers (including different tags) are included rather than being deduped by name alone.

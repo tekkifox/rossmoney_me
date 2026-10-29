@@ -4,15 +4,16 @@
  * This module is the seam between "how the CMS authenticates to ArchView" and
  * "where the token comes from". ArchView only accepts bearer tokens from the
  * identity provider, so today it implements the OAuth 2.0 `client_credentials`
- * grant (RFC 6749 section 4.4). A deployment that needs a different grant — for
- * example Google's service-account JWT-bearer exchange — can replace
- * `requestClientCredentialsToken` (or this whole module) without touching the
- * cache, origin guard or callers in `archviewAuth.ts`.
+ * grant (RFC 6749 section 4.4) against Auth0. A deployment that needs a
+ * different grant can replace `requestClientCredentialsToken` (or this whole
+ * module) without touching the cache, origin guard or callers in
+ * `archviewAuth.ts`.
  *
  * It deliberately knows nothing about ArchView's URL or the token cache.
  */
 
 export type ClientCredentialsTokenRequest = {
+  audience: string
   tokenUrl: string
   clientId: string
   clientSecret: string
@@ -52,10 +53,12 @@ const readExpiresIn = (value: unknown): number => {
  * Exchanges client credentials for an access token.
  *
  * The provider's token endpoint is called with HTTP Basic authentication, as in
- * ArchView's own README example (`curl -u "client:secret" ...`). Errors never
- * include the client secret.
+ * ArchView's own README example (`curl -u "client:secret" ...`). The `audience`
+ * parameter is required by Auth0 to mint a token for the ArchView API. Errors
+ * never include the client secret.
  */
 export const requestClientCredentialsToken = async ({
+  audience,
   tokenUrl,
   clientId,
   clientSecret,
@@ -63,6 +66,9 @@ export const requestClientCredentialsToken = async ({
   fetchImpl = fetch,
 }: ClientCredentialsTokenRequest): Promise<AccessToken> => {
   const body = new URLSearchParams({ grant_type: 'client_credentials' })
+  if (audience) {
+    body.set('audience', audience)
+  }
   if (scope) {
     body.set('scope', scope)
   }

@@ -4,8 +4,8 @@
  * ArchView is its own deployment (`archview.rossmoney.me`) and accepts no
  * static API keys. The CMS only ever calls it from the server — the
  * `/api/architecture` proxy and the architecture page templates — so it asks
- * the identity provider for a short-lived access token with the OAuth 2.0
- * `client_credentials` grant and sends it as a bearer token.
+ * Auth0 for a short-lived access token with the OAuth 2.0 `client_credentials`
+ * grant (including the Auth0 `audience`) and sends it as a bearer token.
  *
  * The token is cached in memory per process and renewed shortly before it
  * expires. Concurrent callers share one in-flight exchange, and a single `401`
@@ -19,6 +19,7 @@
 import { requestClientCredentialsToken } from './archviewToken'
 
 export type ArchviewEnv = {
+  ARCHVIEW_AUDIENCE?: string
   ARCHVIEW_CLIENT_ID?: string
   ARCHVIEW_CLIENT_SECRET?: string
   ARCHVIEW_SCOPE?: string
@@ -28,6 +29,7 @@ export type ArchviewEnv = {
 }
 
 type ArchviewCredentials = {
+  audience: string
   clientId: string
   clientSecret: string
   scope: string
@@ -48,6 +50,7 @@ type CacheEntry = {
 // providers that issue very short-lived tokens.
 const MAX_RENEWAL_SKEW_MS = 60_000
 const DEFAULT_SCOPE = 'archview:read'
+const DEFAULT_AUDIENCE = 'https://archview.rossmoney.me/api'
 
 const tokenCache = new Map<string, CacheEntry>()
 
@@ -87,6 +90,7 @@ const readCredentials = (env: ArchviewEnv): ArchviewCredentials | null => {
   }
 
   return {
+    audience: readString(env.ARCHVIEW_AUDIENCE) || DEFAULT_AUDIENCE,
     clientId,
     clientSecret,
     scope: readString(env.ARCHVIEW_SCOPE) || DEFAULT_SCOPE,
@@ -95,7 +99,7 @@ const readCredentials = (env: ArchviewEnv): ArchviewCredentials | null => {
 }
 
 const cacheKey = (credentials: ArchviewCredentials): string =>
-  `${credentials.tokenUrl}\n${credentials.clientId}\n${credentials.scope}`
+  `${credentials.tokenUrl}\n${credentials.clientId}\n${credentials.audience}\n${credentials.scope}`
 
 const getCachedToken = async (
   credentials: ArchviewCredentials,
@@ -117,6 +121,7 @@ const getCachedToken = async (
   // request instead of starting another one.
   if (!entry.inFlight) {
     entry.inFlight = requestClientCredentialsToken({
+      audience: credentials.audience,
       clientId: credentials.clientId,
       clientSecret: credentials.clientSecret,
       scope: credentials.scope,

@@ -87,8 +87,30 @@ describe('ArchView token client', () => {
     const form = new URLSearchParams(tokenRequestBody)
     expect(form.get('grant_type')).toBe('client_credentials')
     expect(form.get('scope')).toBe('archview:read')
+    expect(form.get('audience')).toBe('https://archview.rossmoney.me/api')
     expect(tokenRequestAuthorization).toBe(
       `Basic ${Buffer.from('cms:test-client-secret').toString('base64')}`,
+    )
+  })
+
+  it('sends ARCHVIEW_AUDIENCE when configured', async () => {
+    let tokenRequestBody = ''
+    const tokenUrl = await startServer((_request, body, response) => {
+      tokenRequestBody = body
+      sendJson(response, 200, { access_token: 'audience-token', expires_in: 3600 })
+    })
+    const archviewUrl = await startServer((_request, _body, response) => {
+      sendJson(response, 200, { ok: true })
+    })
+    const env = {
+      ...envFor(archviewUrl, tokenUrl),
+      ARCHVIEW_AUDIENCE: 'https://archview.example.test/api',
+    }
+
+    await archviewFetch(`${archviewUrl}/api/architecture`, {}, env)
+
+    expect(new URLSearchParams(tokenRequestBody).get('audience')).toBe(
+      'https://archview.example.test/api',
     )
   })
 
@@ -279,6 +301,7 @@ describe('ArchView auth configuration', () => {
 
     await expect(
       requestClientCredentialsToken({
+        audience: 'https://archview.rossmoney.me/api',
         clientId: 'cms',
         clientSecret: 'test-client-secret',
         scope: 'archview:read',
