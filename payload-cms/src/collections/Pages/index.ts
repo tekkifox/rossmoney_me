@@ -157,7 +157,17 @@ export const Pages: CollectionConfig<'pages'> = {
       name: 'archviewUrl',
       label: 'ArchView URL',
       type: 'text',
-      admin: { position: 'sidebar', description: 'Optional: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk).' },
+      admin: { position: 'sidebar', description: 'Legacy: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk). Prefer the ArchView source relation below.' },
+    },
+    {
+      name: 'archviewSource',
+      label: 'ArchView source',
+      type: 'relationship',
+      relationTo: 'archview-sources',
+      admin: {
+        position: 'sidebar',
+        description: "Which ArchView deployment this page's architecture panel reads",
+      },
     },
     {
       name: 'publishedAt',

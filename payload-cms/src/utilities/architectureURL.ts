@@ -7,10 +7,11 @@
  * `/api/architecture` proxy, which carries the machine credential server-side
  * and reaches the configured ArchView deployment.
  *
- * A page may still name its own ArchView instance (the game-servers page points
- * at a different project's deployment). When that value is an absolute HTTPS
- * origin other than this deployment's `ARCHVIEW_URL`, the proxy path carries it
- * as a `source` query parameter. The proxy only honours allowlisted origins.
+ * A page chooses an ArchView instance through its relation, legacy URL text or
+ * the collection's default row. When that value is a public HTTPS origin, the
+ * proxy path carries it as a `source` query parameter. `forceSource` keeps the
+ * parameter even when the origin matches `ARCHVIEW_URL`, so the proxy resolves
+ * the exact row the page chose.
  *
  * Internal Docker names, loopback addresses, bare hosts and unset values all
  * fall back to the plain proxy path.
@@ -18,6 +19,15 @@
 type ArchitectureEnv = {
   ARCHVIEW_URL?: string | null
   [key: string]: string | null | undefined
+}
+
+export type BrowserArchitectureApiOptions = {
+  /**
+   * Include `?source=` even when the origin is `ARCHVIEW_URL`. Used for a
+   * source chosen by relation or as the collection default, where the proxy
+   * must resolve that specific row rather than whatever the environment names.
+   */
+  forceSource?: boolean
 }
 
 const PROXY_PATH = '/api/architecture'
@@ -49,6 +59,7 @@ const isPublicHost = (url: URL): boolean =>
 export const browserArchitectureApi = (
   value?: string | null,
   env: ArchitectureEnv = process.env,
+  options: BrowserArchitectureApiOptions = {},
 ): string => {
   const candidate = typeof value === 'string' ? value.trim() : ''
   if (!candidate) {
@@ -67,7 +78,7 @@ export const browserArchitectureApi = (
   }
 
   const own = normalizeURL(env.ARCHVIEW_URL)
-  if (own && own.origin === url.origin) {
+  if (!options.forceSource && own && own.origin === url.origin) {
     return PROXY_PATH
   }
 
