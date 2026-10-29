@@ -2,6 +2,7 @@ import Link from 'next/link'
 import React from 'react'
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
 import {
@@ -217,7 +218,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
             <div className="raw-json-wrap">
               <details>
                 <summary>Raw payload</summary>
-                <pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(archPayload, null, 2) : 'No snapshot returned'}</pre>
+                <pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
               </details>
             </div>
           </article>
