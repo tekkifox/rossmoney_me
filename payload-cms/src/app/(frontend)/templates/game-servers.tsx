@@ -15,6 +15,7 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { archviewFetchForPageSource, resolvePageArchviewSource } from '@/utilities/archviewPageSource'
 import { getSafePayload } from '@/utilities/getSafePayload'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
@@ -130,7 +131,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
             </div>
             <p className="architecture-description" id="architecture-description">{archDesc}</p>
             <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
-            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(archPayload, null, 2) : 'No snapshot returned'}</pre></details></div>
+            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre></details></div>
           </article>
 
           <aside className="image-column card">
@@ -148,6 +149,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
             </div>
           </aside>
         </div>
+
         <ArchitectureClient project="vortexservers_co_uk" />
       </section>
 
