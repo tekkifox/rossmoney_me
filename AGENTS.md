@@ -9,11 +9,12 @@ visual.
 Run from the repo root:
 
 ```bash
-pnpm --dir payload-cms install --frozen-lockfile --prefer-offline
-pnpm --dir payload-cms build
-pnpm --dir payload-cms lint
-pnpm --dir payload-cms test:int
-pnpm --dir payload-cms lint:tokens
+pnpm install --frozen-lockfile
+pnpm --filter payload-cms run dev
+pnpm --filter payload-cms run build
+pnpm --filter payload-cms run lint
+pnpm --filter payload-cms run test:int
+pnpm --filter payload-cms run lint:tokens
 ```
 
 - `test:int` starts a disposable MongoDB when no `MONGODB_URI` is configured.

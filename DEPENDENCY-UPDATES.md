@@ -24,7 +24,7 @@ control.
 | `@payloadcms/*` and `payload` update in one PR   | `packageRules` group `Payload`, `separateMajorMinor: false`                                                                              |
 | `next` updates in its own PR                     | `packageRules` group `Next.js`, `separateMajorMinor: false`                                                                              |
 | Toolchain versions are reviewed together          | `packageRules` group `toolchain`: `node`, `pnpm`, `corepack`, `mongo` (docker + npm datasources), `automerge: false`                     |
-| pnpm lockfile is updated                         | Renovate's npm/pnpm manager updates `payload-cms/pnpm-lock.yaml` in the same PR; `lockFileMaintenance` also opens lockfile-only PRs      |
+| pnpm lockfile is updated                         | Renovate's npm/pnpm manager updates `pnpm-lock.yaml` in the same PR; `lockFileMaintenance` also opens lockfile-only PRs      |
 | No calendar window (deliberate)                  | No `schedule` at the top level or on `lockFileMaintenance`; `timezone: "Europe/London"` still sets the zone for anything scheduled later |
 | Throttle is concurrency, not the calendar        | `prConcurrentLimit: 3`, `prHourlyLimit: 2` — these cap the PR flood, so updates can be raised on any day                                 |
 | Rebase policy                                    | `rebaseWhen: "conflicted"`                                                                                                               |
@@ -39,7 +39,7 @@ because automerge is off.
 
 ### Why Renovate waits for the pnpm cooling-off window
 
-`minimumReleaseAge: 720` in `payload-cms/pnpm-workspace.yaml` is a pnpm policy,
+`minimumReleaseAge: 720` in `pnpm-workspace.yaml` is a pnpm policy,
 so pnpm enforces it inside the step where Renovate regenerates the lockfile.
 Renovate's npm manager runs
 
@@ -117,7 +117,7 @@ Dockerfile; Node 26 no longer bundles corepack, so both install corepack from
 npm at a pinned version (`corepack@0.36.0`) and let corepack read
 `packageManager`.
 
-`payload-cms/pnpm-lock.yaml` is a pnpm 12 lockfile: two YAML documents, the
+`pnpm-lock.yaml` is a pnpm 12 lockfile: two YAML documents, the
 first a preamble carrying `packageManagerDependencies`, then the main document.
 That is expected, not corruption. pnpm 10 fails on it with
 `ERR_PNPM_BROKEN_LOCKFILE` because it cannot read the preamble — a version
@@ -133,7 +133,7 @@ already reviews changes to it.
 
 pnpm 12 also moved settings out of `.npmrc`: only auth, registry, TLS, proxy
 and local-address settings are read from there. Dependency and supply-chain
-settings live in `payload-cms/pnpm-workspace.yaml`:
+settings live in `pnpm-workspace.yaml`:
 
 - `minimumReleaseAge: 720` — an explicit 12h cooling-off window. pnpm's default
   is 24h, which rejects the committed lockfile because Renovate merged

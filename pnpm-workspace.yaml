@@ -1,3 +1,6 @@
+packages:
+  - payload-cms
+
 # pnpm 12 reads dependency-resolution and supply-chain settings only from this
 # file; .npmrc is limited to auth, registry, TLS, proxy and local-address.
 #

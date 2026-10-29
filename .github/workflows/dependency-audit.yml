@@ -34,9 +34,7 @@ jobs:
         run: npm i -g corepack@0.36.0 && corepack enable
 
       - name: Install dependencies
-        working-directory: payload-cms
         run: corepack pnpm install --frozen-lockfile --prefer-offline
 
       - name: Audit production dependencies
-        working-directory: payload-cms
-        run: corepack pnpm run audit:prod
+        run: corepack pnpm --filter payload-cms run audit:prod
