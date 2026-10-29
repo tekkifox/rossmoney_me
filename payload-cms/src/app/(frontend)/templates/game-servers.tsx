@@ -16,11 +16,9 @@ import { assembleSite } from '@/utilities/assembleSite'
 // Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
-import { archviewFetchForPageSource, resolvePageArchviewSource } from '@/utilities/archviewPageSource'
-import { getSafePayload } from '@/utilities/getSafePayload'
+import { loadArchitectureSnapshot } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
-import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 type SitePayload = {
   gameservers?: unknown
@@ -41,20 +39,10 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
   const projectPayload: UnknownRecord = isRecord(sitePayload?.gameservers) ? sitePayload.gameservers : { eyebrow: page.eyebrow, title: page.title, lead: page.lead, ...data }
   const summaryLead = readString(projectPayload.summaryLead) ?? readString(data.summaryLead) ?? page.lead ?? ''
 
-  let archPayload: Record<string, unknown> | null = null
-  try {
-    const resolvedSource = await resolvePageArchviewSource(page, projectPayload, {
-      payload: await getSafePayload(),
-    })
-    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
-    const base = resolvedSource?.origin || envFallback
-    const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
-    const r = await archviewFetchForPageSource(url, { cache: 'no-store' }, resolvedSource)
-    if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
-    else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
-  } catch (err) {
-    console.warn('Failed to fetch architecture for gameservers', err)
-  }
+  const archPayload = await loadArchitectureSnapshot(page, projectPayload, {
+    label: 'gameservers',
+    project: 'vortexservers_co_uk',
+  })
 
   const archTitle = titleFromPayload(archPayload)
   const archDesc = descriptionFromPayload(archPayload)

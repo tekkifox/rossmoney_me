@@ -3,6 +3,7 @@ import React from 'react'
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
+import { loadArchitectureSnapshot } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
 import {
@@ -66,14 +67,8 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
   const experience = readExperience(sitePayload?.experience)
   const homeData: UnknownRecord = isRecord(sitePayload?.home) ? sitePayload.home : { ...data, focus }
 
-  // Server-side fetch of architecture snapshot via CMS API route (ISR)
-  let archPayload: Record<string, unknown> | null = null
-  try {
-    const res = await fetch(`/api/architecture`, { cache: 'no-store' })
-    if (res.ok) archPayload = await res.json()
-  } catch (err) {
-    console.warn('Failed to fetch architecture snapshot', err)
-  }
+  // Server-side fetch of the redacted snapshot, shared with the project pages
+  const archPayload = await loadArchitectureSnapshot(page, homeData)
 
   const archTitle = titleFromPayload(archPayload)
   const archDesc = descriptionFromPayload(archPayload)
