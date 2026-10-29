@@ -75,6 +75,7 @@ export interface Config {
     experience: Experience;
     media: Media;
     'error-logs': ErrorLog;
+    'archview-sources': ArchviewSource;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -99,6 +100,7 @@ export interface Config {
     experience: ExperienceSelect<false> | ExperienceSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     'error-logs': ErrorLogsSelect<false> | ErrorLogsSelect<true>;
+    'archview-sources': ArchviewSourcesSelect<false> | ArchviewSourcesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -846,6 +848,43 @@ export interface ErrorLog {
   lastSeen: string;
 }
 /**
+ * Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-sources".
+ */
+export interface ArchviewSource {
+  id: string;
+  /**
+   * A short label for this instance, for example "Game servers".
+   */
+  name: string;
+  /**
+   * The instance root, for example https://archview.example.com. Its token is only ever sent to this origin.
+   */
+  origin: string;
+  /**
+   * The Auth0 API audience for this ArchView instance.
+   */
+  audience: string;
+  /**
+   * The identity provider token endpoint, for example https://tenant.auth0.com/oauth/token.
+   */
+  tokenUrl: string;
+  clientId: string;
+  /**
+   * Encrypted at rest with AES-256-GCM using ARCHVIEW_SECRET_KEY. Leave blank when editing to keep the current secret.
+   */
+  clientSecret: string;
+  scope?: string | null;
+  /**
+   * Disabled rows are ignored by the proxy; their credentials are not used.
+   */
+  enabled?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
@@ -1035,6 +1074,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'error-logs';
         value: string | ErrorLog;
+      } | null)
+    | ({
+        relationTo: 'archview-sources';
+        value: string | ArchviewSource;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1455,6 +1498,22 @@ export interface ErrorLogsSelect<T extends boolean = true> {
   userAgent?: T;
   timestamp?: T;
   lastSeen?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-sources_select".
+ */
+export interface ArchviewSourcesSelect<T extends boolean = true> {
+  name?: T;
+  origin?: T;
+  audience?: T;
+  tokenUrl?: T;
+  clientId?: T;
+  clientSecret?: T;
+  scope?: T;
+  enabled?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

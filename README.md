@@ -26,10 +26,24 @@ and the panels fall back to `http://localhost:8080`.
 
 Browsers always call the same-origin proxy, since ArchView requires a session the
 visitor does not have. A page that names a different ArchView instance sends it
-as `?source=`, which the proxy accepts only for `ARCHVIEW_URL`'s origin or an
-origin listed in `ARCHVIEW_ALLOWED_SOURCES` (comma-separated HTTPS origins). That
-variable is only needed for pages pointing at an ArchView other than this
-deployment's.
+as `?source=`. The proxy resolves that origin against the enabled rows in the
+admin's **ArchView → ArchView sources** collection; a match authenticates with
+that row's own Auth0 client credentials, so its token is only ever sent to that
+row's origin. Adding an instance this way does not require editing environment
+variables.
+
+Origins that have no collection row can still be listed in
+`ARCHVIEW_ALLOWED_SOURCES` (comma-separated HTTPS origins). Those instances are
+anonymous by design: the variable admits them, but no credential is attached.
+Anything that is neither an enabled source nor allowlisted falls back to
+`ARCHVIEW_URL`, which keeps its own credentials and remains the only origin the
+`ARCHVIEW_CLIENT_*` token is sent to.
+
+A source's client secret is encrypted at rest in MongoDB with AES-256-GCM (a
+random 12-byte IV per value) using `ARCHVIEW_SECRET_KEY`. Generate the key once
+with `openssl rand -base64 32` and set it before adding sources; without it the
+collection refuses to store or read secrets instead of writing plaintext, and
+changing it makes existing stored secrets unreadable.
 
 The travelling page requests `?project=image-mosaic`; the game-servers page
 requests `?project=vortexservers_co_uk`.
@@ -115,9 +129,12 @@ ARCHVIEW_CLIENT_SECRET=your-archview-client-secret
 ARCHVIEW_TOKEN_URL=https://your-tenant.auth0.com/oauth/token
 ARCHVIEW_AUDIENCE=https://archview.rossmoney.me/api
 ARCHVIEW_SCOPE=archview:read
+# 32 random bytes, base64 (`openssl rand -base64 32`); encrypts secrets in the
+# ArchView sources collection.
+ARCHVIEW_SECRET_KEY=your-archview-secret-key
 ```
 
-The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment; `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.rossmoney.me/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment; `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.rossmoney.me/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored for extra instances in the admin's ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
 
 ### Media storage
 
