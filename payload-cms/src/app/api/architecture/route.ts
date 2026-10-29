@@ -15,6 +15,7 @@ const CANDIDATE_HOSTS = [
 type ArchviewSourceEnv = {
   ARCHVIEW_ALLOWED_SOURCES?: string
   ARCHVIEW_URL?: string
+  [key: string]: string | undefined
 }
 
 const readString = (value: string | null | undefined): string =>

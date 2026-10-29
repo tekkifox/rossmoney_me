@@ -17,6 +17,7 @@
  */
 type ArchitectureEnv = {
   ARCHVIEW_URL?: string | null
+  [key: string]: string | null | undefined
 }
 
 const PROXY_PATH = '/api/architecture'
