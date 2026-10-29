@@ -15,6 +15,7 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: ARCHVIEW base will be resolved from page data (projectPayload) when available; fall back to env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { archviewAuthHeadersFor } from '@/utilities/archviewAuth'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
@@ -41,10 +42,10 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
   let archPayload: Record<string, unknown> | null = null
   try {
     const archviewFromPage = readString(projectPayload.archviewUrl) || readString(projectPayload.archview) || readString(data.archviewUrl) || readString(data.archview)
-    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
+    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
     const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=vortexservers_co_uk`
-    const r = await fetch(url, { cache: 'no-store' })
+    const r = await fetch(url, { cache: 'no-store', headers: archviewAuthHeadersFor(url) })
     if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {

@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 
+import { archviewAuthHeadersFor } from '@/utilities/archviewAuth'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
+// ArchView runs as a separate stack (archview.rossmoney.me), so there is no
+// in-stack service name to fall back to. ARCHVIEW_URL points at the public
+// deployment; localhost covers running ArchView beside `next dev`.
 const CANDIDATE_HOSTS = [
   process.env.ARCHVIEW_URL,
   process.env.ARCHVIEW_HOST && (process.env.ARCHVIEW_HOST.startsWith('http') ? process.env.ARCHVIEW_HOST : `http://${process.env.ARCHVIEW_HOST}`),
-  'http://archview:8080',
   'http://localhost:8080',
 ].filter(Boolean) as string[]
 
@@ -14,7 +17,10 @@ async function tryFetch(url: string, timeoutMs = 5000) {
   const id = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(url, {
-      headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.8' },
+      headers: {
+        Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
+        ...archviewAuthHeadersFor(url),
+      },
       cache: 'no-store',
       signal: controller.signal,
     })

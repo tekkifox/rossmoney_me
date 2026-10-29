@@ -14,6 +14,7 @@ import {
 } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { archviewAuthHeadersFor } from '@/utilities/archviewAuth'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
@@ -61,10 +62,10 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   let archPayload: Record<string, unknown> | null = null
   try {
     const archviewFromPage = readString(travelPayload.archviewUrl) || readString(travelData.archviewUrl) || readString(data.archviewUrl) || readString(data.archview)
-    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://archview:8080'
+    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
     const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=image-mosaic`
-    const r = await fetch(url, { cache: 'no-store' })
+    const r = await fetch(url, { cache: 'no-store', headers: archviewAuthHeadersFor(url) })
     if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {
