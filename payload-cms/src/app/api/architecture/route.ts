@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { archviewAuthHeadersFor } from '@/utilities/archviewAuth'
+import { archviewFetch } from '@/utilities/archviewAuth'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 // ArchView runs as a separate stack (archview.rossmoney.me), so there is no
@@ -16,11 +16,8 @@ async function tryFetch(url: string, timeoutMs = 5000) {
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, {
-      headers: {
-        Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
-        ...archviewAuthHeadersFor(url),
-      },
+    const res = await archviewFetch(url, {
+      headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.8' },
       cache: 'no-store',
       signal: controller.signal,
     })
