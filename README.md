@@ -24,6 +24,13 @@ token obtained with the `client_credentials` grant (`ARCHVIEW_CLIENT_ID`,
 are unset (local development against `AUTH_MODE=none`), no credential is attached
 and the panels fall back to `http://localhost:8080`.
 
+Browsers always call the same-origin proxy, since ArchView requires a session the
+visitor does not have. A page that names a different ArchView instance sends it
+as `?source=`, which the proxy accepts only for `ARCHVIEW_URL`'s origin or an
+origin listed in `ARCHVIEW_ALLOWED_SOURCES` (comma-separated HTTPS origins). That
+variable is only needed for pages pointing at an ArchView other than this
+deployment's.
+
 The travelling page requests `?project=image-mosaic`; the game-servers page
 requests `?project=vortexservers_co_uk`.
 
