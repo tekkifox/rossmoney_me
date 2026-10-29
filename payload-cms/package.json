@@ -4,7 +4,7 @@
   "description": "Website template for Payload",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@12.15.0",
+  "packageManager": "pnpm@12.16.1",
   "scripts": {
     "audit:prod": "node ./scripts/audit-production.mjs",
     "build": "cross-env NODE_OPTIONS=--no-deprecation next build",
