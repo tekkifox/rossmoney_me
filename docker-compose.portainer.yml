@@ -29,48 +29,17 @@ services:
     volumes:
       - mongo-data:/data/db
 
-  archview:
-    image: ghcr.io/tekkifox/archview:latest
-    pull_policy: always
-    env_file:
-      - stack.env
-    environment:
-      PORT: "8080"
-    networks:
-      - rossmoney-stack
-    depends_on:
-      socket-proxy:
-        condition: service_healthy
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host/root:ro
-
-  # proxy service removed for Portainer stack; CMS now proxies /api/architecture through its Next API
-
-  socket-proxy:
-    image: lscr.io/linuxserver/socket-proxy:latest
-    container_name: socket-proxy
-    env_file:
-      - stack.env
-    networks:
-      - rossmoney-stack
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    read_only: true
-    tmpfs:
-      - /run
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2375/_ping | grep -q OK"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 5s
+  # ArchView is a separate stack (ghcr.io/tekkifox/archview) served at
+  # archview.rossmoney.me. It brings its own socket proxy because it is the only
+  # consumer of the Docker API, so neither container belongs here. The CMS
+  # reaches it server-side through the /api/architecture proxy.
 
 networks:
   rossmoney-stack:
     driver: bridge
+  # Created by the openresty stack that terminates TLS for www.rossmoney.me.
+  proxy:
+    external: true
 
 volumes:
   mongo-data:
