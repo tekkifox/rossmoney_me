@@ -152,18 +152,20 @@ Workflow: [`.github/workflows/dependency-audit.yml`](./.github/workflows/depende
 Script: [`payload-cms/scripts/audit-production.mjs`](./payload-cms/scripts/audit-production.mjs).
 
 The workflow runs on every `pull_request`, on a weekly schedule
-(`0 6 * * 1`, Mondays 06:00 UTC), and on `workflow_dispatch`. It installs with
-`corepack pnpm@12.15.0`, then runs:
+(`0 6 * * 1`, Mondays 06:00 UTC), and on `workflow_dispatch`. It runs its
+installs and scripts inside `payload-cms`, so Corepack resolves pnpm from
+`packageManager` with no inline version, then runs:
 
 ```bash
 cd payload-cms
-corepack pnpm@12.15.0 run audit:prod
+corepack pnpm run audit:prod
 ```
 
-`audit:prod` calls:
+`audit:prod` calls the script, which derives the pnpm version from
+`packageManager` and runs:
 
 ```bash
-corepack pnpm@12.15.0 audit --prod --audit-level high --json
+pnpm audit --prod --audit-level high --json
 ```
 
 and then filters the JSON to `high` and `critical` advisories in production
@@ -173,7 +175,8 @@ fails the job.
 ### Verified `pnpm audit` behaviour
 
 These checks were run locally with the then-pinned `corepack pnpm@10.11.0` and
-re-confirmed with the current `corepack pnpm@12.15.0`:
+re-confirmed with the current pnpm 12 (`corepack pnpm@12.15.0` at the time;
+the inline pin is gone from CI now, the version comes from `packageManager`):
 
 - A scratch project with `lodash@4.17.15` as a production dependency:
   `pnpm audit --prod --audit-level high` exited `1`; the same audit with
@@ -262,8 +265,8 @@ cannot silently bypass the gate.
 
 ```bash
 cd payload-cms
-corepack pnpm@12.15.0 install --frozen-lockfile --prefer-offline
-corepack pnpm@12.15.0 run audit:prod
+corepack pnpm install --frozen-lockfile --prefer-offline
+corepack pnpm run audit:prod
 ```
 
 Validate the Renovate config against the published schema before changing it —
@@ -294,7 +297,7 @@ date.
 
 - The audit workflow ran on GitHub for both draft PRs (one against `dev`, one
   against `main`) and the `audit` job passed in both runs.
-- The gate was also run locally with the pinned pnpm version, including the
+- The gate was also run locally with the then-pinned pnpm version, including the
   deliberately vulnerable scratch case described above.
 - The Renovate app is installed, but a run was not observed while making this
   change. The first run can take a while after installation; the **Dependency
@@ -304,12 +307,13 @@ date.
 - The cooling-off coupling above was verified by reproduction, not assumption:
   Renovate 44.190.0 was run against this repo in `--dry-run=full`, and the
   artifact step was then reproduced by hand with `corepack pnpm@12.15.0` in
-  copies of `payload-cms`. Bumping `payload` to a 5-hour-old release failed with
-  the same policy error Renovate posts on the PR. The `lockFileMaintenance`
-  case — delete `pnpm-lock.yaml`, run the same command under the real
-  720-minute policy — rewrote the lockfile from scratch (two documents,
-  `packageManagerDependencies: 12.15.0` intact) and the CI command
-  `corepack pnpm@12.15.0 install --frozen-lockfile --prefer-offline` then
+  copies of `payload-cms` (the inline version is what CI used then; today the
+  same command is plain `corepack pnpm` inside `payload-cms`). Bumping
+  `payload` to a 5-hour-old release failed with the same policy error Renovate
+  posts on the PR. The `lockFileMaintenance` case — delete `pnpm-lock.yaml`, run
+  the same command under the real 720-minute policy — rewrote the lockfile from
+  scratch (two documents, `packageManagerDependencies: 12.15.0` intact) and the
+  CI command `corepack pnpm install --frozen-lockfile --prefer-offline` then
   passed.
 - Not verified here: the exact Renovate version the hosted app runs, that it
   accepts `minimumReleaseAgeBehaviour`, and the next real artifact update. The
