@@ -1,7 +1,7 @@
 # To use this Dockerfile, you have to set `output: 'standalone'` in your next.config.js file.
 # From https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
 
-FROM node:26.12.1-alpine AS base
+FROM node:26.13.0-alpine AS base
 
 # Node 26 no longer bundles corepack, so install it from npm at a pinned version
 # before it is used. The pnpm version itself comes from `packageManager` in
