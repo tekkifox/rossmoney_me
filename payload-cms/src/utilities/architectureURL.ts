@@ -7,11 +7,18 @@
  * `/api/architecture` proxy, which carries the machine credential server-side
  * and reaches the configured ArchView deployment.
  *
+<<<<<<< HEAD
+ * A page may still name its own ArchView instance (the game-servers page points
+ * at a different project's deployment). When that value is an absolute HTTPS
+ * origin other than this deployment's `ARCHVIEW_URL`, the proxy path carries it
+ * as a `source` query parameter. The proxy only honours allowlisted origins.
+=======
  * A page chooses an ArchView instance through its relation, legacy URL text or
  * the collection's default row. When that value is a public HTTPS origin, the
  * proxy path carries it as a `source` query parameter. `forceSource` keeps the
  * parameter even when the origin matches `ARCHVIEW_URL`, so the proxy resolves
  * the exact row the page chose.
+>>>>>>> origin/main
  *
  * Internal Docker names, loopback addresses, bare hosts and unset values all
  * fall back to the plain proxy path.
@@ -21,6 +28,8 @@ type ArchitectureEnv = {
   [key: string]: string | null | undefined
 }
 
+<<<<<<< HEAD
+=======
 export type BrowserArchitectureApiOptions = {
   /**
    * Include `?source=` even when the origin is `ARCHVIEW_URL`. Used for a
@@ -30,6 +39,7 @@ export type BrowserArchitectureApiOptions = {
   forceSource?: boolean
 }
 
+>>>>>>> origin/main
 const PROXY_PATH = '/api/architecture'
 
 const normalizeURL = (value?: string | null): URL | null => {
@@ -59,7 +69,10 @@ const isPublicHost = (url: URL): boolean =>
 export const browserArchitectureApi = (
   value?: string | null,
   env: ArchitectureEnv = process.env,
+<<<<<<< HEAD
+=======
   options: BrowserArchitectureApiOptions = {},
+>>>>>>> origin/main
 ): string => {
   const candidate = typeof value === 'string' ? value.trim() : ''
   if (!candidate) {
@@ -78,7 +91,11 @@ export const browserArchitectureApi = (
   }
 
   const own = normalizeURL(env.ARCHVIEW_URL)
+<<<<<<< HEAD
+  if (own && own.origin === url.origin) {
+=======
   if (!options.forceSource && own && own.origin === url.origin) {
+>>>>>>> origin/main
     return PROXY_PATH
   }
 

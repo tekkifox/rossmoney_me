@@ -16,6 +16,22 @@ The telemetry service lives in the sibling `archview` repo and is deployed as it
 own stack at `https://archview.rossmoney.me`. It is protected by OAuth/OIDC, so a
 person opening that hostname is sent through the identity provider's login before
 it serves a snapshot. There are no static API keys: the CMS never calls it
+<<<<<<< HEAD
+anonymously. Server-side requests go through the CMS proxy
+`GET /api/architecture`, which forwards to `ARCHVIEW_URL` with an Auth0 access
+token obtained with the `client_credentials` grant (`ARCHVIEW_CLIENT_ID`,
+`ARCHVIEW_CLIENT_SECRET`, `ARCHVIEW_TOKEN_URL`, `ARCHVIEW_AUDIENCE`, and
+`ARCHVIEW_SCOPE`, which defaults to `archview:read`). When the client credentials
+are unset (local development against `AUTH_MODE=none`), no credential is attached
+and the panels fall back to `http://localhost:8080`.
+
+Browsers always call the same-origin proxy, since ArchView requires a session the
+visitor does not have. A page that names a different ArchView instance sends it
+as `?source=`, which the proxy accepts only for `ARCHVIEW_URL`'s origin or an
+origin listed in `ARCHVIEW_ALLOWED_SOURCES` (comma-separated HTTPS origins). That
+variable is only needed for pages pointing at an ArchView other than this
+deployment's.
+=======
 anonymously. Every ArchView deployment the CMS may use is a row in the admin's
 **ArchView → ArchView sources** collection, including the primary one. Server-side
 requests go through the CMS proxy `GET /api/architecture`, which exchanges the
@@ -47,6 +63,7 @@ Generate the key once with `openssl rand -base64 32` and set it before adding
 secrets; without it the collection refuses to store or read secrets instead of
 writing plaintext, and changing it makes existing stored secrets unreadable. A
 row with no client ID and secret stays anonymous until an editor fills them in.
+>>>>>>> origin/main
 
 The travelling page requests `?project=image-mosaic`; the game-servers page
 requests `?project=vortexservers_co_uk`.
@@ -125,15 +142,24 @@ NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
 RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key
 
 # ArchView lives in its own stack at https://archview.rossmoney.me and accepts
+<<<<<<< HEAD
+# Auth0 client-credentials tokens (no static API keys).
+=======
 # Auth0 client-credentials tokens (no static API keys). At seed time these values
 # also create the default "Production" source; ARCHVIEW_URL is the bootstrap
 # fallback until a default source exists.
+>>>>>>> origin/main
 ARCHVIEW_URL=https://archview.rossmoney.me
 ARCHVIEW_CLIENT_ID=cms
 ARCHVIEW_CLIENT_SECRET=your-archview-client-secret
 ARCHVIEW_TOKEN_URL=https://your-tenant.auth0.com/oauth/token
 ARCHVIEW_AUDIENCE=https://archview.rossmoney.me/api
 ARCHVIEW_SCOPE=archview:read
+<<<<<<< HEAD
+```
+
+The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment; `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.rossmoney.me/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+=======
 # 32 random bytes, base64 (`openssl rand -base64 32`); encrypts secrets in the
 # ArchView sources collection.
 ARCHVIEW_SECRET_KEY=your-archview-secret-key
@@ -160,6 +186,7 @@ matching on origin so reruns do not duplicate rows or overwrite admin edits:
 
 No secret literals live in the seed; the production secret is read from the
 environment only at seed time.
+>>>>>>> origin/main
 
 ### Media storage
 

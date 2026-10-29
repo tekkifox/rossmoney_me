@@ -196,6 +196,8 @@ describe('browserArchitectureApi', () => {
       '/api/architecture?source=https%3A%2F%2Farchview.vortexservers.co.uk',
     )
   })
+<<<<<<< HEAD
+=======
 
   it('can force the source parameter for an explicitly chosen source', () => {
     expect(
@@ -204,6 +206,7 @@ describe('browserArchitectureApi', () => {
       }),
     ).toBe('/api/architecture?source=https%3A%2F%2Farchview.rossmoney.me')
   })
+>>>>>>> origin/main
 })
 
 describe('sessionCookieIsSecure', () => {

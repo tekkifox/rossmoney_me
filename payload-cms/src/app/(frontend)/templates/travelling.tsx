@@ -14,8 +14,12 @@ import {
 } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+<<<<<<< HEAD
+import { archviewFetch } from '@/utilities/archviewAuth'
+=======
 import { archviewFetchForPageSource, resolvePageArchviewSource } from '@/utilities/archviewPageSource'
 import { getSafePayload } from '@/utilities/getSafePayload'
+>>>>>>> origin/main
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
@@ -62,6 +66,13 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   // Server-side fetch architecture snapshot via the CMS API route (ISR)
   let archPayload: Record<string, unknown> | null = null
   try {
+<<<<<<< HEAD
+    const archviewFromPage = readString(travelPayload.archviewUrl) || readString(travelData.archviewUrl) || readString(data.archviewUrl) || readString(data.archview)
+    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
+    const base = (archviewFromPage && String(archviewFromPage).trim()) || envFallback
+    const url = `${base.replace(/\/$/, '')}/api/architecture?project=image-mosaic`
+    const r = await archviewFetch(url, { cache: 'no-store' })
+=======
     const resolvedSource = await resolvePageArchviewSource(page, travelPayload, {
       payload: await getSafePayload(),
     })
@@ -69,6 +80,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     const base = resolvedSource?.origin || envFallback
     const url = `${base.replace(/\/$/, '')}/api/architecture?project=image-mosaic`
     const r = await archviewFetchForPageSource(url, { cache: 'no-store' }, resolvedSource)
+>>>>>>> origin/main
     if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
     else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
   } catch (err) {
