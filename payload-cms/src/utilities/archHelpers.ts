@@ -1,5 +1,6 @@
 // Server-side helpers to summarise architecture payloads for templates
 import { isObjectLike, type JsonRecord } from '@/utilities/json'
+import { parseArchitectureEndpoints } from '@/utilities/architectureEndpoints'
 
 function asArray<T>(value: T | T[] | null | undefined): T[] {
   if (value === null || value === undefined) return []
@@ -58,15 +59,26 @@ export function buildHighlights(payload: unknown) {
   ]
 }
 
+/**
+ * The endpoint to annotate `/api/architecture` with: the entry named
+ * `architecture`, else the first usable one. Pure payload lookup — no env.
+ */
+function primaryEndpointUrl(payload: unknown): string | undefined {
+  const endpoints = parseArchitectureEndpoints(payload)
+  const architecture = endpoints.find((endpoint) => endpoint.name.toLowerCase() === 'architecture')
+  return (architecture ?? endpoints[0])?.url
+}
+
 export function renderDiagram(payload: unknown) {
   const services = normalizeList(pickFirst(payload, ['services', 'components', 'apps']))
   const dockerImages = extractDockerImages(payload)
   const regions = normalizeList(pickFirst(payload, ['regions', 'availabilityZones', 'zones']))
+  const endpointUrl = primaryEndpointUrl(payload)
 
   const lines: string[] = []
   lines.push('client')
   lines.push('  -> portfolio site')
-  lines.push('     -> /api/architecture')
+  lines.push(endpointUrl ? `     -> /api/architecture (${endpointUrl})` : '     -> /api/architecture')
   lines.push('        -> host Go service')
   lines.push('')
   // Containers (previously called "services")

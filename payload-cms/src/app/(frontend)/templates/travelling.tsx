@@ -14,6 +14,7 @@ import {
 } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { archviewFetchForPageSource, resolvePageArchviewSource } from '@/utilities/archviewPageSource'
 import { getSafePayload } from '@/utilities/getSafePayload'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
@@ -186,7 +187,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           <div className="raw-json-wrap">
             <details>
               <summary>Raw snapshot</summary>
-              <pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(archPayload, null, 2) : 'No snapshot returned'}</pre>
+              <pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
             </details>
           </div>
         </article>
@@ -238,6 +239,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           </div>
         </aside>
       </div>
+
       {/* Client-side hydration for refresh and live updates */}
       <ArchitectureClient project="image-mosaic" />
     </section>

@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react'
 import { buildFacts, buildHighlights, renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
+import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 
 interface Props {
   project?: string
@@ -123,7 +124,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         if (diagramEl) diagramEl.textContent = renderDiagram(arch)
 
         // Image cards removed per UI update. The topology now lists images and descriptions
-        if (rawEl) rawEl.textContent = arch ? JSON.stringify(arch, null, 2) : 'No snapshot returned'
+        if (rawEl) rawEl.textContent = arch ? JSON.stringify(stripUptimesForRawDump(arch), null, 2) : 'No snapshot returned'
         if (updatedEl) {
           // Prefer server-provided timestamp when available
           const serverTs = arch?.updatedAt || arch?.telemetry?.metrics?.updatedAt || arch?.telemetry?.metrics?.loadSample
