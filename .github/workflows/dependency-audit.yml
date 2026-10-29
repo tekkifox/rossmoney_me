@@ -35,8 +35,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: payload-cms
-        run: corepack pnpm@12.15.0 install --frozen-lockfile --prefer-offline
+        run: corepack pnpm install --frozen-lockfile --prefer-offline
 
       - name: Audit production dependencies
         working-directory: payload-cms
-        run: corepack pnpm@12.15.0 run audit:prod
+        run: corepack pnpm run audit:prod
