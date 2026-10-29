@@ -3,8 +3,8 @@ version: "3.8"
 services:
   cms:
     build:
-      context: ./payload-cms
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: payload-cms/Dockerfile
     env_file:
       - stack.env
     restart: unless-stopped
@@ -15,9 +15,9 @@ services:
     networks:
       - rossmoney-stack
     volumes:
-      - /app/.next
-      - /app/node_modules
-      - payload-media:/app/public/media:rw
+      - /app/payload-cms/.next
+      - /app/payload-cms/node_modules
+      - payload-media:/app/payload-cms/public/media:rw
     depends_on:
       - mongo
 

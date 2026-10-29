@@ -6,6 +6,10 @@ on:
       - main
     paths:
       - 'payload-cms/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
       - '.github/workflows/generate-sitemap.yml'
   pull_request:
     branches: [ main ]
@@ -27,15 +31,11 @@ jobs:
         with:
           version: 12.16.1
 
-      - name: Install dependencies (payload-cms)
-        run: |
-          cd payload-cms
-          pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Generate sitemap and robots
-        run: |
-          cd payload-cms
-          pnpm generate:sitemap
+        run: pnpm --filter payload-cms run generate:sitemap
 
       - name: Upload sitemap artifacts
         uses: actions/upload-artifact@v7

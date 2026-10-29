@@ -1,6 +1,7 @@
 .env
 stack.env
 node_modules
+.turbo
 # npm lockfiles are not used; pnpm is the only supported installer.
 package-lock.json
 # Report and cache trees are Docker named volumes, not host paths, so nothing
@@ -10,3 +11,4 @@ monitoring-reports
 .vercel
 .env.local
 .env.*.local
+.DS_Store
