@@ -1,16 +1,35 @@
 import React from 'react'
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { bucketHostSamples, type HostUsageRange } from '@/utilities/hostUsage'
+import {
+  HOST_USAGE_RANGE_MS,
+  RECENT_SAMPLE_WINDOW_MS,
+  RECENT_SAMPLES_LIMIT,
+  bucketHostSamples,
+  recentHostSamples,
+  type HostUsageRange,
+  type HostSample,
+} from '@/utilities/hostUsage'
 import { HostUsageChart } from './HostUsageChart'
 
 type SearchParams = Record<string, string | string[] | undefined> | Promise<Record<string, string | string[] | undefined>>
 
 const RANGE_OPTIONS = [
+  { value: '1h', label: 'Last hour' },
   { value: '24h', label: '24 hours' },
   { value: '7d', label: '7 days' },
   { value: '30d', label: '30 days' },
 ]
+
+type SampleRow = {
+  host?: string | number | null
+  hostLabel?: string | null
+  sampledAt?: string | Date | null
+  cpuAvg?: number | null
+  memoryPercent?: number | null
+  loadAvg?: number | null
+  diskPercent?: number | null
+}
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0]
@@ -18,12 +37,11 @@ function firstParam(value: string | string[] | undefined): string | undefined {
 }
 
 function isRange(value: string | undefined): value is HostUsageRange {
-  return value === '24h' || value === '7d' || value === '30d'
+  return value === '1h' || value === '24h' || value === '7d' || value === '30d'
 }
 
 async function loadSamples(host: string | undefined, range: HostUsageRange) {
   const payload = await getPayload({ config })
-  const { HOST_USAGE_RANGE_MS } = await import('@/utilities/hostUsage')
   const now = Date.now()
   const cutoff = new Date(now - HOST_USAGE_RANGE_MS[range]).toISOString()
   const where: Record<string, unknown> = {
@@ -31,15 +49,6 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
   }
   if (host) {
     where.host = { equals: host }
-  }
-  type SampleRow = {
-    host?: string | number | null
-    hostLabel?: string | null
-    sampledAt?: string | Date | null
-    cpuAvg?: number | null
-    memoryPercent?: number | null
-    loadAvg?: number | null
-    diskPercent?: number | null
   }
   const all: SampleRow[] = []
   let page = 1
@@ -59,6 +68,34 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
   return { payload, docs: all, now }
 }
 
+/**
+ * The table below the graphs is always the last 15 minutes, whatever the range
+ * selector says, so it queries separately and caps the result.
+ */
+async function loadRecentSamples(host: string | undefined, now: number) {
+  const payload = await getPayload({ config })
+  const cutoff = new Date(now - RECENT_SAMPLE_WINDOW_MS).toISOString()
+  const where: Record<string, unknown> = {
+    sampledAt: { greater_than_equal: cutoff },
+  }
+  if (host) {
+    where.host = { equals: host }
+  }
+  const result = await payload.find({
+    collection: 'host-samples',
+    where: where as never,
+    sort: '-sampledAt',
+    limit: RECENT_SAMPLES_LIMIT,
+    page: 1,
+    overrideAccess: true,
+  })
+  return (result.docs ?? []) as SampleRow[]
+}
+
+function formatMetric(value: number | null): string {
+  return value === null ? '—' : value.toFixed(1)
+}
+
 export default async function HostUsage(props: { searchParams?: SearchParams }) {
   const actual =
     typeof (props?.searchParams as { then?: unknown })?.then === 'function'
@@ -70,6 +107,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   const host = firstParam(actual.host)
 
   const { payload, docs, now } = await loadSamples(host, range)
+  const recentDocs = await loadRecentSamples(host, now)
   const sourcesResult = await payload.find({
     collection: 'archview-sources',
     limit: 100,
@@ -85,7 +123,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
     memoryPercent: d.memoryPercent as number | null,
     loadAvg: d.loadAvg as number | null,
     diskPercent: d.diskPercent as number | null,
-  })) as unknown as Parameters<typeof bucketHostSamples>[0]
+  })) as unknown as HostSample[]
 
   const byHost = bucketHostSamples(samples, range, now)
 
@@ -93,8 +131,20 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
     ? [host]
     : sources.map((s) => String(s.id)).filter(Boolean)
 
+  // Always the last 15 minutes, independent of the range selector. The helper
+  // drops stale rows, applies the host filter, sorts newest first and caps the
+  // list so a bad sampler cadence cannot render an unbounded table.
+  const recent = recentHostSamples(recentDocs as unknown as HostSample[], {
+    now,
+    host,
+    limit: RECENT_SAMPLES_LIMIT,
+  })
+
+  const sourceName = (rowHost: string | null, hostLabel: string): string =>
+    (rowHost ? sources.find((s) => String(s.id) === rowHost)?.name : undefined) ?? hostLabel
+
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
+    <div className="host-usage" style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
       <h1>Host usage</h1>
       <form method="get" style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <label>
@@ -125,7 +175,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
 
       {hostLabels.map((label) => {
         const buckets = byHost.get(label) ?? []
-        const sourceName = sources.find((s) => String(s.id) === label)?.name ?? label
+        const name = sources.find((s) => String(s.id) === label)?.name ?? label
         const data = buckets.map((b) => ({
           label: b.label,
           cpuAvg: b.cpuAvg,
@@ -135,7 +185,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
         }))
         return (
           <section key={label} style={{ marginBottom: 32 }}>
-            <h2>{sourceName}</h2>
+            <h2>{name}</h2>
             {buckets.length === 0 ? (
               <p>No samples in range.</p>
             ) : (
@@ -144,6 +194,44 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
           </section>
         )
       })}
+
+      <section style={{ marginTop: 32 }}>
+        <h2>Last 15 minutes</h2>
+        <p style={{ color: 'var(--theme-elevation-600)', marginBottom: 8 }}>
+          Newest first; times are UTC. Capped at the {RECENT_SAMPLES_LIMIT} most recent
+          samples so a bad sampler cadence cannot render an unbounded list.
+        </p>
+        {recent.length === 0 ? (
+          <p>No samples in the last 15 minutes.</p>
+        ) : (
+          <div className="table table--appearance-condensed">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Time (UTC)</th>
+                  <th scope="col">Host</th>
+                  <th scope="col">CPU %</th>
+                  <th scope="col">Memory %</th>
+                  <th scope="col">Load</th>
+                  <th scope="col">Disk %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((row, index) => (
+                  <tr key={`${row.time}-${row.host ?? row.hostLabel}-${index}`}>
+                    <td>{row.time}</td>
+                    <td>{sourceName(row.host, row.hostLabel)}</td>
+                    <td>{formatMetric(row.cpuAvg)}</td>
+                    <td>{formatMetric(row.memoryPercent)}</td>
+                    <td>{formatMetric(row.loadAvg)}</td>
+                    <td>{formatMetric(row.diskPercent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
