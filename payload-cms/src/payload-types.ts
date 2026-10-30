@@ -791,6 +791,10 @@ export interface ArchviewSource {
    */
   origin: string;
   /**
+   * The ArchView project label used when polling this instance, for example rossmoney_me, image-mosaic or vortexservers. Rows without a project are skipped by the host sampler.
+   */
+  project?: string | null;
+  /**
    * The Auth0 API audience for this ArchView instance.
    */
   audience: string;
@@ -1548,6 +1552,7 @@ export interface ErrorLogsSelect<T extends boolean = true> {
 export interface ArchviewSourcesSelect<T extends boolean = true> {
   name?: T;
   origin?: T;
+  project?: T;
   audience?: T;
   tokenUrl?: T;
   clientId?: T;

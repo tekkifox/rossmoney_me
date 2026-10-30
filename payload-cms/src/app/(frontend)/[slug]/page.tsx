@@ -18,7 +18,8 @@ import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
 import { PageMeta } from '../templates/shared'
-import { browserArchitectureApi } from '@/utilities/architectureURL'
+import { PageRoot } from '@/components/PageRoot'
+import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
 import { resolvePageArchviewSource } from '@/utilities/archviewPageSource'
 
 // This page intentionally uses dynamic data from the internal architecture API
@@ -87,9 +88,10 @@ export default async function Page({ params: paramsPromise }: Args) {
     forceSource:
       resolvedSource?.kind === 'relation' || resolvedSource?.kind === 'default',
   })
+  const architectureProject = browserArchitectureProject(resolvedSource?.project)
 
   return (
-    <article id="page-root" className="pt-16 pb-24" data-architecture-api={architectureApi}>
+    <PageRoot architectureApi={architectureApi} architectureProject={architectureProject}>
       <PageMeta page={page} architectureApi={architectureApi} />
       <PageClient />
       {/* Allows redirects for valid pages too */}
@@ -104,7 +106,7 @@ export default async function Page({ params: paramsPromise }: Args) {
       {page.slug === 'cv' && <CVTemplate page={page} />}
       {page.slug === 'services' && <ServicesTemplate page={page} />}
       {(page.slug === 'game-servers' || page.slug === 'gameservers') && <GameServersTemplate page={page} />}
-    </article>
+    </PageRoot>
   )
 }
 

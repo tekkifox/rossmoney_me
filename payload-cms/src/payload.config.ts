@@ -10,6 +10,7 @@ import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
 import { resolveServerURL } from './utilities/serverURL'
+import { SAMPLER_INTERVAL_MS } from './utilities/hostUsage'
 import { resendAdapter } from '@payloadcms/email-resend'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
 import { contactForm as contactFormData } from './endpoints/seed/contact-form';
@@ -90,12 +91,6 @@ export default buildConfig({
       // The `BeforeDashboard` component renders the 'welcome' block that you see after logging into your admin panel.
       // Feel free to delete this at any time. Simply remove the line below.
       beforeDashboard: ['@/components/BeforeDashboard'],
-      views: {
-        'host-usage': {
-          Component: '@/components/HostUsage',
-          path: '/host-usage',
-        },
-      },
     },
     importMap: {
       baseDir: path.resolve(dirname),
@@ -393,12 +388,14 @@ export default buildConfig({
     // Independent host sampler: covers hosts that nobody browses. Runs in the
     // long-lived Node process (disabled on Vercel/serverless where an interval
     // cannot survive). Retention (30 days) happens in the same sweep, daily.
+    // Cadence lives in utilities/hostUsage.ts next to the "last hour" bucket
+    // width; the two are deliberately equal (one sample per bucket).
     const { sampleAllEnabledHosts, shouldRunHostSampler } = await import('./utilities/hostSampling')
     if (process.env.NODE_ENV === 'production' && shouldRunHostSampler(process.env)) {
     try {
       const interval = setInterval(() => {
         void sampleAllEnabledHosts(payload)
-      }, 60 * 1000)
+      }, SAMPLER_INTERVAL_MS)
       interval.unref?.()
     } catch (err) {
       console.warn('host sampler schedule failed:', err)

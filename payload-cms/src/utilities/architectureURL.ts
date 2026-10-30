@@ -84,3 +84,18 @@ export const browserArchitectureApi = (
 
   return `${PROXY_PATH}?source=${encodeURIComponent(url.origin)}`
 }
+
+/**
+ * The ArchView project label that is safe to put in page data.
+ *
+ * A source row owns its project, so the page hands it to the browser beside the
+ * API URL instead of leaving each template to hard-code one. A blank or missing
+ * value returns `undefined`, which omits the attribute and lets the client fall
+ * back to its own `project` prop.
+ */
+export const browserArchitectureProject = (
+  value?: string | null,
+): string | undefined => {
+  const candidate = typeof value === 'string' ? value.trim() : ''
+  return candidate ? candidate : undefined
+}
