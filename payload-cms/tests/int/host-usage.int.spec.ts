@@ -20,7 +20,7 @@ function fullHour(host = 'host-a'): HostSample[] {
   const start = Date.parse('2026-10-30T12:00:00.000Z')
   return Array.from({ length: 20 }, (_, index) => ({
     host,
-    sampledAt: new Date(start + index * HOST_USAGE_BUCKET_MS).toISOString(),
+    sampledAt: new Date(start + index * HOST_USAGE_BUCKET_MS['1h']).toISOString(),
     cpuAvg: 10 + index,
     memoryPercent: 40,
     loadAvg: 0.5,
@@ -73,19 +73,52 @@ describe('last hour range', () => {
     expect(bucketLabelFor(bucketKeyFor(new Date('2026-10-30T23:57:10.000Z'), '1h'), '1h')).toBe('23:57')
   })
 
-  it('keeps the sampler cadence and the bucket width equal', () => {
+  it('keeps the sampler cadence and the last-hour bucket equal', () => {
     expect(SAMPLER_INTERVAL_MS).toBe(3 * MINUTE)
-    expect(HOST_USAGE_BUCKET_MS).toBe(SAMPLER_INTERVAL_MS)
+    expect(HOST_USAGE_BUCKET_MS['1h']).toBe(SAMPLER_INTERVAL_MS)
   })
 
-  it('leaves the other ranges on hourly and daily buckets', () => {
+  it('uses a readable bucket size for every range', () => {
+    expect(HOST_USAGE_BUCKET_MS['1h']).toBe(3 * MINUTE)
+    expect(HOST_USAGE_BUCKET_MS['24h']).toBe(15 * MINUTE)
+    expect(HOST_USAGE_BUCKET_MS['7d']).toBe(60 * MINUTE)
+    expect(HOST_USAGE_BUCKET_MS['30d']).toBe(24 * 60 * MINUTE)
+
     const time = new Date('2026-10-30T12:34:56.000Z')
 
-    expect(bucketKeyFor(time, '24h')).toBe('2026-10-30T12:00:00.000Z')
+    expect(bucketKeyFor(time, '1h')).toBe('2026-10-30T12:33:00.000Z')
+    expect(bucketKeyFor(time, '24h')).toBe('2026-10-30T12:30:00.000Z')
     expect(bucketKeyFor(time, '7d')).toBe('2026-10-30T12:00:00.000Z')
-    expect(bucketLabelFor(bucketKeyFor(time, '24h'), '24h')).toBe('12:00')
     expect(bucketKeyFor(time, '30d')).toBe('2026-10-30T00:00:00.000Z')
+
+    expect(bucketLabelFor(bucketKeyFor(time, '1h'), '1h')).toBe('12:33')
+    expect(bucketLabelFor(bucketKeyFor(time, '24h'), '24h')).toBe('12:30')
+    expect(bucketLabelFor(bucketKeyFor(time, '7d'), '7d')).toBe('12:00')
     expect(bucketLabelFor(bucketKeyFor(time, '30d'), '30d')).toBe('10/30')
+  })
+
+  it('yields 96 points across a full 24 hours at 15-minute buckets', () => {
+    const now = Date.parse('2026-10-30T12:00:00.000Z')
+    const start = now - HOST_USAGE_RANGE_MS['24h']
+    const samples = Array.from({ length: 96 }, (_, index) =>
+      sample(new Date(start + index * HOST_USAGE_BUCKET_MS['24h']).toISOString()),
+    )
+    const buckets = bucketHostSamples(samples, '24h', now).get('host-a') ?? []
+
+    expect(buckets).toHaveLength(96)
+    expect(buckets[0].label).toBe('12:00')
+    expect(buckets[95].label).toBe('11:45')
+  })
+
+  it('produces one bucket when the range holds a single sample', () => {
+    const now = Date.parse('2026-10-30T12:00:00.000Z')
+    const one = [sample('2026-10-30T11:30:00.000Z')]
+
+    for (const range of ['1h', '24h', '7d', '30d'] as const) {
+      const buckets = bucketHostSamples(one, range, now).get('host-a') ?? []
+      expect(buckets).toHaveLength(1)
+      expect(buckets[0].count).toBe(1)
+    }
   })
 })
 
