@@ -1,7 +1,14 @@
 export type HostUsageRange = '1h' | '24h' | '7d' | '30d'
 
+export type HostRef =
+  | string
+  | number
+  | { id?: string | number | null; [key: string]: unknown }
+  | null
+  | undefined
+
 export type HostSample = {
-  host?: string | number | null
+  host?: HostRef
   hostLabel?: string | null
   sampledAt?: string | Date | null
   cpuAvg?: number | string | null
@@ -28,14 +35,21 @@ export type HostUsageBucket = {
 export const SAMPLER_INTERVAL_MS = 3 * 60 * 1000
 
 /**
- * Bucket width for the "last hour" graph. Deliberately equal to
- * SAMPLER_INTERVAL_MS: with one sample every 3 minutes each bucket holds exactly
- * one sample, so the two move together. Do not widen this to 5 minutes — a
- * 5-minute bucket holds one or two samples, so consecutive points average
- * different populations, the line wobbles from arithmetic alone, and a short
- * spike gets diluted.
+ * Bucket width per range, chosen so a full range yields a readable number of
+ * points: 1h → 20, 24h → 96, 7d → 168, 30d → 30.
+ *
+ * The 1h width is deliberately equal to SAMPLER_INTERVAL_MS (one sample per
+ * bucket), so the sampler cadence and the "last hour" chart move together. Do
+ * not widen it to 5 minutes: a 5-minute bucket holds one or two samples, so
+ * consecutive points average different populations, the line wobbles from
+ * arithmetic alone, and a short spike gets diluted.
  */
-export const HOST_USAGE_BUCKET_MS = SAMPLER_INTERVAL_MS
+export const HOST_USAGE_BUCKET_MS: Record<HostUsageRange, number> = {
+  '1h': SAMPLER_INTERVAL_MS,
+  '24h': 15 * 60 * 1000,
+  '7d': 60 * 60 * 1000,
+  '30d': 24 * 60 * 60 * 1000,
+}
 
 export const HOST_USAGE_RANGE_MS: Record<HostUsageRange, number> = {
   '1h': 60 * 60 * 1000,
@@ -70,6 +84,20 @@ export type RecentSampleOptions = {
   limit?: number
 }
 
+/**
+ * Normalises a relationship value to a plain id string. Payload returns either
+ * a raw id or a populated document (`{ id, name, ... }`) depending on `depth`,
+ * and both must key the same series.
+ */
+export function hostIdOf(value: HostRef): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'object') {
+    const id = value.id
+    return id === null || id === undefined ? null : String(id)
+  }
+  return String(value)
+}
+
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   const n = Number(value)
@@ -91,17 +119,11 @@ function sampleTime(date: Date): string {
 }
 
 export function bucketKeyFor(date: Date, range: HostUsageRange): string {
-  const d = new Date(date)
-  if (range === '30d') {
-    d.setUTCHours(0, 0, 0, 0)
-  } else if (range === '1h') {
-    // Hour-aligned 3-minute steps: 00, 03, ... 57.
-    const stepMinutes = HOST_USAGE_BUCKET_MS / (60 * 1000)
-    d.setUTCMinutes(Math.floor(d.getUTCMinutes() / stepMinutes) * stepMinutes, 0, 0)
-  } else {
-    d.setUTCMinutes(0, 0, 0)
-  }
-  return d.toISOString()
+  const bucketMs = HOST_USAGE_BUCKET_MS[range]
+  // Every bucket size divides 24h evenly, so aligning to the Unix epoch gives
+  // UTC-aligned day, hour, 15-minute and 3-minute boundaries.
+  const aligned = Math.floor(new Date(date).getTime() / bucketMs) * bucketMs
+  return new Date(aligned).toISOString()
 }
 
 export function bucketLabelFor(key: string, range: HostUsageRange): string {
@@ -109,7 +131,7 @@ export function bucketLabelFor(key: string, range: HostUsageRange): string {
   if (range === '30d') {
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
   }
-  if (range === '1h') {
+  if (HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000) {
     return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
   }
   return `${pad2(d.getUTCHours())}:00`
@@ -127,7 +149,7 @@ export function bucketHostSamples(
     if (!sample.sampledAt) continue
     const time = new Date(sample.sampledAt).getTime()
     if (!Number.isFinite(time) || time < cutoff) continue
-    const label = (sample.host !== null && sample.host !== undefined ? String(sample.host) : sample.hostLabel) ?? 'Unknown host'
+    const label = hostIdOf(sample.host) ?? sample.hostLabel ?? 'Unknown host'
     if (!grouped.has(label)) grouped.set(label, [])
     grouped.get(label)!.push(sample)
   }
@@ -174,13 +196,14 @@ export function recentHostSamples(
     const date = new Date(sample.sampledAt)
     const time = date.getTime()
     if (!Number.isFinite(time) || time < cutoff) continue
-    if (host && String(sample.host ?? '') !== host) continue
+    const hostId = hostIdOf(sample.host)
+    if (host && hostId !== host) continue
 
     rows.push({
       time,
       row: {
         time: sampleTime(date),
-        host: sample.host !== null && sample.host !== undefined ? String(sample.host) : null,
+        host: hostId,
         hostLabel: sample.hostLabel ?? 'Unknown host',
         cpuAvg: toNumber(sample.cpuAvg),
         memoryPercent: toNumber(sample.memoryPercent),

@@ -6,9 +6,12 @@ import {
   RECENT_SAMPLE_WINDOW_MS,
   RECENT_SAMPLES_LIMIT,
   bucketHostSamples,
+  hostIdOf,
   recentHostSamples,
   type HostUsageRange,
   type HostSample,
+  type HostRef,
+  type RecentHostSample,
 } from '@/utilities/hostUsage'
 import { HostUsageChart } from './HostUsageChart'
 
@@ -22,7 +25,7 @@ const RANGE_OPTIONS = [
 ]
 
 type SampleRow = {
-  host?: string | number | null
+  host?: HostRef
   hostLabel?: string | null
   sampledAt?: string | Date | null
   cpuAvg?: number | null
@@ -59,6 +62,7 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
       sort: 'sampledAt',
       limit: 1000,
       page,
+      depth: 0,
       overrideAccess: true,
     })
     all.push(...((result.docs ?? []) as SampleRow[]))
@@ -87,6 +91,7 @@ async function loadRecentSamples(host: string | undefined, now: number) {
     sort: '-sampledAt',
     limit: RECENT_SAMPLES_LIMIT,
     page: 1,
+    depth: 0,
     overrideAccess: true,
   })
   return (result.docs ?? []) as SampleRow[]
@@ -116,7 +121,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
 
   const samples = docs.map((d) => ({
-    host: d.host as string | number | null,
+    host: hostIdOf(d.host),
     hostLabel: d.hostLabel as string | null,
     sampledAt: d.sampledAt as string | Date | null,
     cpuAvg: d.cpuAvg as number | null,
@@ -142,6 +147,17 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
 
   const sourceName = (rowHost: string | null, hostLabel: string): string =>
     (rowHost ? sources.find((s) => String(s.id) === rowHost)?.name : undefined) ?? hostLabel
+
+  // The selector is already newest-first, so each group keeps that order.
+  const recentByHost = new Map<string, RecentHostSample[]>()
+  for (const row of recent) {
+    const key = hostIdOf(row.host) ?? row.hostLabel
+    const rows = recentByHost.get(key)
+    if (rows) rows.push(row)
+    else recentByHost.set(key, [row])
+  }
+
+  const rangeLabel = RANGE_OPTIONS.find((r) => r.value === range)?.label ?? range
 
   return (
     <div className="host-usage" style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
@@ -187,7 +203,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
           <section key={label} style={{ marginBottom: 32 }}>
             <h2>{name}</h2>
             {buckets.length === 0 ? (
-              <p>No samples in range.</p>
+              <p>No samples in the selected range ({rangeLabel}).</p>
             ) : (
               <HostUsageChart data={data} />
             )}
@@ -198,38 +214,42 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
       <section style={{ marginTop: 32 }}>
         <h2>Last 15 minutes</h2>
         <p style={{ color: 'var(--theme-elevation-600)', marginBottom: 8 }}>
-          Newest first; times are UTC. Capped at the {RECENT_SAMPLES_LIMIT} most recent
-          samples so a bad sampler cadence cannot render an unbounded list.
+          Grouped by host, newest first; times are UTC. Capped at the {RECENT_SAMPLES_LIMIT}{' '}
+          most recent samples in total across hosts so a bad sampler cadence cannot render
+          an unbounded list.
         </p>
-        {recent.length === 0 ? (
+        {recentByHost.size === 0 ? (
           <p>No samples in the last 15 minutes.</p>
         ) : (
-          <div className="table table--appearance-condensed">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Time (UTC)</th>
-                  <th scope="col">Host</th>
-                  <th scope="col">CPU %</th>
-                  <th scope="col">Memory %</th>
-                  <th scope="col">Load</th>
-                  <th scope="col">Disk %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((row, index) => (
-                  <tr key={`${row.time}-${row.host ?? row.hostLabel}-${index}`}>
-                    <td>{row.time}</td>
-                    <td>{sourceName(row.host, row.hostLabel)}</td>
-                    <td>{formatMetric(row.cpuAvg)}</td>
-                    <td>{formatMetric(row.memoryPercent)}</td>
-                    <td>{formatMetric(row.loadAvg)}</td>
-                    <td>{formatMetric(row.diskPercent)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          Array.from(recentByHost.entries()).map(([key, rows]) => (
+            <div key={key} style={{ marginTop: 16 }}>
+              <h3>{sourceName(rows[0].host, rows[0].hostLabel)}</h3>
+              <div className="table table--appearance-condensed">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Time (UTC)</th>
+                      <th scope="col">CPU %</th>
+                      <th scope="col">Memory %</th>
+                      <th scope="col">Load</th>
+                      <th scope="col">Disk %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, index) => (
+                      <tr key={`${row.time}-${index}`}>
+                        <td>{row.time}</td>
+                        <td>{formatMetric(row.cpuAvg)}</td>
+                        <td>{formatMetric(row.memoryPercent)}</td>
+                        <td>{formatMetric(row.loadAvg)}</td>
+                        <td>{formatMetric(row.diskPercent)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))
         )}
       </section>
     </div>
