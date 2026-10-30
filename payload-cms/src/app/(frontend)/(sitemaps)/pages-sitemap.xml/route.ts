@@ -3,10 +3,10 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { unstable_cache } from 'next/cache'
 
-// Slugs that must not be advertised in the sitemap. `experience` is the renamed
-// experience page, and `experience-page` is kept for old links. Keep this list
-// in sync with `scripts/generate-sitemap.mjs`; both guards stop stale CMS
-// documents from reappearing in a sitemap.
+// Slugs that must not be advertised in the sitemap. The experience page is
+// excluded under both its current and legacy spellings. Keep this list in sync
+// with `scripts/generate-sitemap.mjs`; both guards stop stale CMS documents from
+// reappearing in a sitemap.
 const SITEMAP_EXCLUDED_SLUGS = new Set([
   'posts',
   'search',
