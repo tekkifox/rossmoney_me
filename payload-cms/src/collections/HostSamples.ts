@@ -22,9 +22,15 @@ export const HostSamples: CollectionConfig = {
   },
   admin: {
     group: 'ArchView',
-    hidden: true,
     defaultColumns: ['hostLabel', 'sampledAt', 'cpuAvg', 'memoryPercent', 'loadAvg', 'diskPercent'],
     description: 'Sampled ArchView host metrics, one row per refresh.',
+    components: {
+      views: {
+        list: {
+          Component: '@/components/HostUsage',
+        },
+      },
+    },
   },
   defaultSort: '-sampledAt',
   timestamps: false,
