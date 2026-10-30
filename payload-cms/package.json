@@ -14,7 +14,7 @@
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
     "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
     "ii": "cross-env NODE_OPTIONS=--no-deprecation pnpm --ignore-workspace install",
-    "generate:sitemap": "node ./scripts/generate-sitemap.mjs",
+    "generate:sitemap": "tsx ./scripts/generate-sitemap.mjs",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "lint:tokens": "node ./scripts/check-tokens.mjs",

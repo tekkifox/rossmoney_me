@@ -1,24 +1,17 @@
 #!/usr/bin/env node
+// Run this through `tsx` (see the `generate:sitemap` script in package.json):
+// it imports the TypeScript resolver shared with the dynamic sitemap route.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import {
+  isSitemapExcluded,
+  resolveHeaderSitemapPaths,
+} from '../src/utilities/sitemapPaths.ts'
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-const seedDir = path.join(__dirname, '..', 'src', 'endpoints', 'seed')
 const publicDir = path.join(__dirname, '..', 'public')
-
-// Slugs that must not be advertised in the sitemap. Keep this list in sync with
-// the dynamic sitemap route in `src/app/(frontend)/(sitemaps)`.
-const SITEMAP_EXCLUDED_SLUGS = new Set([
-  'posts',
-  'search',
-  'commits',
-  'experience',
-  'experience-page',
-  'work',
-  'architecture',
-])
 
 function getSiteUrl() {
   return (
@@ -26,23 +19,11 @@ function getSiteUrl() {
   ).replace(/\/$/, '')
 }
 
-function findSlugs() {
-  const files = fs
-    .readdirSync(seedDir)
-    .filter((f) => (f.endsWith('.ts') || f.endsWith('.js')) && !f.startsWith('post-'))
-  const slugs = new Set()
-  for (const file of files) {
-    const text = fs.readFileSync(path.join(seedDir, file), 'utf8')
-    const m = text.match(/slug\s*:\s*['"`]([^'"`]+)['"`]/)
-    if (m && m[1]) slugs.add(m[1].trim())
-  }
-  return Array.from(slugs)
-}
-
 function writeSitemap(urls) {
   const siteUrl = getSiteUrl()
   const xml = [`<?xml version="1.0" encoding="UTF-8"?>`, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`]
   for (const u of urls) {
+    if (isSitemapExcluded(u)) continue
     xml.push('  <url>')
     xml.push(`    <loc>${siteUrl}${u}</loc>`)
     xml.push('    <changefreq>monthly</changefreq>')
@@ -70,19 +51,13 @@ function writeRobots() {
   console.log('Wrote', path.join(publicDir, 'robots.txt'))
 }
 
-function main() {
-  const slugs = findSlugs()
-  // map slugs to paths; treat 'home' as root
-  const urls = new Set()
-  urls.add('/')
-  for (const s of slugs) {
-    if (!s) continue
-    if (s === 'home') continue
-    if (SITEMAP_EXCLUDED_SLUGS.has(s)) continue
-    urls.add('/' + s)
-  }
-  writeSitemap(Array.from(urls))
+async function main() {
+  // No database is available during a static build, so the shared resolver
+  // falls back to the navigation seeded in `payload.config.ts` and
+  // `src/endpoints/seed/index.ts`.
+  const urls = await resolveHeaderSitemapPaths()
+  writeSitemap(urls)
   writeRobots()
 }
 
-main()
+await main()
