@@ -3,10 +3,6 @@ import { getPayload, type Payload } from 'payload'
 
 import config from '@/payload.config'
 import { buildPagesSitemap } from '@/app/(frontend)/(sitemaps)/pages-sitemap.xml/route'
-import { architecture as architectureSeed } from '@/endpoints/seed/architecture-page'
-import { commits as commitsSeed } from '@/endpoints/seed/commits-page'
-import { experiencePage as experienceSeed } from '@/endpoints/seed/experience-page'
-import { work as workSeed } from '@/endpoints/seed/work-page'
 import type { Header } from '@/payload-types'
 import { assembleSite } from '@/utilities/assembleSite'
 import { resolveHeaderSitemapPaths, SITEMAP_EXCLUDED_PATHS } from '@/utilities/sitemapPaths'
@@ -37,24 +33,12 @@ describe('pages sitemap', () => {
     })
   })
 
-  it('keeps the retired page data but seeds it as drafts', () => {
-    expect(commitsSeed.slug).toBe('commits')
-    expect(commitsSeed._status).toBe('draft')
-    expect(experienceSeed.slug).toBe('experience-page')
-    expect(experienceSeed._status).toBe('draft')
-    expect(workSeed.slug).toBe('work')
-    expect(workSeed._status).toBe('draft')
-    expect(architectureSeed.slug).toBe('architecture')
-    expect(architectureSeed._status).toBe('draft')
-  })
-
-  it('keeps the retired page data available to the site payload', async () => {
+  it('keeps the homepage data available without the retired pages', async () => {
     const site = await assembleSite(payload)
 
-    expect(site.commits.title).toBe(commitsSeed.title)
-    expect(site.experiencePage.title).toBe(experienceSeed.title)
-    expect(site.work.title).toBe(workSeed.title)
-    expect(site.architecture.title).toBe(architectureSeed.title)
+    // The retired page documents are no longer seeded; the homepage reads the
+    // experience and projects collections, and the assembled site still exposes
+    // those sections, just without the retired page content.
     expect(site.experience).toBeDefined()
     expect(site.projects).toBeDefined()
   })

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * Unpublish the two retired page documents without deleting their data.
+ * Unpublish the four retired page documents without deleting their data.
  *
- * The `commits`, `experience-page`, `work` and `architecture` pages are kept in
- * the CMS because the homepage still reads their content. They must not be
- * public, so this one-off helper updates their `_status` to `draft`. It never
- * deletes anything.
+ * Fresh databases no longer seed the `commits`, `experience-page`, `work` and
+ * `architecture` pages: their templates are gone and nothing reads them. This
+ * one-off helper is only for databases that already contain those documents
+ * from an earlier seed. It updates their `_status` to `draft` so they stay out
+ * of the public site and sitemap. It never deletes anything.
  *
  * Usage (from the repository root):
  *   pnpm --filter payload-cms run unpublish:retired-pages
