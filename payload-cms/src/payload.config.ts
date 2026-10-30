@@ -28,6 +28,7 @@ import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
 import { cv } from './endpoints/seed/cv-page';
 import { seedArchviewSources, type SeededArchviewSources } from './endpoints/seed/archview-sources';
+import { dedupeByTitle, normalizeTitle } from './utilities/dedupeByTitle';
 import { asRecord } from './utilities/json';
 import type { Form } from './payload-types';
 import fs from 'fs'
@@ -344,10 +345,22 @@ export default buildConfig({
         { title: 'Project Better Energy', role: 'Full stack PHP and Vue work for business tooling', summary: 'Worked in a small team maintaining Laravel applications, built Vue.js finance wizards, and delivered a stockist map feature for EV chargers.', tags: [{ tag: 'Laravel' }, { tag: 'Vue.js' }, { tag: 'Tailwind / Bootstrap' }], order: 3 }
       ];
 
-      const existingProjects = await pClient.find({ collection: 'projects', limit: 100 });
+      // Fetch immediately before each item: a list captured once before the
+      // loop would miss rows created earlier in the same pass (for example by a
+      // second deployment seeding the shared database at the same time). The
+      // check must use the same normalised key as the read path so casing and
+      // surrounding whitespace cannot create a duplicate.
       for (const proj of defaultProjects) {
-        const found = existingProjects.docs.find((p) => p.title === proj.title);
         try {
+          const existingProjects = await pClient.find({
+            collection: 'projects',
+            limit: 1000,
+            depth: 0,
+          });
+          const matches = existingProjects.docs.filter(
+            (doc) => normalizeTitle(doc.title) === normalizeTitle(proj.title),
+          );
+          const found = dedupeByTitle(matches)[0];
           if (found && forceSeed) {
             await pClient.update({ collection: 'projects', id: found.id, data: proj });
           } else if (!found) {
@@ -364,10 +377,17 @@ export default buildConfig({
         { year: '2021 - 2024', title: 'Platform support', organization: 'Managed hosting and application teams', summary: 'Kept production systems stable, handled support workloads, and improved developer delivery paths across PHP and AWS stacks.', highlights: [{ highlight: 'AWS' }, { highlight: 'Ubuntu' }, { highlight: 'Support' }], order: 2 }
       ];
 
-      const existingExp = await pClient.find({ collection: 'experience', limit: 100 });
       for (const exp of defaultExperience) {
-        const found = existingExp.docs.find((e) => e.title === exp.title);
         try {
+          const existingExp = await pClient.find({
+            collection: 'experience',
+            limit: 1000,
+            depth: 0,
+          });
+          const matches = existingExp.docs.filter(
+            (doc) => normalizeTitle(doc.title) === normalizeTitle(exp.title),
+          );
+          const found = dedupeByTitle(matches)[0];
           if (found && forceSeed) {
             await pClient.update({ collection: 'experience', id: found.id, data: exp });
           } else if (!found) {

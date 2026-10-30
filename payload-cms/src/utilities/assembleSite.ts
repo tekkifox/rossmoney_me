@@ -2,6 +2,7 @@ import type { Payload } from 'payload'
 
 import type { Experience, Page, Project } from '@/payload-types'
 
+import { dedupeByTitle } from '@/utilities/dedupeByTitle'
 import { getSafePayload } from '@/utilities/getSafePayload'
 import { asRecord, asString, isObjectLike } from '@/utilities/json'
 
@@ -228,8 +229,8 @@ export async function assembleSite(pClientArg?: Payload): Promise<AssembledSite>
       links: navLinks,
     },
     navItems: navLinks,
-    projects: projects.docs,
-    experience: experience.docs,
+    projects: dedupeByTitle(projects.docs),
+    experience: dedupeByTitle(experience.docs),
     updatedAt: new Date().toISOString(),
   }
 }
