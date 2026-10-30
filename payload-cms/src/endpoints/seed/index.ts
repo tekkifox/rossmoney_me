@@ -6,10 +6,6 @@ import { home } from './home'
 import { image1 } from './image-1'
 import { image2 } from './image-2'
 import { imageHero1 } from './image-hero-1'
-import { architecture } from './architecture-page'
-import { commits } from './commits-page'
-import { experiencePage } from './experience-page'
-import { work } from './work-page'
 import { travelling } from './travelling-page'
 import { gameservers } from './game-servers-page'
 import { services } from './services-page'
@@ -181,36 +177,16 @@ export const seed = async ({
     payload.create({
       collection: 'pages',
       depth: 0,
-      data: architecture,
+      data:
+        seededArchviewSources.vortexserversId !== undefined
+          ? { ...gameservers, archviewSource: seededArchviewSources.vortexserversId }
+          : gameservers,
     }),
     payload.create({
       collection: 'pages',
       depth: 0,
-      data: commits,
+      data: cv,
     }),
-    	  payload.create({
-		  collection: 'pages',
-		  depth: 0,
-		  data: work,
-		}),
-    		payload.create({
-		  collection: 'pages',
-		  depth: 0,
-		  data: experiencePage,
-		}),
-		payload.create({
-		  collection: 'pages',
-		  depth: 0,
-		  data:
-		    seededArchviewSources.vortexserversId !== undefined
-		      ? { ...gameservers, archviewSource: seededArchviewSources.vortexserversId }
-		      : gameservers,
-		}),
-            payload.create({
-              collection: 'pages',
-              depth: 0,
-              data: cv,
-            }),
   ])
 
   payload.logger.info(`— Seeding globals...`)
