@@ -37,7 +37,7 @@ interface ArchitecturePayload {
   [key: string]: unknown
 }
 
-const REFRESH_INTERVAL_MS = 5000
+const REFRESH_INTERVAL_MS = 10000
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
   useEffect(() => {
