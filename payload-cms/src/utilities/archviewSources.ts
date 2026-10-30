@@ -11,6 +11,8 @@ type SourceRow = Record<string, unknown>
  * incomplete.
  */
 export type ArchviewSourceRecord = {
+  id?: string
+  name?: string
   origin: string
   credentials?: ArchviewSourceCredentials
 }
@@ -62,8 +64,11 @@ export const toArchviewSourceRecord = (row: unknown): ArchviewSourceRecord | nul
     return null
   }
 
+  const id = asString(record.id)
+  const name = readRequired(record, 'name') ?? undefined
   const credentials = readCredentials(record)
-  return credentials ? { origin, credentials } : { origin }
+  const base = { origin, ...(id ? { id } : {}), ...(name ? { name } : {}) }
+  return credentials ? { ...base, credentials } : base
 }
 
 /**
