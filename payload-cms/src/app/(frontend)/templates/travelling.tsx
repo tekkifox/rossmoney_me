@@ -15,10 +15,8 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
-import { archviewFetchForPageSource, resolvePageArchviewSource } from '@/utilities/archviewPageSource'
-import { getSafePayload } from '@/utilities/getSafePayload'
+import { loadArchitectureSnapshot } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
-import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 type SitePayload = {
   travelling?: unknown
@@ -60,21 +58,11 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   const cardsList = Array.isArray(travelPayload.cards) ? readCards(travelPayload.cards) : (Array.isArray(data.cards) ? readCards(data.cards) : [])
   const summaryLead = readString(travelPayload.summaryLead) ?? readString(travelData.summaryLead) ?? readString(data.summaryLead) ?? page.lead ?? ''
 
-  // Server-side fetch architecture snapshot via the CMS API route (ISR)
-  let archPayload: Record<string, unknown> | null = null
-  try {
-    const resolvedSource = await resolvePageArchviewSource(page, travelPayload, {
-      payload: await getSafePayload(),
-    })
-    const envFallback = process.env.ARCHVIEW_URL || process.env.ARCHVIEW_HOST || process.env.ARCHVIEW || 'http://localhost:8080'
-    const base = resolvedSource?.origin || envFallback
-    const url = `${base.replace(/\/$/, '')}/api/architecture?project=image-mosaic`
-    const r = await archviewFetchForPageSource(url, { cache: 'no-store' }, resolvedSource)
-    if (r.ok) archPayload = redactInternalEndpoints((await r.json()) as Record<string, unknown>)
-    else console.warn('ArchView returned', r.status, r.statusText, 'for', url)
-  } catch (err) {
-    console.warn('Failed to fetch architecture for travelling', err)
-  }
+  // Server-side fetch of the redacted snapshot for this page
+  const archPayload = await loadArchitectureSnapshot(page, travelPayload, {
+    label: 'travelling',
+    project: 'image-mosaic',
+  })
 
   const archTitle = titleFromPayload(archPayload)
   const archDesc = descriptionFromPayload(archPayload)
