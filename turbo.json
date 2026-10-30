@@ -8,7 +8,11 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {},
-    "test:int": {}
+    "lint": {
+      "tags": ["ci"]
+    },
+    "test:int": {
+      "tags": ["ci"]
+    }
   }
 }
