@@ -58,6 +58,9 @@ export const HostSamples: CollectionConfig = {
     numericField('hostCount'),
     numericField('networkRxMB'),
     numericField('networkTxMB'),
-    numericField('updatedAt'),
+    {
+      name: 'updatedAt',
+      type: 'date',
+    },
   ],
 }

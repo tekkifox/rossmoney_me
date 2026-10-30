@@ -1,28 +1,9 @@
 import React from 'react'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { bucketHostSamples, type HostUsageRange } from '@/utilities/hostUsage'
 
 type SearchParams = Record<string, string | string[] | undefined> | Promise<Record<string, string | string[] | undefined>>
-
-type Sample = {
-  host?: number | string | { id?: string | number } | null
-  hostLabel?: string | null
-  sampledAt?: string | Date | null
-  cpuAvg?: number | null
-  memoryPercent?: number | null
-  loadAvg?: number | null
-  diskPercent?: number | null
-}
-
-type Bucket = {
-  key: string
-  label: string
-  cpuAvg: number | null
-  memoryPercent: number | null
-  loadAvg: number | null
-  diskPercent: number | null
-  count: number
-}
 
 const RANGE_OPTIONS = [
   { value: '24h', label: '24 hours' },
@@ -35,46 +16,15 @@ function firstParam(value: string | string[] | undefined): string | undefined {
   return value
 }
 
-function rangeMs(range: string): number {
-  if (range === '7d') return 7 * 24 * 60 * 60 * 1000
-  if (range === '30d') return 30 * 24 * 60 * 60 * 1000
-  return 24 * 60 * 60 * 1000
+function isRange(value: string | undefined): value is HostUsageRange {
+  return value === '24h' || value === '7d' || value === '30d'
 }
 
-function bucketKey(date: Date, range: string): string {
-  const d = new Date(date)
-  if (range === '30d') {
-    d.setUTCHours(0, 0, 0, 0)
-  } else {
-    d.setUTCMinutes(0, 0, 0)
-  }
-  return d.toISOString()
-}
-
-function bucketLabel(key: string, range: string): string {
-  const d = new Date(key)
-  if (range === '30d') {
-    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
-  }
-  return `${String(d.getUTCHours()).padStart(2, '0')}:00`
-}
-
-function toNumber(value: unknown): number | null {
-  if (value === null || value === undefined) return null
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
-}
-
-function average(values: (number | null)[]): number | null {
-  const nums = values.filter((v): v is number => v !== null)
-  if (nums.length === 0) return null
-  return nums.reduce((a, b) => a + b, 0) / nums.length
-}
-
-async function loadSamples(host: string | undefined, range: string): Promise<Sample[]> {
+async function loadSamples(host: string | undefined, range: HostUsageRange) {
   const payload = await getPayload({ config })
+  const { HOST_USAGE_RANGE_MS } = await import('@/utilities/hostUsage')
   const now = Date.now()
-  const cutoff = new Date(now - rangeMs(range)).toISOString()
+  const cutoff = new Date(now - HOST_USAGE_RANGE_MS[range]).toISOString()
   const where: Record<string, unknown> = {
     sampledAt: { greater_than_equal: cutoff },
   }
@@ -88,41 +38,10 @@ async function loadSamples(host: string | undefined, range: string): Promise<Sam
     limit: 100000,
     overrideAccess: true,
   })
-  return (result.docs ?? []) as Sample[]
+  return { payload, docs: (result.docs ?? []) as Array<Record<string, unknown>>, now }
 }
 
-function groupByHost(samples: Sample[]): Map<string, Sample[]> {
-  const map = new Map<string, Sample[]>()
-  for (const sample of samples) {
-    const label = sample.hostLabel ?? 'Unknown host'
-    if (!map.has(label)) map.set(label, [])
-    map.get(label)!.push(sample)
-  }
-  return map
-}
-
-function aggregate(samples: Sample[], range: string): Bucket[] {
-  const buckets = new Map<string, Sample[]>()
-  for (const sample of samples) {
-    if (!sample.sampledAt) continue
-    const key = bucketKey(new Date(sample.sampledAt), range)
-    if (!buckets.has(key)) buckets.set(key, [])
-    buckets.get(key)!.push(sample)
-  }
-  return Array.from(buckets.entries())
-    .sort(([a], [b]) => (a < b ? -1 : 1))
-    .map(([key, items]) => ({
-      key,
-      label: bucketLabel(key, range),
-      cpuAvg: average(items.map((s) => toNumber(s.cpuAvg))),
-      memoryPercent: average(items.map((s) => toNumber(s.memoryPercent))),
-      loadAvg: average(items.map((s) => toNumber(s.loadAvg))),
-      diskPercent: average(items.map((s) => toNumber(s.diskPercent))),
-      count: items.length,
-    }))
-}
-
-function LineChart({ title, unit, buckets, color }: { title: string; unit: string; buckets: Bucket[]; color: string }) {
+function LineChart({ title, unit, buckets, color }: { title: string; unit: string; buckets: { cpuAvg: number | null; memoryPercent: number | null; loadAvg: number | null; diskPercent: number | null; label: string }[]; color: string }) {
   const width = 480
   const height = 160
   const padLeft = 40
@@ -133,9 +52,9 @@ function LineChart({ title, unit, buckets, color }: { title: string; unit: strin
   const plotH = height - padTop - padBottom
 
   const values = buckets.map((b) => {
-    if (title.startsWith('CPU')) return b.cpuAvg
-    if (title.startsWith('Memory')) return b.memoryPercent
-    if (title.startsWith('Load')) return b.loadAvg
+    if (title === 'CPU') return b.cpuAvg
+    if (title === 'Memory') return b.memoryPercent
+    if (title === 'Load') return b.loadAvg
     return b.diskPercent
   })
 
@@ -197,21 +116,29 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
       ? await (props.searchParams as Promise<Record<string, string | string[] | undefined>>)
       : ((props?.searchParams as Record<string, string | string[] | undefined>) ?? {})
 
-  const range = firstParam(actual.range) ?? '24h'
+  const rangeInput = firstParam(actual.range)
+  const range: HostUsageRange = isRange(rangeInput) ? rangeInput : '24h'
   const host = firstParam(actual.host)
 
-  const payload = await getPayload({ config })
+  const { payload, docs, now } = await loadSamples(host, range)
   const sourcesResult = await payload.find({
     collection: 'archview-sources',
     limit: 100,
     overrideAccess: true,
   })
-  const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string; isDefault?: boolean }>
+  const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
 
-  const samples = await loadSamples(host, range)
-  const byHost = groupByHost(samples)
+  const samples = docs.map((d) => ({
+    hostLabel: d.hostLabel as string | null,
+    sampledAt: d.sampledAt as string | Date | null,
+    cpuAvg: d.cpuAvg as number | null,
+    memoryPercent: d.memoryPercent as number | null,
+    loadAvg: d.loadAvg as number | null,
+    diskPercent: d.diskPercent as number | null,
+  }))
 
-  // If no host filter and no samples, still show sources
+  const byHost = bucketHostSamples(samples, range, now)
+
   const hostLabels = host
     ? [host]
     : sources.map((s) => s.name).filter(Boolean) as string[]
@@ -249,8 +176,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
       {hostLabels.length === 0 && <p>No hosts configured.</p>}
 
       {hostLabels.map((label, idx) => {
-        const hostSamples = byHost.get(label) ?? []
-        const buckets = aggregate(hostSamples, range)
+        const buckets = byHost.get(label) ?? []
         const color = colors[idx % colors.length]
         return (
           <section key={label} style={{ marginBottom: 32 }}>

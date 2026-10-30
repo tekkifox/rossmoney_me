@@ -919,7 +919,7 @@ export interface HostSample {
   hostCount?: number | null;
   networkRxMB?: number | null;
   networkTxMB?: number | null;
-  updatedAt?: number | null;
+  updatedAt?: string | null;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
