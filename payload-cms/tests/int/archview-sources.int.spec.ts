@@ -365,7 +365,9 @@ describe('ArchView sources collection', () => {
     )
 
     expect(production?.isDefault).toBe(true)
+    expect(production?.project).toBe('rossmoney_me')
     expect(vortex?.isDefault).toBe(false)
+    expect(vortex?.project).toBe('vortexservers_co_uk')
 
     const productionRaw = await payload.db.findOne<{
       clientSecret?: string
@@ -402,6 +404,7 @@ describe('ArchView sources collection', () => {
     ).resolves.toMatchObject({
       kind: 'relation',
       origin: 'https://archview.vortexservers.co.uk',
+      project: 'vortexservers_co_uk',
       credentials: undefined,
     })
   })
