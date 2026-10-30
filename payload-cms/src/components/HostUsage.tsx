@@ -6,9 +6,11 @@ import {
   RECENT_SAMPLE_WINDOW_MS,
   RECENT_SAMPLES_LIMIT,
   bucketHostSamples,
+  hostIdOf,
   recentHostSamples,
   type HostUsageRange,
   type HostSample,
+  type HostRef,
   type RecentHostSample,
 } from '@/utilities/hostUsage'
 import { HostUsageChart } from './HostUsageChart'
@@ -23,7 +25,7 @@ const RANGE_OPTIONS = [
 ]
 
 type SampleRow = {
-  host?: string | number | null
+  host?: HostRef
   hostLabel?: string | null
   sampledAt?: string | Date | null
   cpuAvg?: number | null
@@ -60,6 +62,7 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
       sort: 'sampledAt',
       limit: 1000,
       page,
+      depth: 0,
       overrideAccess: true,
     })
     all.push(...((result.docs ?? []) as SampleRow[]))
@@ -88,6 +91,7 @@ async function loadRecentSamples(host: string | undefined, now: number) {
     sort: '-sampledAt',
     limit: RECENT_SAMPLES_LIMIT,
     page: 1,
+    depth: 0,
     overrideAccess: true,
   })
   return (result.docs ?? []) as SampleRow[]
@@ -117,7 +121,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
 
   const samples = docs.map((d) => ({
-    host: d.host as string | number | null,
+    host: hostIdOf(d.host),
     hostLabel: d.hostLabel as string | null,
     sampledAt: d.sampledAt as string | Date | null,
     cpuAvg: d.cpuAvg as number | null,
@@ -147,7 +151,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   // The selector is already newest-first, so each group keeps that order.
   const recentByHost = new Map<string, RecentHostSample[]>()
   for (const row of recent) {
-    const key = row.host ?? row.hostLabel
+    const key = hostIdOf(row.host) ?? row.hostLabel
     const rows = recentByHost.get(key)
     if (rows) rows.push(row)
     else recentByHost.set(key, [row])

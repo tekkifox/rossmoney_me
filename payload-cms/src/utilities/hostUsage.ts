@@ -1,7 +1,14 @@
 export type HostUsageRange = '1h' | '24h' | '7d' | '30d'
 
+export type HostRef =
+  | string
+  | number
+  | { id?: string | number | null; [key: string]: unknown }
+  | null
+  | undefined
+
 export type HostSample = {
-  host?: string | number | null
+  host?: HostRef
   hostLabel?: string | null
   sampledAt?: string | Date | null
   cpuAvg?: number | string | null
@@ -77,6 +84,20 @@ export type RecentSampleOptions = {
   limit?: number
 }
 
+/**
+ * Normalises a relationship value to a plain id string. Payload returns either
+ * a raw id or a populated document (`{ id, name, ... }`) depending on `depth`,
+ * and both must key the same series.
+ */
+export function hostIdOf(value: HostRef): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'object') {
+    const id = value.id
+    return id === null || id === undefined ? null : String(id)
+  }
+  return String(value)
+}
+
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   const n = Number(value)
@@ -128,7 +149,7 @@ export function bucketHostSamples(
     if (!sample.sampledAt) continue
     const time = new Date(sample.sampledAt).getTime()
     if (!Number.isFinite(time) || time < cutoff) continue
-    const label = (sample.host !== null && sample.host !== undefined ? String(sample.host) : sample.hostLabel) ?? 'Unknown host'
+    const label = hostIdOf(sample.host) ?? sample.hostLabel ?? 'Unknown host'
     if (!grouped.has(label)) grouped.set(label, [])
     grouped.get(label)!.push(sample)
   }
@@ -175,13 +196,14 @@ export function recentHostSamples(
     const date = new Date(sample.sampledAt)
     const time = date.getTime()
     if (!Number.isFinite(time) || time < cutoff) continue
-    if (host && String(sample.host ?? '') !== host) continue
+    const hostId = hostIdOf(sample.host)
+    if (host && hostId !== host) continue
 
     rows.push({
       time,
       row: {
         time: sampleTime(date),
-        host: sample.host !== null && sample.host !== undefined ? String(sample.host) : null,
+        host: hostId,
         hostLabel: sample.hostLabel ?? 'Unknown host',
         cpuAvg: toNumber(sample.cpuAvg),
         memoryPercent: toNumber(sample.memoryPercent),

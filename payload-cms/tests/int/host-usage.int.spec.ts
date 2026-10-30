@@ -9,6 +9,7 @@ import {
   bucketHostSamples,
   bucketKeyFor,
   bucketLabelFor,
+  hostIdOf,
   recentHostSamples,
   type HostSample,
 } from '@/utilities/hostUsage'
@@ -119,6 +120,35 @@ describe('last hour range', () => {
       expect(buckets).toHaveLength(1)
       expect(buckets[0].count).toBe(1)
     }
+  })
+})
+
+describe('populated host relationships', () => {
+  const now = Date.parse('2026-10-30T12:00:00.000Z')
+
+  it('normalises raw and populated host ids', () => {
+    expect(hostIdOf('abc')).toBe('abc')
+    expect(hostIdOf(42)).toBe('42')
+    expect(hostIdOf({ id: 'abc', name: 'alpha' })).toBe('abc')
+    expect(hostIdOf({ id: 7 })).toBe('7')
+    expect(hostIdOf({ id: null })).toBeNull()
+    expect(hostIdOf(null)).toBeNull()
+    expect(hostIdOf(undefined)).toBeNull()
+  })
+
+  it('keys buckets and recent rows by id when the host is populated', () => {
+    const populated = {
+      ...sample('2026-10-30T11:55:00.000Z'),
+      host: { id: 'host-a', name: 'alpha' },
+      hostLabel: 'alpha',
+    }
+    const buckets = bucketHostSamples([populated], '1h', now)
+    const rows = recentHostSamples([populated], { now, host: 'host-a' })
+
+    expect([...buckets.keys()]).toEqual(['host-a'])
+    expect(buckets.get('host-a')).toHaveLength(1)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].host).toBe('host-a')
   })
 })
 
