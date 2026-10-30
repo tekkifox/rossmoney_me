@@ -234,7 +234,7 @@ describe('host usage data path', () => {
       limit: 100000,
       overrideAccess: true,
     })
-    const filtered = (result.docs as any[]).filter((d) =>
+    const filtered = (result.docs as unknown as Array<Record<string, unknown>>).filter((d) =>
       String(d.hostLabel).startsWith('host-') && String(d.hostLabel).endsWith(String(runId)),
     )
     const buckets = bucketHostSamples(

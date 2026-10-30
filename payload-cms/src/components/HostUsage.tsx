@@ -32,7 +32,16 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
   if (host) {
     where.host = { equals: host }
   }
-  const all: any[] = []
+  type SampleRow = {
+    host?: string | number | null
+    hostLabel?: string | null
+    sampledAt?: string | Date | null
+    cpuAvg?: number | null
+    memoryPercent?: number | null
+    loadAvg?: number | null
+    diskPercent?: number | null
+  }
+  const all: SampleRow[] = []
   let page = 1
   while (true) {
     const result = await payload.find({
@@ -43,7 +52,7 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
       page,
       overrideAccess: true,
     })
-    all.push(...(result.docs ?? []))
+    all.push(...((result.docs ?? []) as SampleRow[]))
     if (!result.hasNextPage) break
     page += 1
   }
@@ -68,7 +77,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   })
   const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
 
-  const samples = docs.map((d: any) => ({
+  const samples = docs.map((d) => ({
     host: d.host as string | number | null,
     hostLabel: d.hostLabel as string | null,
     sampledAt: d.sampledAt as string | Date | null,

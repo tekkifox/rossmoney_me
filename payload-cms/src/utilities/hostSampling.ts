@@ -7,7 +7,6 @@ import {
   type ArchviewSourceCredentials,
 } from './archviewAuth'
 import { toArchviewSourceRecord } from './archviewSources'
-import { asRecord } from './json'
 
 let lastPruneAt = 0
 
