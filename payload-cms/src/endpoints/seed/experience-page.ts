@@ -2,7 +2,7 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 
 export const experiencePage: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'experience-page',
-  _status: 'published',
+  _status: 'draft',
   hero: {
     type: 'none',
   },

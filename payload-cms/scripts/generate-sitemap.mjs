@@ -8,6 +8,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const seedDir = path.join(__dirname, '..', 'src', 'endpoints', 'seed')
 const publicDir = path.join(__dirname, '..', 'public')
 
+// Slugs that must not be advertised in the sitemap. Keep this list in sync with
+// the dynamic sitemap route in `src/app/(frontend)/(sitemaps)`.
+const SITEMAP_EXCLUDED_SLUGS = new Set([
+  'posts',
+  'search',
+  'commits',
+  'experience',
+  'experience-page',
+  'work',
+  'architecture',
+])
+
 function getSiteUrl() {
   return (
     process.env.NEXT_PUBLIC_SERVER_URL || process.env.SERVER_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || 'https://www.rossmoney.me'
@@ -66,6 +78,7 @@ function main() {
   for (const s of slugs) {
     if (!s) continue
     if (s === 'home') continue
+    if (SITEMAP_EXCLUDED_SLUGS.has(s)) continue
     urls.add('/' + s)
   }
   writeSitemap(Array.from(urls))
