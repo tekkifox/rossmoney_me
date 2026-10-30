@@ -150,13 +150,13 @@ jobs:
             type=sha,prefix=
 
       - name: Download linux/amd64 digest
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: digest-amd64
           path: /tmp/digests/amd64
 
       - name: Download linux/arm64 digest
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: digest-arm64
           path: /tmp/digests/arm64
