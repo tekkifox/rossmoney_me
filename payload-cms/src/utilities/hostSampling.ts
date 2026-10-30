@@ -20,8 +20,15 @@ export async function sampleOneSource(
   payload: Awaited<ReturnType<typeof getPayload>>,
   record: { id?: string; name?: string; origin: string; credentials?: ArchviewSourceCredentials },
 ): Promise<void> {
+  const log = (msg: string) => {
+    if (payload.logger?.info) payload.logger.info(msg)
+    else console.log(msg)
+  }
   try {
-    if (!record.id) return
+    if (!record.id) {
+      log(`host sample: ${record.name ?? record.origin} skipped (no id)`)
+      return
+    }
     const init: RequestInit = {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
@@ -30,12 +37,25 @@ export async function sampleOneSource(
     const res = record.credentials
       ? await archviewSourceFetch(url, init, record.credentials)
       : await archviewFetch(url, init, process.env)
-    if (!res || !res.ok) return
+    if (!res) {
+      log(`host sample: ${record.name ?? record.origin} skipped (no response)`)
+      return
+    }
+    if (!res.ok) {
+      log(`host sample: ${record.name ?? record.origin} skipped (HTTP ${res.status})`)
+      return
+    }
     const contentType = res.headers.get('content-type') || ''
-    if (!contentType.includes('application/json')) return
+    if (!contentType.includes('application/json')) {
+      log(`host sample: ${record.name ?? record.origin} skipped (non-JSON)`)
+      return
+    }
     const data = (await res.json()) as { telemetry?: { metrics?: Record<string, unknown> } }
     const metrics = data?.telemetry?.metrics
-    if (!metrics) return
+    if (!metrics) {
+      log(`host sample: ${record.name ?? record.origin} skipped (no metrics)`)
+      return
+    }
 
     const toNumber = (v: unknown): number | null => {
       if (v === null || v === undefined) return null
@@ -47,6 +67,7 @@ export async function sampleOneSource(
         ? null
         : new Date(metrics.updatedAt as string | number).toISOString()
 
+    log(`host sample: ${record.name ?? record.origin} fetched`)
     await payload.create({
       collection: 'host-samples',
       data: {

@@ -394,7 +394,13 @@ export default buildConfig({
     // long-lived Node process (disabled on Vercel/serverless where an interval
     // cannot survive). Retention (30 days) happens in the same sweep, daily.
     const { sampleAllEnabledHosts, shouldRunHostSampler } = await import('./utilities/hostSampling')
-    if (process.env.NODE_ENV === 'production' && shouldRunHostSampler(process.env)) {
+    const shouldStart = process.env.NODE_ENV !== 'development' && shouldRunHostSampler(process.env)
+    if (payload.logger?.info) {
+      payload.logger.info(
+        `host sampler: ${shouldStart ? 'starting' : 'disabled'} (NODE_ENV=${process.env.NODE_ENV}, VERCEL=${process.env.VERCEL ?? ''}, HOST_SAMPLER=${process.env.HOST_SAMPLER ?? ''})`,
+      )
+    }
+    if (shouldStart) {
     try {
       const interval = setInterval(() => {
         void sampleAllEnabledHosts(payload)
