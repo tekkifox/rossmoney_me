@@ -23,6 +23,7 @@ import { Posts } from './collections/Posts';
 import { Categories } from './collections/Categories';
 import { ErrorLogs } from './collections/ErrorLogs';
 import { ArchviewSources } from './collections/ArchviewSources';
+import { HostSamples } from './collections/HostSamples';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
@@ -89,6 +90,12 @@ export default buildConfig({
       // The `BeforeDashboard` component renders the 'welcome' block that you see after logging into your admin panel.
       // Feel free to delete this at any time. Simply remove the line below.
       beforeDashboard: ['@/components/BeforeDashboard'],
+      views: {
+        'host-usage': {
+          Component: '@/components/HostUsage',
+          path: '/host-usage',
+        },
+      },
     },
     importMap: {
       baseDir: path.resolve(dirname),
@@ -117,7 +124,7 @@ export default buildConfig({
       ],
     },
   },
-  collections: [Users, Pages, Posts, Categories, Projects, Experience, Media, ErrorLogs, ArchviewSources],
+  collections: [Users, Pages, Posts, Categories, Projects, Experience, Media, ErrorLogs, ArchviewSources, HostSamples],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   email: emailAdapter,
@@ -382,5 +389,20 @@ export default buildConfig({
       const message = err instanceof Error ? err.message : String(err);
       payload.logger.error(`Error seeding default documents: ${message}`);
     }
+
+    // Independent host sampler: covers hosts that nobody browses. Runs in the
+    // long-lived Node process (disabled on Vercel/serverless where an interval
+    // cannot survive). Retention (30 days) happens in the same sweep, daily.
+    const { sampleAllEnabledHosts, shouldRunHostSampler } = await import('./utilities/hostSampling')
+    if (process.env.NODE_ENV === 'production' && shouldRunHostSampler(process.env)) {
+    try {
+      const interval = setInterval(() => {
+        void sampleAllEnabledHosts(payload)
+      }, 60 * 1000)
+      interval.unref?.()
+    } catch (err) {
+      console.warn('host sampler schedule failed:', err)
+    }
+  }
   },
 });
