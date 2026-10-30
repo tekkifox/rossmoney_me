@@ -407,7 +407,10 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
           hostCount: toSampleNumber(m.hostCount),
           networkRxMB: toSampleNumber(m.networkRxMB),
           networkTxMB: toSampleNumber(m.networkTxMB),
-          updatedAt: toSampleNumber(m.updatedAt),
+          updatedAt:
+            m.updatedAt === null || m.updatedAt === undefined
+              ? null
+              : new Date(m.updatedAt as string | number).toISOString(),
         },
         overrideAccess: true,
       })
