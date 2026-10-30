@@ -3,14 +3,17 @@ import { getPayload, type Payload } from 'payload'
 
 import config from '@/payload.config'
 import { buildPagesSitemap } from '@/app/(frontend)/(sitemaps)/pages-sitemap.xml/route'
+import { commits as commitsSeed } from '@/endpoints/seed/commits-page'
+import { experiencePage as experienceSeed } from '@/endpoints/seed/experience-page'
+import { assembleSite } from '@/utilities/assembleSite'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 /**
- * The excluded slugs must never be advertised in the sitemap, even if an old
- * document still exists in the database. `/posts` and `/search` have no page
- * documents at all, so this spec creates them temporarily to prove the filter
- * is not merely relying on an empty collection.
+ * The excluded slugs must never be advertised in the sitemap. The `commits` and
+ * `experience-page` documents are still seeded; `/posts`, `/search` and
+ * `/experience` have no page documents, so this spec creates them temporarily to
+ * prove the filter is not merely relying on an empty collection.
  */
 const EXCLUDED_SLUGS = ['posts', 'search', 'commits', 'experience', 'experience-page']
 
@@ -32,11 +35,37 @@ describe('pages sitemap', () => {
     }
   })
 
-  it('omits retired and renamed pages from the generated XML', async () => {
+  it('keeps the retired page data but seeds it as drafts', () => {
+    expect(commitsSeed.slug).toBe('commits')
+    expect(commitsSeed._status).toBe('draft')
+    expect(experienceSeed.slug).toBe('experience-page')
+    expect(experienceSeed._status).toBe('draft')
+  })
+
+  it('filters every excluded slug even when a published document exists', async () => {
+    const docs = EXCLUDED_SLUGS.map((slug) => ({
+      slug,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }))
+
+    const sitemap = buildPagesSitemap(docs, 'https://example.com', '2026-01-01T00:00:00.000Z')
+    expect(sitemap).toHaveLength(0)
+  })
+
+  it('keeps the retired page data available to the site payload', async () => {
+    const site = await assembleSite(payload)
+
+    expect(site.commits.title).toBe(commitsSeed.title)
+    expect(site.experiencePage.title).toBe(experienceSeed.title)
+    expect(site.experience).toBeDefined()
+  })
+
+  it('omits the excluded slugs from the generated XML', async () => {
     for (const slug of EXCLUDED_SLUGS) {
       const existing = await payload.find({
         collection: 'pages',
         where: { slug: { equals: slug } },
+        draft: true,
         limit: 1,
         pagination: false,
       })
@@ -56,15 +85,6 @@ describe('pages sitemap', () => {
         createdIds.push(doc.id)
       }
     }
-
-    // The renamed page is seeded by `onInit`; its old slug is not.
-    const experience = await payload.find({
-      collection: 'pages',
-      where: { slug: { equals: 'experience' } },
-      limit: 1,
-      pagination: false,
-    })
-    expect(experience.docs).toHaveLength(1)
 
     const pages = await payload.find({
       collection: 'pages',

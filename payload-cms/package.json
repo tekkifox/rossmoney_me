@@ -24,6 +24,7 @@
     "test": "pnpm run test:int && pnpm run test:e2e",
     "test:e2e": "cross-env NODE_OPTIONS=\"--no-deprecation --import=tsx/esm\" playwright test --config=playwright.config.ts",
     "test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts",
+    "unpublish:retired-pages": "cross-env NODE_OPTIONS=--no-deprecation tsx ./scripts/unpublish-retired-pages.ts",
     "verify:rate-limit": "cross-env NODE_OPTIONS=\"--no-deprecation --import=tsx/esm\" tsx ./scripts/verify-shared-rate-limit.mts"
   },
   "dependencies": {

@@ -246,6 +246,24 @@ pnpm generate:sitemap
 
 This writes `payload-cms/public/sitemap.xml` and `payload-cms/public/robots.txt` based on the seeded pages in `payload-cms/src/endpoints/seed`. These files are ignored by git by default (environment-specific), so copy or publish them as needed for your deployment.
 
+### Unpublishing the retired pages
+
+The `commits` and `experience-page` page documents are kept because the
+homepage reads their content, but neither renders a public template. New seeds
+create both as drafts; a database that already has them published needs one
+status update.
+
+The helper uses Payload's local API and only changes `_status` to `draft`. It
+never deletes documents and defaults to a dry run:
+
+```bash
+pnpm --filter payload-cms run unpublish:retired-pages
+pnpm --filter payload-cms run unpublish:retired-pages -- --apply
+```
+
+Set `MONGODB_URI`/`DATABASE_URL` and `PAYLOAD_SECRET` first, and take a backup
+before running it against a deployed database.
+
 ## CV Viewer
 
 The site now renders the DOCX CV in-browser using mammoth.js. The viewer inserts the converted HTML and applies light normalization for two-column blocks so content stacks cleanly on narrow viewports. A download link for the original DOCX is shown at the top-right of the viewer on desktop (falls back to an inline link on mobile).
