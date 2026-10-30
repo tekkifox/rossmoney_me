@@ -156,14 +156,14 @@ describe('host sampling on architecture cache fill', () => {
 })
 
 describe('host usage bucketing', () => {
-  it('produces hourly buckets for 24h and 7d, daily for 30d', () => {
+  it('produces 15-minute buckets for 24h, hourly for 7d, daily for 30d', () => {
     const now = Date.UTC(2026, 0, 2, 12, 0, 0)
     const samples = [
       { hostLabel: 'host-a', sampledAt: new Date(now - 30 * 60 * 1000).toISOString(), cpuAvg: 10, memoryPercent: 20, loadAvg: 1, diskPercent: 30 },
     ]
-    expect(bucketHostSamples(samples, '24h', now).get('host-a')![0].label).toMatch(/:/)
-    expect(bucketHostSamples(samples, '7d', now).get('host-a')![0].label).toMatch(/:/)
-    expect(bucketHostSamples(samples, '30d', now).get('host-a')![0].label).toMatch(/\//)
+    expect(bucketHostSamples(samples, '24h', now).get('host-a')![0].label).toBe('11:30')
+    expect(bucketHostSamples(samples, '7d', now).get('host-a')![0].label).toBe('11:00')
+    expect(bucketHostSamples(samples, '30d', now).get('host-a')![0].label).toBe('1/2')
   })
 
   it('drops samples outside the range', () => {
