@@ -3,6 +3,41 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { unstable_cache } from 'next/cache'
 
+// Slugs that must not be advertised in the sitemap. `experience` is the renamed
+// experience page, and `experience-page` is kept for old links. Keep this list
+// in sync with `scripts/generate-sitemap.mjs`; both guards stop stale CMS
+// documents from reappearing in a sitemap.
+const SITEMAP_EXCLUDED_SLUGS = new Set([
+  'posts',
+  'search',
+  'commits',
+  'experience',
+  'experience-page',
+])
+
+export interface SitemapPage {
+  slug?: string | null
+  updatedAt?: string | null
+}
+
+/** Build the sitemap entries, excluding the slugs above. */
+export function buildPagesSitemap(
+  docs: SitemapPage[],
+  siteUrl: string,
+  dateFallback: string,
+): Array<{ loc: string; lastmod: string }> {
+  return docs
+    .filter((page): page is SitemapPage & { slug: string } => {
+      return Boolean(page.slug) && !SITEMAP_EXCLUDED_SLUGS.has(page.slug as string)
+    })
+    .map((page) => {
+      return {
+        loc: page.slug === 'home' ? `${siteUrl}/` : `${siteUrl}/${page.slug}`,
+        lastmod: page.updatedAt || dateFallback,
+      }
+    })
+}
+
 const getPagesSitemap = unstable_cache(
   async () => {
     const payload = await getPayload({ config })
@@ -29,31 +64,7 @@ const getPagesSitemap = unstable_cache(
       },
     })
 
-    const dateFallback = new Date().toISOString()
-
-    const defaultSitemap = [
-      {
-        loc: `${SITE_URL}/search`,
-        lastmod: dateFallback,
-      },
-      {
-        loc: `${SITE_URL}/posts`,
-        lastmod: dateFallback,
-      },
-    ]
-
-    const sitemap = results.docs
-      ? results.docs
-          .filter((page) => Boolean(page?.slug))
-          .map((page) => {
-            return {
-              loc: page?.slug === 'home' ? `${SITE_URL}/` : `${SITE_URL}/${page?.slug}`,
-              lastmod: page.updatedAt || dateFallback,
-            }
-          })
-      : []
-
-    return [...defaultSitemap, ...sitemap]
+    return buildPagesSitemap(results.docs, SITE_URL, new Date().toISOString())
   },
   ['pages-sitemap'],
   {

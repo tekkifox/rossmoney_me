@@ -132,7 +132,7 @@ export async function assembleSite(pClientArg?: Payload): Promise<AssembledSite>
   const archDoc = findPage(pages.docs, 'architecture')
   const commitsDoc = findPage(pages.docs, 'commits')
   const workDoc = findPage(pages.docs, 'work')
-  const expPageDoc = findPage(pages.docs, 'experience-page')
+  const expPageDoc = findPage(pages.docs, 'experience')
   const navDoc = findPage(pages.docs, 'navigation')
   const gameserversDoc = findPage(pages.docs, 'game-servers', 'gameservers')
 
