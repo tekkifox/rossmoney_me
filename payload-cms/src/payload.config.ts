@@ -393,9 +393,9 @@ export default buildConfig({
     // Independent host sampler: covers hosts that nobody browses. Runs in the
     // long-lived Node process (disabled on Vercel/serverless where an interval
     // cannot survive). Retention (30 days) happens in the same sweep, daily.
-    if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
+    const { sampleAllEnabledHosts, shouldRunHostSampler } = await import('./utilities/hostSampling')
+    if (process.env.NODE_ENV === 'production' && shouldRunHostSampler(process.env)) {
     try {
-      const { sampleAllEnabledHosts } = await import('./utilities/hostSampling')
       const interval = setInterval(() => {
         void sampleAllEnabledHosts(payload)
       }, 60 * 1000)

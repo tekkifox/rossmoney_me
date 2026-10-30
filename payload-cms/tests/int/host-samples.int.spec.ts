@@ -254,7 +254,22 @@ describe('host usage data path', () => {
   })
 })
 
-import { sampleAllEnabledHosts } from '@/utilities/hostSampling'
+import { sampleAllEnabledHosts, shouldRunHostSampler } from '@/utilities/hostSampling'
+
+describe('shouldRunHostSampler', () => {
+  it('on by default locally', () => {
+    expect(shouldRunHostSampler({})).toBe(true)
+  })
+  it('off when VERCEL set', () => {
+    expect(shouldRunHostSampler({ VERCEL: '1' })).toBe(false)
+  })
+  it('off when HOST_SAMPLER=off', () => {
+    expect(shouldRunHostSampler({ HOST_SAMPLER: 'off' })).toBe(false)
+  })
+  it('on with HOST_SAMPLER=on even under Vercel', () => {
+    expect(shouldRunHostSampler({ VERCEL: '1', HOST_SAMPLER: 'on' })).toBe(true)
+  })
+})
 
 describe('host sampling scheduler', () => {
   let payload: Payload
