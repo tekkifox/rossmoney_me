@@ -23,10 +23,6 @@ import { Posts } from './collections/Posts';
 import { Categories } from './collections/Categories';
 import { ErrorLogs } from './collections/ErrorLogs';
 import { ArchviewSources } from './collections/ArchviewSources';
-import { architecture } from './endpoints/seed/architecture-page';
-import { commits } from './endpoints/seed/commits-page';
-import { experiencePage } from './endpoints/seed/experience-page';
-import { work } from './endpoints/seed/work-page';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
@@ -228,10 +224,6 @@ export default buildConfig({
         home,
         contactPageData,
         travellingPage,
-        architecture,
-        commits,
-        work,
-        experiencePage,
         servicesPage,
         gameservers,
         cv,
