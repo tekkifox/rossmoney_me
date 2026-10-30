@@ -105,6 +105,26 @@ export async function assembleSite(pClientArg?: Payload): Promise<AssembledSite>
   const pClient = pClientArg ?? (await getSafePayload())
 
   const pages = await pClient.find({ collection: 'pages', limit: 100 })
+  // The retired page documents are deliberately unpublished, but their data is
+  // still part of the site payload (and the homepage). Fetch just those drafts
+  // by slug so other pages keep their published-only behaviour.
+  const retiredPageSlugs = ['commits', 'experience-page', 'work', 'architecture']
+  const missingRetiredPages = retiredPageSlugs.filter(
+    (slug) => !pages.docs.some((page) => page.slug === slug),
+  )
+  if (missingRetiredPages.length > 0) {
+    const retiredDrafts = await pClient.find({
+      collection: 'pages',
+      limit: missingRetiredPages.length,
+      draft: true,
+      where: {
+        slug: {
+          in: missingRetiredPages,
+        },
+      },
+    })
+    pages.docs.push(...retiredDrafts.docs)
+  }
   const projects = await pClient.find({ collection: 'projects', limit: 100, sort: 'order' })
   const experience = await pClient.find({ collection: 'experience', limit: 100, sort: 'order' })
   const headerDoc = await pClient.findGlobal({ slug: 'header' }).catch(() => ({ navItems: [] }))

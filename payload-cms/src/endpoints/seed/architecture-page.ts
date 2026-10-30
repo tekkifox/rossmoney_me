@@ -2,7 +2,7 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 
 export const architecture: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'architecture',
-  _status: 'published',
+  _status: 'draft',
   hero: {
     type: 'none',
   },
