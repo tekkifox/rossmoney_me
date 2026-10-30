@@ -162,6 +162,8 @@ export const resolveArchviewSource = (
 export type ArchviewRequestSource = {
   origin: string
   credentials?: ArchviewSourceCredentials
+  sourceId?: string
+  sourceLabel?: string
 }
 
 export type ArchviewSourceLookup = (
@@ -192,7 +194,13 @@ const toResolved = (
     return { origin: value.origin, credentials: value }
   }
 
-  return { origin: value.origin, credentials: value.credentials }
+  const record = value as ArchviewSourceRecord
+  return {
+    origin: record.origin,
+    credentials: record.credentials,
+    sourceId: record.id,
+    sourceLabel: record.name,
+  }
 }
 
 /**
@@ -355,6 +363,73 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   // across all visitors). Bounded to keep memory in check.
   const cache = new Map<string, CachedArchitectureResponse>()
   const inFlight = new Map<string, Promise<CachedArchitectureResponse | null>>()
+  const sampleThrottle = new Map<string, number>()
+
+  const toSampleNumber = (value: unknown): number | null => {
+    if (value === null || value === undefined) return null
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+
+  const recordHostSample = async (
+    resolved: ArchviewRequestSource | null,
+    metrics: unknown,
+  ): Promise<void> => {
+    try {
+      if (!resolved?.sourceId) return
+      if (!metrics || typeof metrics !== 'object') return
+      const m = metrics as Record<string, unknown>
+      const key = resolved.sourceId
+      const now = Date.now()
+      const last = sampleThrottle.get(key) ?? 0
+      if (now - last < 60000) return
+      sampleThrottle.set(key, now)
+
+      const { getPayload } = await import('payload')
+      const payloadConfig = (await import('@payload-config')).default
+      const payload = await getPayload({ config: payloadConfig })
+      const label = resolved.sourceLabel ?? resolved.origin
+
+      await payload.create({
+        collection: 'host-samples',
+        data: {
+          host: resolved.sourceId,
+          hostLabel: label,
+          sampledAt: new Date(now).toISOString(),
+          cpuAvg: toSampleNumber(m.cpuAvg),
+          memoryUsedBytes: toSampleNumber(m.memoryUsedBytes),
+          memoryTotalBytes: toSampleNumber(m.memoryTotalBytes),
+          memoryPercent: toSampleNumber(m.memoryPercent),
+          loadAvg: toSampleNumber(m.loadAvg),
+          diskPercent: toSampleNumber(m.diskPercent),
+          swapPercent: toSampleNumber(m.swapPercent),
+          processCount: toSampleNumber(m.processCount),
+          hostCount: toSampleNumber(m.hostCount),
+          networkRxMB: toSampleNumber(m.networkRxMB),
+          networkTxMB: toSampleNumber(m.networkTxMB),
+          updatedAt:
+            m.updatedAt === null || m.updatedAt === undefined
+              ? null
+              : new Date(m.updatedAt as string | number).toISOString(),
+        },
+        overrideAccess: true,
+      })
+
+      // Opportunistic retention: drop samples older than 30 days.
+      try {
+        const cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
+        await payload.delete({
+          collection: 'host-samples',
+          where: { sampledAt: { less_than: cutoff } } as never,
+          overrideAccess: true,
+        })
+      } catch (error) {
+        console.warn('host sample retention prune failed:', error instanceof Error ? error.message : error)
+      }
+    } catch (error) {
+      console.warn('host sample write failed:', error instanceof Error ? error.message : error)
+    }
+  }
 
   const setCache = (key: string, value: CachedArchitectureResponse): void => {
     if (cache.size >= ARCHVIEW_CACHE_MAX_ENTRIES && !cache.has(key)) {
@@ -442,6 +517,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         if (contentType.includes('application/json')) {
           const data = await res.json()
           const redacted = redactInternalEndpoints(data)
+          await recordHostSample(resolved, (data as { telemetry?: { metrics?: unknown } })?.telemetry?.metrics)
           const body = new TextEncoder().encode(JSON.stringify(redacted))
           return {
             status: 200,
