@@ -76,6 +76,7 @@ export interface Config {
     media: Media;
     'error-logs': ErrorLog;
     'archview-sources': ArchviewSource;
+    'host-samples': HostSample;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -101,6 +102,7 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     'error-logs': ErrorLogsSelect<false> | ErrorLogsSelect<true>;
     'archview-sources': ArchviewSourcesSelect<false> | ArchviewSourcesSelect<true>;
+    'host-samples': HostSamplesSelect<false> | HostSamplesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -896,6 +898,30 @@ export interface ErrorLog {
   lastSeen: string;
 }
 /**
+ * Sampled ArchView host metrics, one row per refresh.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "host-samples".
+ */
+export interface HostSample {
+  id: string;
+  host?: (string | null) | ArchviewSource;
+  hostLabel: string;
+  sampledAt: string;
+  cpuAvg?: number | null;
+  memoryUsedBytes?: number | null;
+  memoryTotalBytes?: number | null;
+  memoryPercent?: number | null;
+  loadAvg?: number | null;
+  diskPercent?: number | null;
+  swapPercent?: number | null;
+  processCount?: number | null;
+  hostCount?: number | null;
+  networkRxMB?: number | null;
+  networkTxMB?: number | null;
+  updatedAt?: number | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
@@ -1089,6 +1115,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'archview-sources';
         value: string | ArchviewSource;
+      } | null)
+    | ({
+        relationTo: 'host-samples';
+        value: string | HostSample;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1527,6 +1557,27 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   isDefault?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "host-samples_select".
+ */
+export interface HostSamplesSelect<T extends boolean = true> {
+  host?: T;
+  hostLabel?: T;
+  sampledAt?: T;
+  cpuAvg?: T;
+  memoryUsedBytes?: T;
+  memoryTotalBytes?: T;
+  memoryPercent?: T;
+  loadAvg?: T;
+  diskPercent?: T;
+  swapPercent?: T;
+  processCount?: T;
+  hostCount?: T;
+  networkRxMB?: T;
+  networkTxMB?: T;
+  updatedAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
