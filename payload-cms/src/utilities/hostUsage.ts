@@ -1,6 +1,7 @@
 export type HostUsageRange = '24h' | '7d' | '30d'
 
 export type HostSample = {
+  host?: string | number | null
   hostLabel?: string | null
   sampledAt?: string | Date | null
   cpuAvg?: number | string | null
@@ -67,7 +68,7 @@ export function bucketHostSamples(
     if (!sample.sampledAt) continue
     const time = new Date(sample.sampledAt).getTime()
     if (!Number.isFinite(time) || time < cutoff) continue
-    const label = sample.hostLabel ?? 'Unknown host'
+    const label = (sample.host !== null && sample.host !== undefined ? String(sample.host) : sample.hostLabel) ?? 'Unknown host'
     if (!grouped.has(label)) grouped.set(label, [])
     grouped.get(label)!.push(sample)
   }
