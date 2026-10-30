@@ -108,7 +108,7 @@ export async function assembleSite(pClientArg?: Payload): Promise<AssembledSite>
   // The retired page documents are deliberately unpublished, but their data is
   // still part of the site payload (and the homepage). Fetch just those drafts
   // by slug so other pages keep their published-only behaviour.
-  const retiredPageSlugs = ['commits', 'experience-page']
+  const retiredPageSlugs = ['commits', 'experience-page', 'work', 'architecture']
   const missingRetiredPages = retiredPageSlugs.filter(
     (slug) => !pages.docs.some((page) => page.slug === slug),
   )

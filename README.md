@@ -248,10 +248,10 @@ This writes `payload-cms/public/sitemap.xml` and `payload-cms/public/robots.txt`
 
 ### Unpublishing the retired pages
 
-The `commits` and `experience-page` page documents are kept because the
-homepage reads their content, but neither renders a public template. New seeds
-create both as drafts; a database that already has them published needs one
-status update.
+The `commits`, `experience-page`, `work` and `architecture` page documents are
+kept because the homepage still reads their content, but none of them renders a
+public template. New seeds create them as drafts; a database that already has
+them published needs one status update.
 
 The helper uses Payload's local API and only changes `_status` to `draft`. It
 never deletes documents and defaults to a dry run:
