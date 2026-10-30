@@ -66,6 +66,23 @@ This project is plain HTML, CSS, and JavaScript, so you can serve it from any st
 
 The Go API sends permissive CORS headers, so the site can fetch it across origins during local development.
 
+## Workspace and tasks
+
+The repository is a pnpm workspace driven by Turborepo. `payload-cms` is the only
+workspace package; the lockfile, `pnpm-workspace.yaml`, root `package.json` and
+`turbo.json` live at the repository root.
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter payload-cms dev
+pnpm turbo run build --filter=payload-cms
+pnpm turbo run lint --filter=payload-cms
+pnpm turbo run test:int --filter=payload-cms
+```
+
+`pnpm dev` starts the same dev server through Turbo, and
+`pnpm --filter payload-cms run <script>` runs any package script directly.
+
 ## CMS
 
 The content editor stores documents in MongoDB through the `cms` service.

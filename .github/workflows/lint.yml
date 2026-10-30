@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'payload-cms/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
       - '.github/workflows/lint.yml'
   push:
     branches:
@@ -11,6 +15,10 @@ on:
       - dev
     paths:
       - 'payload-cms/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
       - '.github/workflows/lint.yml'
 
 concurrency:
@@ -42,12 +50,10 @@ jobs:
       - name: Enable Corepack
         run: npm i -g corepack@0.36.0 && corepack enable
 
-      # There is no root package.json, so Corepack can only resolve pnpm's
-      # version from `packageManager` when it runs inside payload-cms.
-      - name: Install dependencies (payload-cms)
-        working-directory: payload-cms
+      # There is a root package.json now, so Corepack resolves pnpm's version
+      # from `packageManager` at the repository root.
+      - name: Install dependencies
         run: corepack pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run oxlint
-        working-directory: payload-cms
-        run: corepack pnpm lint
+        run: corepack pnpm --filter payload-cms run lint

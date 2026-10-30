@@ -1,5 +1,9 @@
 # To use this Dockerfile, you have to set `output: 'standalone'` in your next.config.js file.
 # From https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
+#
+# Build from the repository root, not from payload-cms: the lockfile and the
+# pnpm workspace settings live there now.
+#   docker build -f payload-cms/Dockerfile .
 
 FROM node:26.13.0-alpine AS base
 
@@ -14,18 +18,23 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies with pnpm. pnpm-workspace.yaml carries the pnpm 12
-# supply-chain settings (minimumReleaseAge, allowBuilds); without it the
-# frozen install fails.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN corepack enable pnpm && pnpm i --frozen-lockfile
+# Install the workspace dependencies from the root manifests. pnpm-workspace.yaml
+# carries the pnpm 12 supply-chain settings (minimumReleaseAge, allowBuilds);
+# .npmrc carries the pre/post-script setting the build relies on. The filter
+# installs payload-cms and its workspace dependencies only.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY payload-cms/package.json payload-cms/package.json
+RUN corepack enable pnpm && pnpm install --frozen-lockfile --filter payload-cms...
 
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 ARG SKIP_DB=false
+# The virtual store stays in /app/node_modules; the package links live in
+# payload-cms/node_modules.
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/payload-cms/node_modules ./payload-cms/node_modules
 COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.
@@ -36,7 +45,7 @@ ENV NODE_OPTIONS=--no-deprecation
 
 ENV SKIP_DB=$SKIP_DB
 
-RUN corepack enable pnpm && pnpm run build
+RUN corepack enable pnpm && pnpm --filter payload-cms run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -50,16 +59,21 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Remove this line if you do not have this folder
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/payload-cms/public ./payload-cms/public
 
 # Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
+RUN mkdir -p payload-cms/.next
+RUN chown nextjs:nodejs payload-cms/.next
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+#
+# Next.js traces from the workspace root, so the standalone tree mirrors the
+# repository: node_modules at the root and the app under payload-cms/.
+COPY --from=builder --chown=nextjs:nodejs /app/payload-cms/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/payload-cms/.next/static ./payload-cms/.next/static
+
+WORKDIR /app/payload-cms
 
 USER nextjs
 

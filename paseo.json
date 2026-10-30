@@ -1,6 +1,6 @@
 {
   "worktree": {
-    "setup": "pnpm --dir payload-cms install --frozen-lockfile --prefer-offline"
+    "setup": "pnpm install --frozen-lockfile --prefer-offline"
   },
   "metadataGeneration": {
     "branchName": {
