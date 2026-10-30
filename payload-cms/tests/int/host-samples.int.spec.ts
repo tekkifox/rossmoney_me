@@ -78,6 +78,9 @@ describe('host sampling on architecture cache fill', () => {
     await GET(new Request('https://cms.example/api/architecture?project=p'))
 
     expect(calls).toBe(1)
+    for (let i = 0; i < 20 && (await sampleCount()) < 1; i++) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
     expect(await sampleCount()).toBe(1)
   })
 
@@ -101,6 +104,9 @@ describe('host sampling on architecture cache fill', () => {
     await GET(new Request('https://cms.example/api/architecture?project=p2&t=2'))
 
     expect(calls).toBe(1)
+    for (let i = 0; i < 20 && (await sampleCount()) < before + 1; i++) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
     expect(await sampleCount()).toBe(before + 1)
   })
 
@@ -248,6 +254,87 @@ describe('host usage data path', () => {
   })
 })
 
-// View render is not exercised in jsdom: Recharts' ResponsiveContainer needs
-// layout measurements that jsdom does not provide, so asserting on its output
-// here would only test the library. The bucketing and data path are covered above.
+import { sampleAllEnabledHosts } from '@/utilities/hostSampling'
+
+describe('host sampling scheduler', () => {
+  let payload: Payload
+  let sourceId: string
+  const originalFetch = global.fetch
+  beforeAll(async () => {
+    payload = await getPayload({ config: await config })
+    const source = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `sched-source-${Date.now()}`,
+        origin: 'https://sched.example.test',
+        audience: 'https://sched.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    sourceId = String(source.id)
+  })
+  afterAll(async () => {
+    global.fetch = originalFetch
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: sourceId } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: sourceId } }, overrideAccess: true })
+  })
+  it('samples a source that is never requested', async () => {
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
+    await sampleAllEnabledHosts(payload)
+    const result = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: sourceId } },
+      overrideAccess: true,
+    })
+    expect(result.totalDocs).toBeGreaterThan(0)
+  })
+})
+
+describe('host rename keeps history by id', () => {
+  let payload: Payload
+  let sourceId: string
+  beforeAll(async () => {
+    payload = await getPayload({ config: await config })
+    const source = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `rename-source-${Date.now()}`,
+        origin: 'https://rename.example.test',
+        audience: 'https://rename.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    sourceId = String(source.id)
+    await payload.create({
+      collection: 'host-samples',
+      data: { host: sourceId, hostLabel: 'old-name', sampledAt: new Date().toISOString(), cpuAvg: 5 },
+      overrideAccess: true,
+    })
+    await payload.update({
+      collection: 'archview-sources',
+      id: sourceId,
+      data: { name: 'new-name' },
+      overrideAccess: true,
+    })
+  })
+  afterAll(async () => {
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: sourceId } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: sourceId } }, overrideAccess: true })
+  })
+  it('keeps samples queryable by host id after rename', async () => {
+    const result = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: sourceId } },
+      overrideAccess: true,
+    })
+    expect(result.totalDocs).toBe(1)
+  })
+})

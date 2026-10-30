@@ -389,5 +389,20 @@ export default buildConfig({
       const message = err instanceof Error ? err.message : String(err);
       payload.logger.error(`Error seeding default documents: ${message}`);
     }
+
+    // Independent host sampler: covers hosts that nobody browses. Runs in the
+    // long-lived Node process (disabled on Vercel/serverless where an interval
+    // cannot survive). Retention (30 days) happens in the same sweep, daily.
+    if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
+    try {
+      const { sampleAllEnabledHosts } = await import('./utilities/hostSampling')
+      const interval = setInterval(() => {
+        void sampleAllEnabledHosts(payload)
+      }, 60 * 1000)
+      interval.unref?.()
+    } catch (err) {
+      console.warn('host sampler schedule failed:', err)
+    }
+  }
   },
 });
