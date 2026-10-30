@@ -414,18 +414,6 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         },
         overrideAccess: true,
       })
-
-      // Opportunistic retention: drop samples older than 30 days.
-      try {
-        const cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
-        await payload.delete({
-          collection: 'host-samples',
-          where: { sampledAt: { less_than: cutoff } } as never,
-          overrideAccess: true,
-        })
-      } catch (error) {
-        console.warn('host sample retention prune failed:', error instanceof Error ? error.message : error)
-      }
     } catch (error) {
       console.warn('host sample write failed:', error instanceof Error ? error.message : error)
     }
@@ -517,7 +505,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         if (contentType.includes('application/json')) {
           const data = await res.json()
           const redacted = redactInternalEndpoints(data)
-          await recordHostSample(resolved, (data as { telemetry?: { metrics?: unknown } })?.telemetry?.metrics)
+          void recordHostSample(resolved, (data as { telemetry?: { metrics?: unknown } })?.telemetry?.metrics)
           const body = new TextEncoder().encode(JSON.stringify(redacted))
           return {
             status: 200,

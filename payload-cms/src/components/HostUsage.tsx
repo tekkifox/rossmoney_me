@@ -30,16 +30,24 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
     sampledAt: { greater_than_equal: cutoff },
   }
   if (host) {
-    where.hostLabel = { equals: host }
+    where.host = { equals: host }
   }
-  const result = await payload.find({
-    collection: 'host-samples',
-    where: where as never,
-    sort: 'sampledAt',
-    limit: 100000,
-    overrideAccess: true,
-  })
-  return { payload, docs: (result.docs ?? []) as any, now }
+  const all: any[] = []
+  let page = 1
+  while (true) {
+    const result = await payload.find({
+      collection: 'host-samples',
+      where: where as never,
+      sort: 'sampledAt',
+      limit: 1000,
+      page,
+      overrideAccess: true,
+    })
+    all.push(...(result.docs ?? []))
+    if (!result.hasNextPage) break
+    page += 1
+  }
+  return { payload, docs: all, now }
 }
 
 export default async function HostUsage(props: { searchParams?: SearchParams }) {
@@ -61,6 +69,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
 
   const samples = docs.map((d: any) => ({
+    host: d.host as string | number | null,
     hostLabel: d.hostLabel as string | null,
     sampledAt: d.sampledAt as string | Date | null,
     cpuAvg: d.cpuAvg as number | null,
@@ -73,7 +82,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
 
   const hostLabels = host
     ? [host]
-    : sources.map((s) => s.name).filter(Boolean) as string[]
+    : sources.map((s) => String(s.id)).filter(Boolean)
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
@@ -84,7 +93,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
           <select name="host" defaultValue={host ?? ''}>
             <option value="">All hosts</option>
             {sources.map((s) => (
-              <option key={String(s.id)} value={s.name ?? ''}>
+              <option key={String(s.id)} value={String(s.id)}>
                 {s.name ?? s.id}
               </option>
             ))}
@@ -107,6 +116,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
 
       {hostLabels.map((label) => {
         const buckets = byHost.get(label) ?? []
+        const sourceName = sources.find((s) => String(s.id) === label)?.name ?? label
         const data = buckets.map((b) => ({
           label: b.label,
           cpuAvg: b.cpuAvg,
@@ -116,7 +126,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
         }))
         return (
           <section key={label} style={{ marginBottom: 32 }}>
-            <h2>{label}</h2>
+            <h2>{sourceName}</h2>
             {buckets.length === 0 ? (
               <p>No samples in range.</p>
             ) : (
