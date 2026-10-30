@@ -37,6 +37,8 @@ interface ArchitecturePayload {
   [key: string]: unknown
 }
 
+const REFRESH_INTERVAL_MS = 5000
+
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
   useEffect(() => {
     // Prefer a page-root data attribute when present (set by page wrapper) to guarantee page-level source
@@ -52,7 +54,10 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
       architectureUrl = (meta && meta.content) || '/api/architecture'
     }
 
+    let inFlight = false
     async function fetchArchitecture() {
+      if (inFlight) return
+      inFlight = true
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (project ? `&project=${encodeURIComponent(project)}` : '')
         const res = await fetch(url, { cache: 'no-store' })
@@ -62,6 +67,8 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const payload = ct.includes('application/json') ? await res.json() : { raw: await res.text() }
         updateDom(payload)
       } catch {
+      } finally {
+        inFlight = false
       }
     }
 
@@ -223,10 +230,24 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
     const handler = () => { void fetchArchitecture() }
     if (refreshBtn) refreshBtn.addEventListener('click', handler)
 
+    // Poll every REFRESH_INTERVAL_MS, skipping ticks while the tab is hidden
+    const intervalId = setInterval(() => {
+      if (document.hidden) return
+      void fetchArchitecture()
+    }, REFRESH_INTERVAL_MS)
+
+    // Fetch immediately when the tab becomes visible again
+    const onVisibilityChange = () => {
+      if (!document.hidden) void fetchArchitecture()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     // Load architecture immediately on client mount so the page isn't empty
     void fetchArchitecture()
 
     return () => {
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       if (refreshBtn) refreshBtn.removeEventListener('click', handler)
     }
   }, [project])
