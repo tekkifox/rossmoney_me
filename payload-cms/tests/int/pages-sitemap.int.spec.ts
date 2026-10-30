@@ -7,43 +7,34 @@ import { architecture as architectureSeed } from '@/endpoints/seed/architecture-
 import { commits as commitsSeed } from '@/endpoints/seed/commits-page'
 import { experiencePage as experienceSeed } from '@/endpoints/seed/experience-page'
 import { work as workSeed } from '@/endpoints/seed/work-page'
+import type { Header } from '@/payload-types'
 import { assembleSite } from '@/utilities/assembleSite'
+import { resolveHeaderSitemapPaths, SITEMAP_EXCLUDED_PATHS } from '@/utilities/sitemapPaths'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-/**
- * The excluded slugs must never be advertised in the sitemap. The `commits`,
- * `experience-page`, `work` and `architecture` documents are still seeded;
- * `/posts`, `/search` and `/experience` have no page documents, so this spec
- * creates them temporarily to prove the filter is not merely relying on an
- * empty collection.
- */
-const EXCLUDED_SLUGS = [
-  'posts',
-  'search',
-  'commits',
-  'experience',
-  'experience-page',
-  'work',
-  'architecture',
-]
+const SITE_URL = 'https://example.com'
+const DATE_FALLBACK = '2026-01-01T00:00:00.000Z'
+const EXCLUDED_PATHS: string[] = [...SITEMAP_EXCLUDED_PATHS]
 
 let payload: Payload
-const createdIds: Array<string | number> = []
+let originalNavItems: Header['navItems']
 
 describe('pages sitemap', () => {
   beforeAll(async () => {
     payload = await getPayload({ config: await config })
+    const header = await payload.findGlobal({ slug: 'header', depth: 0 })
+    originalNavItems = header.navItems
   })
 
   afterAll(async () => {
-    if (createdIds.length > 0) {
-      await payload.delete({
-        collection: 'pages',
-        where: { id: { in: createdIds } },
-        context: { disableRevalidate: true },
-      })
-    }
+    if (originalNavItems === undefined) return
+
+    await payload.updateGlobal({
+      slug: 'header',
+      data: { navItems: originalNavItems },
+      context: { disableRevalidate: true },
+    })
   })
 
   it('keeps the retired page data but seeds it as drafts', () => {
@@ -57,16 +48,6 @@ describe('pages sitemap', () => {
     expect(architectureSeed._status).toBe('draft')
   })
 
-  it('filters every excluded slug even when a published document exists', async () => {
-    const docs = EXCLUDED_SLUGS.map((slug) => ({
-      slug,
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }))
-
-    const sitemap = buildPagesSitemap(docs, 'https://example.com', '2026-01-01T00:00:00.000Z')
-    expect(sitemap).toHaveLength(0)
-  })
-
   it('keeps the retired page data available to the site payload', async () => {
     const site = await assembleSite(payload)
 
@@ -78,49 +59,80 @@ describe('pages sitemap', () => {
     expect(site.projects).toBeDefined()
   })
 
-  it('omits the excluded slugs from the generated XML', async () => {
-    for (const slug of EXCLUDED_SLUGS) {
-      const existing = await payload.find({
-        collection: 'pages',
-        where: { slug: { equals: slug } },
-        draft: true,
-        limit: 1,
-        pagination: false,
-      })
-
-      if (existing.docs.length === 0) {
-        const doc = await payload.create({
-          collection: 'pages',
-          draft: false,
-          data: {
-            slug,
-            title: `Retired page ${slug}`,
-            hero: { type: 'none' },
-            _status: 'published',
-          },
-          context: { disableRevalidate: true },
-        })
-        createdIds.push(doc.id)
-      }
-    }
-
-    const pages = await payload.find({
-      collection: 'pages',
-      draft: false,
-      limit: 1000,
-      pagination: false,
-      where: { _status: { equals: 'published' } },
-      select: { slug: true, updatedAt: true },
-    })
-
-    const sitemap = buildPagesSitemap(pages.docs, 'https://example.com', new Date().toISOString())
+  it('filters only the excluded paths, even when they arrive from the header', async () => {
+    const paths = [...EXCLUDED_PATHS, '/work', '/commits', '/experience', '/architecture']
+    const sitemap = buildPagesSitemap(paths, SITE_URL, DATE_FALLBACK)
     const xml = await (await getServerSideSitemap(sitemap)).text()
 
-    for (const slug of EXCLUDED_SLUGS) {
-      expect(xml).not.toContain(`/${slug}<`)
+    for (const path of EXCLUDED_PATHS) {
+      expect(xml).not.toContain(`${path}<`)
     }
 
-    // Sanity check: a page that is still advertised is present.
-    expect(xml).toContain('/contact<')
+    for (const path of ['/work', '/commits', '/experience', '/architecture']) {
+      expect(xml).toContain(`${path}<`)
+    }
+  })
+
+  it('emits exactly the header paths minus the exclusions', async () => {
+    const contact = await payload.find({
+      collection: 'pages',
+      where: { slug: { equals: 'contact' }, _status: { equals: 'published' } },
+      draft: false,
+      limit: 1,
+      pagination: false,
+    })
+    expect(contact.docs).toHaveLength(1)
+
+    await payload.updateGlobal({
+      slug: 'header',
+      data: {
+        navItems: [
+          { link: { type: 'custom', label: 'Work', url: '/#work' } },
+          { link: { type: 'custom', label: 'Travelling', url: '/travelling' } },
+          {
+            link: {
+              type: 'reference',
+              label: 'Contact',
+              reference: { relationTo: 'pages', value: contact.docs[0]?.id },
+            },
+          },
+          { link: { type: 'custom', label: 'Posts', url: '/posts' } },
+          {
+            link: {
+              type: 'custom',
+              label: 'Legacy experience alias',
+              url: '/#experience-page',
+            },
+          },
+          { link: { type: 'custom', label: 'Architecture', url: '/#architecture' } },
+          { link: { type: 'custom', label: 'Commits', url: '/#commits' } },
+          { link: { type: 'custom', label: 'Experience', url: '/#experience' } },
+        ],
+      },
+      context: { disableRevalidate: true },
+    })
+
+    const paths = await resolveHeaderSitemapPaths(payload)
+    expect(paths).toEqual([
+      '/work',
+      '/travelling',
+      '/contact',
+      '/architecture',
+      '/commits',
+      '/experience',
+    ])
+
+    const sitemap = buildPagesSitemap(paths, SITE_URL, DATE_FALLBACK)
+    expect(sitemap.map((entry) => entry.loc)).toEqual(
+      paths.map((path) => `${SITE_URL}${path}`),
+    )
+
+    const xml = await (await getServerSideSitemap(sitemap)).text()
+    for (const path of paths) {
+      expect(xml).toContain(`${path}<`)
+    }
+    for (const path of EXCLUDED_PATHS) {
+      expect(xml).not.toContain(`${path}<`)
+    }
   })
 })
