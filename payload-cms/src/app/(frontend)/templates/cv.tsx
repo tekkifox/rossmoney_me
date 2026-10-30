@@ -8,7 +8,6 @@ export default function CVTemplate({ page }: { page: PageDoc }) {
       <section className="section container">
         <div className="section-heading">
           <p className="eyebrow">Curriculum Vitae</p>
-          <h2>Curriculum Vitae</h2>
         </div>
         <CVViewer cvFile={page.cvFile} />
       </section>
