@@ -264,6 +264,26 @@ pnpm --filter payload-cms run unpublish:retired-pages -- --apply
 Set `MONGODB_URI`/`DATABASE_URL` and `PAYLOAD_SECRET` first, and take a backup
 before running it against a deployed database.
 
+### De-duplicating projects and experience
+
+Two deployments sharing one database can each seed their own copy of the
+default `projects` and `experience` rows. The site de-duplicates those
+collections at read time, so duplicates never render, but the extra database
+rows remain until they are removed.
+
+The helper uses Payload's local API, only touches `projects` and `experience`,
+and keeps the row the site would render: the lowest numeric `order`, with the
+oldest `createdAt` as a tie-break. It defaults to a dry run and prints every row
+it would delete before touching anything:
+
+```bash
+pnpm --filter payload-cms run dedupe:collections
+pnpm --filter payload-cms run dedupe:collections -- --apply
+```
+
+Set `MONGODB_URI`/`DATABASE_URL` and `PAYLOAD_SECRET` first, and take a backup
+before running it against a deployed database.
+
 ## CV Viewer
 
 The site now renders the DOCX CV in-browser using mammoth.js. The viewer inserts the converted HTML and applies light normalization for two-column blocks so content stacks cleanly on narrow viewports. A download link for the original DOCX is shown at the top-right of the viewer on desktop (falls back to an inline link on mobile).
