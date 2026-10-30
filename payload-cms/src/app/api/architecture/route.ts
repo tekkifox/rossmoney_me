@@ -300,6 +300,10 @@ const fetchCandidate = async (
   }
 }
 
+// Shared across visitors, and shorter than the 10-second panel poll so a
+// cached entry never outlives the next poll by more than a few seconds.
+export const ARCHVIEW_CACHE_TTL_MS = 5000
+
 export type ArchitectureRouteDeps = {
   env?: ArchviewSourceEnv
   fetchImpl?: typeof fetch
@@ -307,19 +311,68 @@ export type ArchitectureRouteDeps = {
   lookupDefaultSource?: ArchviewDefaultSourceLookup
 }
 
+type CachedArchitectureResponse = {
+  status: number
+  headers: [string, string][]
+  body: ArrayBuffer
+  expiresAt: number
+}
+
+const ARCHVIEW_CACHE_MAX_ENTRIES = 50
+
+const degradedSnapshot = () =>
+  NextResponse.json(
+    {
+      degraded: true,
+      error: 'ArchView unreachable from CMS API route',
+      title: 'Degraded architecture snapshot',
+      description: 'ArchView unreachable, returning a minimal snapshot',
+      services: [],
+      nodes: [],
+      images: [],
+    },
+    { status: 200 },
+  )
+
 export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   const env = deps.env ?? process.env
   const fetchImpl = deps.fetchImpl ?? fetch
   const lookupSource = deps.lookupSource ?? lookupFromDatabase
   const lookupDefaultSource = deps.lookupDefaultSource ?? lookupDefaultFromDatabase
 
-  return async function GET(req: Request): Promise<Response> {
-    const url = new URL(req.url)
-    const search = stripSource(url.searchParams)
+  // Per-instance cache (the production instance is a singleton, so it is shared
+  // across all visitors). Bounded to keep memory in check.
+  const cache = new Map<string, CachedArchitectureResponse>()
+  const inFlight = new Map<string, Promise<CachedArchitectureResponse | null>>()
 
-    let resolved: ArchviewRequestSource | null = null
+  const setCache = (key: string, value: CachedArchitectureResponse): void => {
+    if (cache.size >= ARCHVIEW_CACHE_MAX_ENTRIES && !cache.has(key)) {
+      const oldest = cache.keys().next().value
+      if (oldest !== undefined) {
+        cache.delete(oldest)
+      }
+    }
+    // Refresh insertion order for LRU behaviour.
+    cache.delete(key)
+    cache.set(key, value)
+  }
+
+  const cacheKeyFor = (resolved: ArchviewRequestSource | null, search: string): string => {
+    const sourcePart = resolved
+      ? `${resolved.origin}|${resolved.credentials?.clientId ?? ''}|${resolved.credentials?.tokenUrl ?? ''}`
+      : `env:${env.ARCHVIEW_URL ?? ''}`
+    return `${sourcePart}|${search}`
+  }
+
+  const reconstruct = (value: CachedArchitectureResponse): Response =>
+    new Response(value.body.slice(0), {
+      status: value.status,
+      headers: new Headers(value.headers),
+    })
+
+  const resolveSource = async (raw: string | null): Promise<ArchviewRequestSource | null> => {
     try {
-      resolved = await resolveArchviewRequestSource(url.searchParams.get('source'), {
+      return await resolveArchviewRequestSource(raw, {
         env,
         lookupSource,
         lookupDefaultSource,
@@ -331,14 +384,18 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         },
       })
     } catch (error) {
-      // Defensive: resolution only reads the environment after a lookup
-      // failure, so this is not expected. Falling back keeps the proxy up.
       console.warn(
         'ArchView source resolution failed:',
         error instanceof Error ? error.message : error,
       )
+      return null
     }
+  }
 
+  const build = async (
+    resolved: ArchviewRequestSource | null,
+    search: string,
+  ): Promise<CachedArchitectureResponse | null> => {
     const candidates: Array<{
       host: string
       source?: ArchviewSourceCredentials
@@ -350,8 +407,6 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
       candidates.push({ host })
     }
 
-    // Keep the requested (possibly authenticated) origin first and try each
-    // other origin only once.
     const seen = new Set<string>()
     const hosts = candidates.filter(({ host }) => {
       const key = originKey(host)
@@ -370,40 +425,77 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
 
         const contentType = res.headers.get('content-type') || ''
         if (!res.ok) {
-          // try next host
           continue
         }
 
         if (contentType.includes('application/json')) {
           const data = await res.json()
-          return NextResponse.json(redactInternalEndpoints(data))
+          const redacted = redactInternalEndpoints(data)
+          const body = new TextEncoder().encode(JSON.stringify(redacted))
+          return {
+            status: 200,
+            headers: [['content-type', 'application/json']],
+            body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+            expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+          }
         }
 
         const text = await res.text()
-        return new NextResponse(redactInternalEndpoints(text), {
-          headers: { 'content-type': contentType },
-        })
+        const redactedText = redactInternalEndpoints(text)
+        const body = new TextEncoder().encode(redactedText)
+        return {
+          status: 200,
+          headers: [['content-type', contentType]],
+          body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+          expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+        }
       } catch (e) {
-        // try next candidate host
         console.warn('ArchView fetch attempt failed for', candidate.host, e instanceof Error ? e.message : e)
         continue
       }
     }
 
-    // All attempts failed — return degraded snapshot
-    const message = 'ArchView unreachable from CMS API route'
-    return NextResponse.json(
-      {
-        degraded: true,
-        error: message,
-        title: 'Degraded architecture snapshot',
-        description: 'ArchView unreachable, returning a minimal snapshot',
-        services: [],
-        nodes: [],
-        images: [],
-      },
-      { status: 200 },
-    )
+    return null
+  }
+
+  return async function GET(req: Request): Promise<Response> {
+    const url = new URL(req.url)
+    const search = stripSource(url.searchParams)
+
+    const resolved = await resolveSource(url.searchParams.get('source'))
+    const key = cacheKeyFor(resolved, search)
+
+    // Cache hit
+    const existing = cache.get(key)
+    if (existing && Date.now() < existing.expiresAt) {
+      // LRU refresh
+      cache.delete(key)
+      cache.set(key, existing)
+      return reconstruct(existing)
+    }
+    if (existing) {
+      cache.delete(key)
+    }
+
+    // Single-flight coalescing
+    let promise = inFlight.get(key)
+    if (!promise) {
+      promise = build(resolved, search).finally(() => {
+        inFlight.delete(key)
+      })
+      inFlight.set(key, promise)
+    }
+
+    const value = await promise
+    if (value) {
+      value.expiresAt = Date.now() + ARCHVIEW_CACHE_TTL_MS
+      if (!cache.has(key)) {
+        setCache(key, value)
+      }
+      return reconstruct(value)
+    }
+
+    return degradedSnapshot()
   }
 }
 
