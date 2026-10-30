@@ -295,6 +295,52 @@ describe('host sampling scheduler', () => {
     await payload.delete({ collection: 'host-samples', where: { host: { equals: sourceId } }, overrideAccess: true })
     await payload.delete({ collection: 'archview-sources', where: { id: { equals: sourceId } }, overrideAccess: true })
   })
+  it('one undecryptable secret does not stop other sources', async () => {
+    const good = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `good-${Date.now()}`,
+        origin: 'https://good.example.test',
+        audience: 'https://good.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    const bad = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `bad-${Date.now()}`,
+        origin: 'https://bad.example.test',
+        audience: 'https://bad.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    // Corrupt the stored secret so decryption fails.
+    await payload.db.updateOne({
+      collection: 'archview-sources',
+      id: bad.id,
+      data: { clientSecret: 'v1.garbage.garbage.garbage' },
+    } as never)
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
+    await sampleAllEnabledHosts(payload)
+    const goodSamples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(good.id) } },
+      overrideAccess: true,
+    })
+    expect(goodSamples.totalDocs).toBeGreaterThan(0)
+    // cleanup
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: String(good.id) } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { in: [String(good.id), String(bad.id)] } }, overrideAccess: true })
+  })
+
   it('samples a source that is never requested', async () => {
     global.fetch = (async () =>
       new Response(JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }), {
