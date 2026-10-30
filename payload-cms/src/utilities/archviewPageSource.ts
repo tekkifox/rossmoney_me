@@ -18,6 +18,7 @@ export type ArchviewResolutionKind = 'relation' | 'legacy' | 'default' | 'env'
 export type ResolvedArchviewSource = {
   kind: ArchviewResolutionKind
   origin: string
+  project?: string
   credentials?: ArchviewSourceCredentials
 }
 
@@ -71,7 +72,12 @@ const resolveRelation = async (
       const record: ArchviewSourceRecord | null =
         await findEnabledArchviewSourceRecordByRef(payload, ref)
       if (record) {
-        return { kind: 'relation', origin: record.origin, credentials: record.credentials }
+        return {
+          kind: 'relation',
+          origin: record.origin,
+          ...(record.project ? { project: record.project } : {}),
+          credentials: record.credentials,
+        }
       }
     }
 
@@ -132,7 +138,12 @@ export const resolvePageArchviewSource = async (
   if (deps.payload) {
     const record = await findDefaultArchviewSourceRecord(deps.payload)
     if (record) {
-      return { kind: 'default', origin: record.origin, credentials: record.credentials }
+      return {
+        kind: 'default',
+        origin: record.origin,
+        ...(record.project ? { project: record.project } : {}),
+        credentials: record.credentials,
+      }
     }
   }
 

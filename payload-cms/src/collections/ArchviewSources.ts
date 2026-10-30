@@ -217,6 +217,14 @@ export const ArchviewSources: CollectionConfig = {
       },
     },
     {
+      name: 'project',
+      type: 'text',
+      admin: {
+        description:
+          'The ArchView project label used when polling this instance, for example rossmoney_me, image-mosaic or vortexservers. Rows without a project are skipped by the host sampler.',
+      },
+    },
+    {
       name: 'audience',
       type: 'text',
       required: true,

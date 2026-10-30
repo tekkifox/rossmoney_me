@@ -70,6 +70,7 @@ export const seedArchviewSources = async (
     isDefault: boolean
     name: string
     origin: string
+    project: string
     scope: string
     tokenUrl: string
   }): Promise<string | undefined> => {
@@ -114,6 +115,7 @@ export const seedArchviewSources = async (
     productionId = await createIfMissing({
       name: 'Production',
       origin: productionOrigin,
+      project: 'rossmoney_me',
       audience: read(env.ARCHVIEW_AUDIENCE) || `${productionOrigin}/api`,
       tokenUrl,
       clientId: productionClientId,
@@ -131,6 +133,7 @@ export const seedArchviewSources = async (
   const vortexserversId = await createIfMissing({
     name: 'Vortexservers',
     origin: 'https://archview.vortexservers.co.uk',
+    project: 'vortexservers_co_uk',
     audience: 'https://archview.vortexservers.co.uk/api',
     tokenUrl,
     scope: 'archview:read',

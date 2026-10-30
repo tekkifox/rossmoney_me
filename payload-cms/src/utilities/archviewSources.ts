@@ -14,6 +14,7 @@ export type ArchviewSourceRecord = {
   id?: string
   name?: string
   origin: string
+  project?: string
   credentials?: ArchviewSourceCredentials
 }
 
@@ -66,8 +67,14 @@ export const toArchviewSourceRecord = (row: unknown): ArchviewSourceRecord | nul
 
   const id = asString(record.id)
   const name = readRequired(record, 'name') ?? undefined
+  const project = readRequired(record, 'project') ?? undefined
   const credentials = readCredentials(record)
-  const base = { origin, ...(id ? { id } : {}), ...(name ? { name } : {}) }
+  const base = {
+    origin,
+    ...(id ? { id } : {}),
+    ...(name ? { name } : {}),
+    ...(project ? { project } : {}),
+  }
   return credentials ? { ...base, credentials } : base
 }
 

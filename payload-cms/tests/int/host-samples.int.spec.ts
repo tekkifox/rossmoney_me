@@ -1,10 +1,14 @@
+import React from 'react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { getPayload, type Payload, type RequiredDataFromCollectionSlug } from 'payload'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import config from '@/payload.config'
 import { createArchitectureGet } from '@/app/api/architecture/route'
 import type { ArchviewSourceRecord } from '@/utilities/archviewSources'
 import { bucketHostSamples } from '@/utilities/hostUsage'
+import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
+import { PageRoot } from '@/components/PageRoot'
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -24,6 +28,7 @@ describe('host sampling on architecture cache fill', () => {
       data: {
         name: `sample-source-${Date.now()}`,
         origin: 'https://sample.example.test',
+        project: 'sample-project',
         audience: 'https://sample.example.test/api',
         tokenUrl: 'https://identity.example.test/oauth/token',
         enabled: true,
@@ -282,6 +287,7 @@ describe('host sampling scheduler', () => {
       data: {
         name: `sched-source-${Date.now()}`,
         origin: 'https://sched.example.test',
+        project: 'sched-project',
         audience: 'https://sched.example.test/api',
         tokenUrl: 'https://identity.example.test/oauth/token',
         enabled: true,
@@ -301,6 +307,7 @@ describe('host sampling scheduler', () => {
       data: {
         name: `good-${Date.now()}`,
         origin: 'https://good.example.test',
+        project: 'good-project',
         audience: 'https://good.example.test/api',
         tokenUrl: 'https://identity.example.test/oauth/token',
         enabled: true,
@@ -312,6 +319,7 @@ describe('host sampling scheduler', () => {
       data: {
         name: `bad-${Date.now()}`,
         origin: 'https://bad.example.test',
+        project: 'bad-project',
         audience: 'https://bad.example.test/api',
         tokenUrl: 'https://identity.example.test/oauth/token',
         enabled: true,
@@ -347,6 +355,7 @@ describe('host sampling scheduler', () => {
       data: {
         name: `authfail-${Date.now()}`,
         origin: 'https://authfail.example.test',
+        project: 'authfail-project',
         audience: 'https://authfail.example.test/api',
         tokenUrl: 'https://identity.example.test/oauth/token',
         enabled: true,
@@ -379,6 +388,83 @@ describe('host sampling scheduler', () => {
       overrideAccess: true,
     })
     expect(result.totalDocs).toBeGreaterThan(0)
+  })
+
+  it("polls the row's ArchView project in the query string", async () => {
+    const src = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `project-query-${Date.now()}`,
+        origin: 'https://project-query.example.test',
+        project: 'image mosaic/2026',
+        audience: 'https://project-query.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    const urls: string[] = []
+    global.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url)
+      return new Response(
+        JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+
+    await sampleAllEnabledHosts(payload)
+
+    const polled = urls.find((url) => url.startsWith('https://project-query.example.test/api/architecture'))
+    expect(polled).toBe(
+      `https://project-query.example.test/api/architecture?project=${encodeURIComponent('image mosaic/2026')}`,
+    )
+
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: String(src.id) } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
+  })
+
+  it('skips a source without a project and writes nothing', async () => {
+    const src = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `no-project-${Date.now()}`,
+        origin: 'https://no-project.example.test',
+        audience: 'https://no-project.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    const urls: string[] = []
+    global.fetch = (async (input: RequestInfo | URL) => {
+      urls.push(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url)
+      return new Response(
+        JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
+    const warn = vi.spyOn(payload.logger, 'warn')
+
+    await sampleAllEnabledHosts(payload)
+
+    expect(urls.some((url) => url.startsWith('https://no-project.example.test'))).toBe(false)
+    expect(
+      (
+        await payload.find({
+          collection: 'host-samples',
+          where: { host: { equals: String(src.id) } },
+          overrideAccess: true,
+        })
+      ).totalDocs,
+    ).toBe(0)
+    expect(
+      warn.mock.calls.map((call) => call.map(String).join(' ')).join('\n'),
+    ).toContain('no project configured')
+    warn.mockRestore()
+
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
   })
 })
 
@@ -422,5 +508,70 @@ describe('host rename keeps history by id', () => {
       overrideAccess: true,
     })
     expect(result.totalDocs).toBe(1)
+  })
+})
+
+describe('architecture project attribute', () => {
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+    document.getElementById('page-root')?.remove()
+  })
+
+  it('renders the resolved source project on #page-root', () => {
+    const { container } = render(
+      React.createElement(PageRoot, {
+        architectureApi: '/api/architecture',
+        architectureProject: 'image-mosaic',
+      }),
+    )
+
+    expect(
+      container.querySelector('#page-root')?.getAttribute('data-architecture-project'),
+    ).toBe('image-mosaic')
+  })
+
+  it('omits the attribute when the source has no project', () => {
+    const { container } = render(
+      React.createElement(PageRoot, {
+        architectureApi: '/api/architecture',
+      }),
+    )
+
+    expect(
+      container.querySelector('#page-root')?.hasAttribute('data-architecture-project'),
+    ).toBe(false)
+  })
+
+  it('prefers the rendered project and falls back to the prop', async () => {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        urls.push(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url)
+        return new Response(
+          JSON.stringify({ telemetry: { metrics: { cpuAvg: 1, memoryPercent: 2, loadAvg: 0.1, diskPercent: 3 } } }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }),
+    )
+
+    const root = document.createElement('article')
+    root.id = 'page-root'
+    root.dataset.architectureApi = '/api/architecture'
+    root.dataset.architectureProject = 'from-row'
+    document.body.appendChild(root)
+
+    render(React.createElement(ArchitectureClient, { project: 'from-prop' }))
+    await waitFor(() => expect(urls).toHaveLength(1))
+    expect(urls[0]).toContain('project=from-row')
+    expect(urls[0]).not.toContain('from-prop')
+
+    cleanup()
+    delete root.dataset.architectureProject
+
+    render(React.createElement(ArchitectureClient, { project: 'from-prop' }))
+    await waitFor(() => expect(urls).toHaveLength(2))
+    expect(urls[1]).toContain('project=from-prop')
   })
 })

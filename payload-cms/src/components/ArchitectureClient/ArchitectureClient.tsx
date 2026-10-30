@@ -54,12 +54,17 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
       architectureUrl = (meta && meta.content) || '/api/architecture'
     }
 
+    // The resolved source row owns the project label. Fall back to the prop the
+    // template passes while a source has no project configured yet.
+    const pageProject = pageRoot?.dataset?.architectureProject?.trim()
+    const projectLabel = pageProject || project
+
     let inFlight = false
     async function fetchArchitecture() {
       if (inFlight) return
       inFlight = true
       try {
-        const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (project ? `&project=${encodeURIComponent(project)}` : '')
+        const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
         const res = await fetch(url, { cache: 'no-store' })
         if (!res.ok) throw new Error(`Architecture fetch returned ${res.status}`)
 

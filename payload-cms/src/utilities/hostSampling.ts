@@ -24,7 +24,13 @@ export type SampleResult =
 
 export async function sampleOneSource(
   payload: Awaited<ReturnType<typeof getPayload>>,
-  record: { id?: string; name?: string; origin: string; credentials?: ArchviewSourceCredentials },
+  record: {
+    id?: string
+    name?: string
+    origin: string
+    project?: string
+    credentials?: ArchviewSourceCredentials
+  },
 ): Promise<SampleResult> {
   const log = (msg: string) => {
     if (payload.logger?.info) payload.logger.info(msg)
@@ -35,11 +41,16 @@ export async function sampleOneSource(
       log(`host sample: ${record.name ?? record.origin} skipped (no id)`)
       return { status: 'skipped', reason: 'no id' }
     }
+    const project = typeof record.project === 'string' ? record.project.trim() : ''
+    if (!project) {
+      log(`host sample: ${record.name ?? record.origin} skipped (no project configured)`)
+      return { status: 'skipped', reason: 'no project configured' }
+    }
     const init: RequestInit = {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     }
-    const url = `${record.origin.replace(/\/$/, '')}/api/architecture`
+    const url = `${record.origin.replace(/\/$/, '')}/api/architecture?project=${encodeURIComponent(project)}`
     const res = record.credentials
       ? await archviewSourceFetch(url, init, record.credentials)
       : await archviewFetch(url, init, process.env)
