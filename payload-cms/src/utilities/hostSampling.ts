@@ -7,6 +7,7 @@ import {
   type ArchviewSourceCredentials,
 } from './archviewAuth'
 import { toArchviewSourceRecord } from './archviewSources'
+import { decryptArchviewSecret } from './archviewSourceSecret'
 
 export function shouldRunHostSampler(env: Record<string, string | undefined> = process.env): boolean {
   if (env.HOST_SAMPLER === 'off') return false
@@ -75,22 +76,44 @@ export async function sampleOneSource(
 
 export async function sampleAllEnabledHosts(payload?: Awaited<ReturnType<typeof getPayload>>): Promise<void> {
   const p = payload ?? (await getPayload({ config }))
+  let sampled = 0
+  let skippedSecret = 0
+  let skippedOther = 0
   try {
-    const result = await p.find({
+    const result = await p.db.find({
       collection: 'archview-sources',
       where: { enabled: { equals: true } },
       limit: 1000,
-      overrideAccess: true,
-      context: { revealArchviewSourceSecret: true },
     })
-    for (const row of result.docs ?? []) {
+    const rows = (result?.docs ?? result ?? []) as Array<Record<string, unknown>>
+    for (const rawRow of rows) {
+      const row = { ...rawRow }
+      const name = String(row.name ?? row.id ?? 'unknown')
+      if (typeof row.clientSecret === 'string' && row.clientSecret.length > 0) {
+        try {
+          row.clientSecret = decryptArchviewSecret(row.clientSecret)
+        } catch (error) {
+          skippedSecret += 1
+          if (p.logger?.warn) p.logger.warn(`host sampling: skipping ${name}: secret (${error instanceof Error ? error.message : error})`)
+          else console.warn(`host sampling: skipping ${name}: secret`)
+          continue
+        }
+      }
       const record = toArchviewSourceRecord(row)
-      if (!record) continue
+      if (!record) {
+        skippedOther += 1
+        continue
+      }
       await sampleOneSource(p, record)
+      sampled += 1
     }
   } catch (error) {
     console.warn('host sampling sweep failed:', error instanceof Error ? error.message : error)
   }
+
+  const msg = `host sampling: ${sampled} sampled, ${skippedSecret} skipped (secret), ${skippedOther} skipped (other)`
+  if (p.logger?.info) p.logger.info(msg)
+  else console.log(msg)
 
   // Retention once per day.
   const now = Date.now()
