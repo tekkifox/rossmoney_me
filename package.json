@@ -1,0 +1,14 @@
+{
+  "name": "rossmoney-me",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --filter=payload-cms",
+    "lint": "turbo run lint",
+    "test:int": "turbo run test:int"
+  },
+  "devDependencies": {
+    "turbo": "2.11.10"
+  }
+}

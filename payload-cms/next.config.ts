@@ -160,7 +160,10 @@ const nextConfig: NextConfig = {
   output: process.env.VERCEL ? undefined : 'standalone',
   redirects,
   turbopack: {
-    root: path.resolve(dirname),
+    // Turbopack must see the workspace root: pnpm links this package's
+    // dependencies to `../node_modules/.pnpm`, and Turbopack refuses to resolve
+    // files outside its root.
+    root: path.resolve(dirname, '..'),
     // Mammoth's browser zip reader imports `jszip`, and Turbopack otherwise
     // resolves jszip's Node entry point. That pulls in `readable-stream` and
     // Next's `util` polyfill, which feature-detects generators with

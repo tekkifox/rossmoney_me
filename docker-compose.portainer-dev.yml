@@ -17,7 +17,7 @@ services:
     depends_on:
       - mongo
     volumes:
-      - payload-media-dev:/app/public/media:rw
+      - payload-media-dev:/app/payload-cms/public/media:rw
 
   mongo:
     image: mongo:9
