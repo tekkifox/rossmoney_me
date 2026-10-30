@@ -341,6 +341,31 @@ describe('host sampling scheduler', () => {
     await payload.delete({ collection: 'archview-sources', where: { id: { in: [String(good.id), String(bad.id)] } }, overrideAccess: true })
   })
 
+  it('reports a 401 source as skipped with status', async () => {
+    const src = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `authfail-${Date.now()}`,
+        origin: 'https://authfail.example.test',
+        audience: 'https://authfail.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    global.fetch = (async () =>
+      new Response('unauthorized', { status: 401 })) as typeof fetch
+    // capture console? just call
+    await sampleAllEnabledHosts(payload)
+    const result = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(src.id) } },
+      overrideAccess: true,
+    })
+    expect(result.totalDocs).toBe(0)
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
+  })
+
   it('samples a source that is never requested', async () => {
     global.fetch = (async () =>
       new Response(JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }), {
