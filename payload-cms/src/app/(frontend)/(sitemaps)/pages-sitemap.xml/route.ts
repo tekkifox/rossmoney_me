@@ -13,6 +13,8 @@ const SITEMAP_EXCLUDED_SLUGS = new Set([
   'commits',
   'experience',
   'experience-page',
+  'work',
+  'architecture',
 ])
 
 export interface SitemapPage {

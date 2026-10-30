@@ -2,7 +2,6 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 import React from 'react'
 
 import { RenderBlocks } from '@/blocks/RenderBlocks'
-import { getSafePayload } from '@/utilities/getSafePayload'
 import { browserArchitectureApi } from '@/utilities/architectureURL'
 
 export type PageDoc = RequiredDataFromCollectionSlug<'pages'>
@@ -99,20 +98,6 @@ export function readExperience(value: unknown): ExperienceDoc[] {
       summary: readString(record.summary),
     }
   })
-}
-
-export async function loadCollections() {
-  const payload = await getSafePayload()
-
-  const [projects, experience] = await Promise.all([
-    payload.find({ collection: 'projects', limit: 100, sort: 'order' }),
-    payload.find({ collection: 'experience', limit: 100, sort: 'order' }),
-  ])
-
-  return {
-    projects: readProjects(projects.docs),
-    experience: readExperience(experience.docs),
-  }
 }
 
 export function Section({ eyebrow, title, lead, children, className }: { eyebrow?: string; title: string; lead?: string; children?: React.ReactNode; className?: string }) {

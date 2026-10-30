@@ -2,9 +2,10 @@
 /**
  * Unpublish the two retired page documents without deleting their data.
  *
- * The `commits` and `experience-page` pages are kept in the CMS because the
- * homepage still reads their content. They must not be public, so this one-off
- * helper updates their `_status` to `draft`. It never deletes anything.
+ * The `commits`, `experience-page`, `work` and `architecture` pages are kept in
+ * the CMS because the homepage still reads their content. They must not be
+ * public, so this one-off helper updates their `_status` to `draft`. It never
+ * deletes anything.
  *
  * Usage (from the repository root):
  *   pnpm --filter payload-cms run unpublish:retired-pages
@@ -21,7 +22,7 @@ import { getPayload } from 'payload'
 
 import config from '../src/payload.config'
 
-const RETIRED_PAGE_SLUGS = ['commits', 'experience-page'] as const
+const RETIRED_PAGE_SLUGS = ['commits', 'experience-page', 'work', 'architecture'] as const
 
 function printUsage() {
   console.log(`Usage: pnpm --filter payload-cms run unpublish:retired-pages [-- --dry-run|--apply]

@@ -13,13 +13,11 @@ import { LivePreviewListener } from '@/components/LivePreviewListener'
 import HomeTemplate from '../templates/home'
 import ContactTemplate from '../templates/contact'
 import TravellingTemplate from '../templates/travelling'
-import ArchitectureTemplate from '../templates/architecture'
-import WorkTemplate from '../templates/work'
 import NavigationTemplate from '../templates/navigation'
 import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
-import { loadCollections, PageMeta } from '../templates/shared'
+import { PageMeta } from '../templates/shared'
 import { browserArchitectureApi } from '@/utilities/architectureURL'
 import { resolvePageArchviewSource } from '@/utilities/archviewPageSource'
 
@@ -82,7 +80,6 @@ export default async function Page({ params: paramsPromise }: Args) {
     return <PayloadRedirects url={url} />
   }
 
-  const collections = page.slug === 'work' ? await loadCollections() : null
   const resolvedSource = await resolvePageArchviewSource(page, null, {
     payload: await getSafePayload(),
   })
@@ -103,8 +100,6 @@ export default async function Page({ params: paramsPromise }: Args) {
       {page.slug === 'home' && <HomeTemplate page={page} />}
       {page.slug === 'contact' && <ContactTemplate page={page} />}
       {page.slug === 'travelling' && <TravellingTemplate page={page} />}
-      {page.slug === 'architecture' && <ArchitectureTemplate page={page} />}
-      {page.slug === 'work' && <WorkTemplate page={page} projects={collections?.projects || []} />}
       {page.slug === 'navigation' && <NavigationTemplate page={page} />}
       {page.slug === 'cv' && <CVTemplate page={page} />}
       {page.slug === 'services' && <ServicesTemplate page={page} />}
