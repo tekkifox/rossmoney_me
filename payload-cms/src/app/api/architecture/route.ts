@@ -262,6 +262,17 @@ const stripSource = (searchParams: URLSearchParams): string => {
   return query ? `?${query}` : ''
 }
 
+// Volatile cache-buster (`t`) and the `source` selector do not change the
+// answer, so they are excluded from the cache key. Everything else (project
+// and any other query input) stays part of it.
+const cacheableSearch = (searchParams: URLSearchParams): string => {
+  const forwarded = new URLSearchParams(searchParams)
+  forwarded.delete('source')
+  forwarded.delete('t')
+  const query = forwarded.toString()
+  return query ? `?${query}` : ''
+}
+
 const originKey = (value: string): string => originOf(value) ?? value
 
 const lookupFromDatabase = async (
@@ -461,9 +472,10 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   return async function GET(req: Request): Promise<Response> {
     const url = new URL(req.url)
     const search = stripSource(url.searchParams)
+    const cacheable = cacheableSearch(url.searchParams)
 
     const resolved = await resolveSource(url.searchParams.get('source'))
-    const key = cacheKeyFor(resolved, search)
+    const key = cacheKeyFor(resolved, cacheable)
 
     // Cache hit
     const existing = cache.get(key)
