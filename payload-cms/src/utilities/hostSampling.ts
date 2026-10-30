@@ -8,6 +8,12 @@ import {
 } from './archviewAuth'
 import { toArchviewSourceRecord } from './archviewSources'
 
+export function shouldRunHostSampler(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.HOST_SAMPLER === 'off') return false
+  if (env.HOST_SAMPLER === 'on') return true
+  return !env.VERCEL
+}
+
 let lastPruneAt = 0
 
 export async function sampleOneSource(
