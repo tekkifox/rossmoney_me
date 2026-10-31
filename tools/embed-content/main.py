@@ -150,6 +150,27 @@ def _as_text(value: Any) -> str:
     return str(value)
 
 
+def decode_document(value: Any) -> Any:
+    """Return a document from a driver column without double-encoding it.
+
+    ``python-oracledb`` may hand back a JSON column as an already-decoded
+    ``dict``/``list``. Older drivers and CLOB columns return ``str``, ``bytes``
+    or a LOB. Calling ``json.loads`` on ``str(dict)`` is invalid JSON, so only
+    strings are parsed here.
+    """
+
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        text = bytes(value).decode("utf-8", errors="replace")
+    elif isinstance(value, str):
+        text = value
+    else:
+        read = getattr(value, "read", None)
+        text = _as_text(read()) if callable(read) else _as_text(value)
+    return json.loads(text)
+
+
 def _updated_at(doc: Mapping[str, Any]) -> str:
     value = doc.get("updatedAt")
     return "" if value is None else str(value)
@@ -157,7 +178,19 @@ def _updated_at(doc: Mapping[str, Any]) -> str:
 
 def _doc_id(doc: Mapping[str, Any]) -> str:
     value = doc.get("_id", doc.get("id", ""))
-    return "" if value is None else str(value)
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray)):
+        raw = bytes(value)
+        try:
+            text = raw.decode("ascii")
+        except UnicodeDecodeError:
+            return raw.hex()
+        # Mongo ObjectIds arrive as 12 raw bytes; printable ids stay as text.
+        if text and all(32 <= ord(character) < 127 for character in text):
+            return text
+        return raw.hex()
+    return str(value)
 
 
 def _base_id(kind: str, doc_id: str) -> str:
@@ -216,11 +249,8 @@ def load_documents(cursor: Any) -> list[tuple[str, dict[str, Any]]]:
     for kind, table in TABLES:
         cursor.execute(f'SELECT data FROM ROSSMONEY."{table}"')
         for row in cursor.fetchall():
-            text = _as_text(row[0])
-            if not text:
-                continue
             try:
-                doc = json.loads(text)
+                doc = decode_document(row[0])
             except json.JSONDecodeError as exc:
                 raise IngestError(
                     f"Could not parse a document from ROSSMONEY.\"{table}\": {exc}"
