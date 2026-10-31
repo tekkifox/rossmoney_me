@@ -29,24 +29,6 @@ services:
     volumes:
       - mongo-data-dev:/data/db
 
-  # Same daily report, built from the dev tag. Dry-run by default so the dev
-  # stack does not post a second copy of the production message; set
-  # HOST_REPORT_DRY_RUN=0 in this stack's stack.env to let it send.
-  host-report:
-    image: ghcr.io/tekkifox/rossmoney_me-host-report:dev
-    pull_policy: always
-    hostname: rossmoney-host-report-dev-1
-    env_file:
-      - stack.env
-    restart: unless-stopped
-    environment:
-      ORACLE_TNS_ADMIN: /wallet
-      HOST_REPORT_DRY_RUN: "${HOST_REPORT_DRY_RUN:-1}"
-    volumes:
-      - ${ORACLE_WALLET_DIR:-./Wallet_rossadb}:/wallet:ro
-    networks:
-      - rossmoney-stack-dev
-
   # ArchView is a separate stack (ghcr.io/tekkifox/archview) served at
   # archview.rossmoney.me. It brings its own socket proxy because it is the only
   # consumer of the Docker API, so neither container belongs here. The CMS

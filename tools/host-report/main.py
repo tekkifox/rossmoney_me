@@ -48,8 +48,7 @@ DEFAULT_COMPOSIO_BASE_URL = "https://backend.composio.dev"
 #: Optional comma-separated host list for the report.
 HOSTS_ENV = "HOST_REPORT_HOSTS"
 
-#: Set to 1/true to print the report without delivering it. The dev stack uses
-#: this so it never posts a second copy of the production report.
+#: Set to 1/true to print the report without delivering it.
 DRY_RUN_ENV = "HOST_REPORT_DRY_RUN"
 
 HTTP_TIMEOUT_SECONDS = 20

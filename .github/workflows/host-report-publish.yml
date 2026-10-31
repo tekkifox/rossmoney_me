@@ -4,14 +4,13 @@ on:
   push:
     branches:
       - main
-      - dev
     paths:
       - 'tools/host-report/**'
       - '.github/workflows/host-report-publish.yml'
   workflow_dispatch:
 
 concurrency:
-  group: host-report-publish-${{ github.ref_name }}
+  group: host-report-publish
   cancel-in-progress: false
 
 permissions:
@@ -46,7 +45,6 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
             type=sha,prefix=
 
       - name: Build and push
@@ -64,7 +62,7 @@ jobs:
 
       - name: Trigger Portainer webhook
         env:
-          PORTAINER_WEBHOOK_URL: ${{ github.ref == 'refs/heads/dev' && secrets.PORTAINER_WEBHOOK_URL_DEV || secrets.PORTAINER_WEBHOOK_URL }}
+          PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
         if: ${{ env.PORTAINER_WEBHOOK_URL != '' }}
         run: |
           status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$PORTAINER_WEBHOOK_URL")

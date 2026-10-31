@@ -95,7 +95,7 @@ not valid JSON objects are skipped.
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `HOST_REPORT_HOSTS` | no | Comma-separated host list. Defaults to `rossmoney.me,photos.rossmoney.me,vortexservers.co.uk`; hosts found in the data are added in name order |
-| `HOST_REPORT_DRY_RUN` | no | `1`/`true` prints the report without sending. The dev stack defaults to dry-run |
+| `HOST_REPORT_DRY_RUN` | no | `1`/`true` prints the report without sending |
 | `TZ` | no | Container and cron timezone, default `Europe/London` |
 | `HOST_REPORT_CRON` | no | Cron expression, default `0 9 * * *` |
 | `ORACLE_WALLET_DIR` | no | **Host** path bind-mounted read-only at `/wallet` (compose substitution only; not a container variable) |
@@ -111,8 +111,8 @@ cd tools/host-report
 docker build -t rossmoney-me-host-report .
 ```
 
-CI publishes `ghcr.io/tekkifox/rossmoney_me-host-report:latest` from `main` and
-`:dev` from `dev` (`.github/workflows/host-report-publish.yml`, linux/amd64).
+CI publishes `ghcr.io/tekkifox/rossmoney_me-host-report:latest` from `main`
+(`.github/workflows/host-report-publish.yml`, linux/amd64).
 
 ## Test a send manually
 
@@ -173,10 +173,7 @@ which is deliberate — the next 09:00 report covers the previous 24 hours.
 `docker-compose.portainer.yml` adds a `host-report` service on the existing
 `rossmoney-stack` network. It has no published ports, uses `env_file:
 stack.env`, mounts the Oracle wallet read-only, and pulls
-`ghcr.io/tekkifox/rossmoney_me-host-report:latest`. The dev stack
-(`docker-compose.portainer-dev.yml`) uses the `:dev` tag on
-`rossmoney-stack-dev` and defaults to `HOST_REPORT_DRY_RUN=1` so it does not
-post a second copy of the production message.
+`ghcr.io/tekkifox/rossmoney_me-host-report:latest`.
 
 Set these in the Portainer stack's `stack.env`:
 
