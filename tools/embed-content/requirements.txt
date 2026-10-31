@@ -1,0 +1,3 @@
+# Standalone CMS chunk embedder.
+# Uses Oracle thin mode, so no Instant Client installation is required.
+oracledb==26.1.0
