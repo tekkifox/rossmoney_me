@@ -112,7 +112,8 @@ docker build -t rossmoney-me-host-report .
 ```
 
 CI publishes `ghcr.io/tekkifox/rossmoney_me-host-report:latest` from `main`
-(`.github/workflows/host-report-publish.yml`, linux/amd64).
+(`.github/workflows/host-report-publish.yml`) for linux/amd64 and linux/arm64,
+each built natively on its own runner and merged into one manifest.
 
 ## Test a send manually
 
