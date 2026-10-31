@@ -3,6 +3,7 @@ import { getPayload, type Payload, type RequiredDataFromCollectionSlug } from 'p
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import HostUsage from '@/components/HostUsage'
+import { seriesDomain, type SeriesPoint } from '@/components/HostUsageChart'
 import config from '@/payload.config'
 import {
   bucketHostSamples,
@@ -78,6 +79,35 @@ afterAll(async () => {
 
 afterEach(cleanup)
 
+const point = (overrides: Partial<SeriesPoint>): SeriesPoint => ({
+  label: '00:00',
+  cpuAvg: null,
+  memoryPercent: null,
+  loadAvg: null,
+  diskPercent: null,
+  ...overrides,
+})
+
+describe('per-metric chart scales', () => {
+  it('pads a metric to its own range so small variation fills the panel', () => {
+    expect(
+      seriesDomain([point({ cpuAvg: 29 }), point({ cpuAvg: 53 })], 'cpuAvg', true),
+    ).toEqual([25.4, 56.6])
+  })
+
+  it('gives a constant series a readable band instead of a degenerate axis', () => {
+    expect(
+      seriesDomain([point({ diskPercent: 80.3 }), point({ diskPercent: 80.29999999999998 })], 'diskPercent', true),
+    ).toEqual([79.3, 81.3])
+  })
+
+  it('keeps percent metrics inside 0–100', () => {
+    expect(
+      seriesDomain([point({ memoryPercent: 99 }), point({ memoryPercent: 100 })], 'memoryPercent', true),
+    ).toEqual([98.85, 100])
+  })
+})
+
 describe('host usage with populated relationships', () => {
   it('groups a populated host relationship under the source id and yields chart data', async () => {
     const source = sources[0]
@@ -129,7 +159,14 @@ describe('host usage view with three hosts', () => {
 
       expect(section).not.toBeNull()
       expect(within(section as HTMLElement).queryByText(/No samples in the selected range/)).toBeNull()
-      expect(section?.querySelector('.recharts-responsive-container')).not.toBeNull()
+
+      // Stacked small multiples: one chart panel per metric, each with its own
+      // ResponsiveContainer and Y-axis rather than one shared percent axis.
+      expect(section?.querySelectorAll('.recharts-responsive-container')).toHaveLength(4)
+      const panelTitles = Array.from(section?.querySelectorAll('h3') ?? []).map(
+        (heading) => heading.textContent,
+      )
+      expect(panelTitles).toEqual(['CPU %', 'Memory %', 'Load', 'Disk %'])
 
       const tableHeading = screen.getByRole('heading', { level: 3, name: source.name })
       const group = tableHeading.parentElement as HTMLElement
