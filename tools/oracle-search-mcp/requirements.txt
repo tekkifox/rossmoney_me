@@ -1,0 +1,4 @@
+# Standalone stdio MCP server for semantic CMS search.
+# mcp 2.x renamed FastMCP to MCPServer; this server targets that API.
+mcp==2.3.0
+oracledb==26.1.0
