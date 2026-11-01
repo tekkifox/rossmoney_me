@@ -2,7 +2,7 @@
 
 **Status:** enforced on every production response.  
 **Date:** 2026-10-26.  
-**Scope:** `www.example.com` (Portainer/openresty), `example.vercel.app`
+**Scope:** `www.example.com` (Portainer/Nginx Proxy Manager), `example.vercel.app`
 (Vercel production), `dev.example.com` (Vercel preview), and local
 `next start`.
 
