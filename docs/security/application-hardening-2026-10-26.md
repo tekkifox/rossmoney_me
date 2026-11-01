@@ -78,5 +78,5 @@ Production build (`next build` + `next start`) on a disposable database:
   reproduced with a real Chromium in which only the automation markers were
   removed. An actual headed browser could not be launched in this environment.
 - **HSTS preload list submission.** The header is now eligible
-  (`includeSubDomains; preload`); actually submitting `rossmoney.me` is a
+  (`includeSubDomains; preload`); actually submitting `example.com` is a
   separate product/deployment decision.
