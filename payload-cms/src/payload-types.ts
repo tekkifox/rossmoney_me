@@ -1958,6 +1958,34 @@ export interface BotSetting {
       }[]
     | null;
   /**
+   * Inbound Discord messages the bot answers. Each source maps a channel to one of the targets above.
+   */
+  sources?:
+    | {
+        /**
+         * The key the agent uses, for example vortex-admin.
+         */
+        name: string;
+        /**
+         * The Composio connection that receives the message.
+         */
+        connected_account_id: string;
+        /**
+         * The Discord channel id this source listens on.
+         */
+        channel_id: string;
+        /**
+         * Discord user ids allowed to use this source. Empty means nobody: the bot refuses every author until an id is added.
+         */
+        allowed_authors?: string[] | null;
+        /**
+         * Must name one of the Targets in this document. A source whose target does not exist answers to nothing.
+         */
+        target: string;
+        id?: string | null;
+      }[]
+    | null;
+  /**
    * The model the agent prefers, and the one it falls back to.
    */
   model?: {
@@ -2040,6 +2068,16 @@ export interface BotSettingsSelect<T extends boolean = true> {
               books?: T;
               token?: T;
             };
+        id?: T;
+      };
+  sources?:
+    | T
+    | {
+        name?: T;
+        connected_account_id?: T;
+        channel_id?: T;
+        allowed_authors?: T;
+        target?: T;
         id?: T;
       };
   model?:

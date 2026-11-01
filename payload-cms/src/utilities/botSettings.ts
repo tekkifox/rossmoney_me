@@ -43,9 +43,19 @@ export type BotSettingsTarget = {
   bookstack: BotSettingsBookstack
 }
 
+/** One inbound source, shaped like a `NOTIFY_INBOUND_SOURCES` entry. */
+export type BotSettingsSource = {
+  name: string
+  connected_account_id: string
+  channel_id: string
+  allowed_authors: string
+  target: string
+}
+
 export type BotSettingsResponse = {
   version: string
   targets: Record<string, BotSettingsTarget>
+  sources: BotSettingsSource[]
 }
 
 const isBlank = (value: unknown): boolean =>
@@ -153,6 +163,38 @@ export const validateTargetName = (value: unknown): string | true => {
   return true
 }
 
+/** Inbound source names follow the same key-safe pattern as target names. */
+export const validateSourceName = validateTargetName
+
+/** Target names defined in the same document, used by the source reference check. */
+export const knownTargetNames = (targets: unknown): string[] =>
+  (Array.isArray(targets) ? targets : [])
+    .map((row) => stringOrEmpty(asRecord(row).name))
+    .filter(Boolean)
+
+/**
+ * A source must name a target that exists in this same document.
+ *
+ * The lookup is case-sensitive on purpose: the agent keys `targets` by name, so
+ * `Admin-Chat` would pass a case-insensitive check and still answer to nothing.
+ * The error names the value it could not find, which is the typo an editor has
+ * to fix.
+ */
+export const validateSourceTarget = (value: unknown, targets: unknown): string | true => {
+  if (isBlank(value)) {
+    return true
+  }
+  const name = stringOrEmpty(value)
+  if (!name) {
+    return true
+  }
+
+  if (!knownTargetNames(targets).includes(name)) {
+    return `Target "${name}" does not exist. Add it under Targets first, or correct the name: a source that names a missing target answers to nothing.`
+  }
+  return true
+}
+
 /**
  * The two cross-field runbook rules:
  * - a URL present means the target may read runbooks;
@@ -183,8 +225,8 @@ export const validateRunbookAccess = (
   return true
 }
 
-/** Names that appear more than once, compared case-insensitively. */
-export const duplicateTargetNames = (rows: unknown): string[] => {
+/** Names that appear more than once, compared case-insensitively (targets or sources). */
+export const duplicateNames = (rows: unknown): string[] => {
   if (!Array.isArray(rows)) {
     return []
   }
@@ -207,8 +249,9 @@ export const duplicateTargetNames = (rows: unknown): string[] => {
 
 /**
  * Converts the stored global into the shape the agent consumes: `targets` is
- * keyed by name and every entry uses the snake_case field names of the old
- * `NOTIFY_TARGETS` environment variable. Nothing else is exposed.
+ * keyed by name and `sources` is an array, using the snake_case field names of
+ * the old `NOTIFY_TARGETS` / `NOTIFY_INBOUND_SOURCES` variables. Nothing else is
+ * exposed.
  */
 export const toBotSettingsResponse = (doc: unknown): BotSettingsResponse | null => {
   const global = asRecord(doc)
@@ -217,10 +260,14 @@ export const toBotSettingsResponse = (doc: unknown): BotSettingsResponse | null 
     return null
   }
 
-  const rows = Array.isArray(global.targets) ? global.targets : []
+  const targets = toTargets(global.targets)
+  return { version, targets, sources: toSources(global.sources) }
+}
+
+const toTargets = (rows: unknown): Record<string, BotSettingsTarget> => {
   const targets: Record<string, BotSettingsTarget> = {}
 
-  for (const row of rows) {
+  for (const row of Array.isArray(rows) ? rows : []) {
     const target = asRecord(row)
     const name = stringOrEmpty(target.name)
     if (!name) {
@@ -249,5 +296,37 @@ export const toBotSettingsResponse = (doc: unknown): BotSettingsResponse | null 
     targets[name] = entry
   }
 
-  return { version, targets }
+  return targets
 }
+
+/**
+ * `allowed_authors` is a comma-separated string in the agent's environment
+ * variable, so an empty list becomes `''` — the agent then refuses every author.
+ */
+const toSources = (rows: unknown): BotSettingsSource[] => {
+  const sources: BotSettingsSource[] = []
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const source = asRecord(row)
+    const name = stringOrEmpty(source.name)
+    if (!name) {
+      continue
+    }
+
+    sources.push({
+      name,
+      connected_account_id: stringOrEmpty(source.connected_account_id),
+      channel_id: stringOrEmpty(source.channel_id),
+      allowed_authors: Array.isArray(source.allowed_authors)
+        ? source.allowed_authors
+            .map((author) => stringOrEmpty(author))
+            .filter(Boolean)
+            .join(',')
+        : '',
+      target: stringOrEmpty(source.target),
+    })
+  }
+
+  return sources
+}
+
