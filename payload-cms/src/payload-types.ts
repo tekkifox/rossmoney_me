@@ -1918,7 +1918,7 @@ export interface BotSetting {
          */
         name: string;
         /**
-         * The Discord channel id this target posts to.
+         * The Discord channel id this target posts to (digits only).
          */
         channel_id: string;
         /**
@@ -1926,9 +1926,9 @@ export interface BotSetting {
          */
         connected_account_id: string;
         /**
-         * Hostnames this target may report on, for example example.com. Leave empty to report on nothing host-specific.
+         * At least one hostname this target may report on, for example example.com. An empty list is refused when the agent loads its configuration.
          */
-        host_scope?: string[] | null;
+        host_scope: string[];
         /**
          * Allow this target to read published site content.
          */
@@ -1971,13 +1971,13 @@ export interface BotSetting {
          */
         connected_account_id: string;
         /**
-         * The Discord channel id this source listens on.
+         * The Discord channel id this source listens on (digits only). It must match the channel of the target it names.
          */
         channel_id: string;
         /**
-         * Discord user ids allowed to use this source. Empty means nobody: the bot refuses every author until an id is added.
+         * At least one Discord user id allowed to use this source. With none, the inbound listener refuses to start.
          */
-        allowed_authors?: string[] | null;
+        allowed_authors: string[];
         /**
          * Must name one of the Targets in this document. A source whose target does not exist answers to nothing.
          */

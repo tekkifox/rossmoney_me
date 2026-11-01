@@ -5,11 +5,15 @@ import { asRecord } from '@/utilities/json'
 import {
   duplicateNames,
   splitBookstackBooks,
+  validateAllowedAuthors,
   validateBookstackBooks,
   validateBookstackUrl,
+  validateChannelId,
+  validateConnectedAccountId,
   validateCredentialName,
   validateHostScope,
   validateRunbookAccess,
+  validateSourceChannelMatchesTarget,
   validateSourceName,
   validateSourceTarget,
   validateTargetName,
@@ -84,6 +88,18 @@ const validateSourceTargetField: Validate<string> = (value, { data }) =>
   validateSourceTarget(value, asRecord(data).targets)
 
 /**
+ * The source's channel must be the target's channel as well as a valid id.
+ * The agent refuses to reply to a different channel, so both are checked here.
+ */
+const validateSourceChannelField: Validate<string> = (value, { data, siblingData }) => {
+  const format = validateChannelId(value)
+  if (format !== true) {
+    return format
+  }
+  return validateSourceChannelMatchesTarget(value, asRecord(siblingData).target, asRecord(data).targets)
+}
+
+/**
  * Configuration for the notification bot.
  *
  * This global holds names, ids and flags — never credentials. The BookStack
@@ -150,14 +166,16 @@ export const BotSettings: GlobalConfig = {
           name: 'channel_id',
           type: 'text',
           required: true,
+          validate: validateChannelId,
           admin: {
-            description: 'The Discord channel id this target posts to.',
+            description: 'The Discord channel id this target posts to (digits only).',
           },
         },
         {
           name: 'connected_account_id',
           type: 'text',
           required: true,
+          validate: validateConnectedAccountId,
           admin: {
             description: 'The Composio connected account the bot acts through.',
           },
@@ -166,11 +184,12 @@ export const BotSettings: GlobalConfig = {
           name: 'host_scope',
           type: 'text',
           hasMany: true,
+          required: true,
           validate: validateHostScope,
           label: 'Hosts',
           admin: {
             description:
-              'Hostnames this target may report on, for example example.com. Leave empty to report on nothing host-specific.',
+              'At least one hostname this target may report on, for example example.com. An empty list is refused when the agent loads its configuration.',
           },
         },
         {
@@ -267,6 +286,7 @@ export const BotSettings: GlobalConfig = {
           name: 'connected_account_id',
           type: 'text',
           required: true,
+          validate: validateConnectedAccountId,
           admin: {
             description: 'The Composio connection that receives the message.',
           },
@@ -275,18 +295,22 @@ export const BotSettings: GlobalConfig = {
           name: 'channel_id',
           type: 'text',
           required: true,
+          validate: validateSourceChannelField,
           admin: {
-            description: 'The Discord channel id this source listens on.',
+            description:
+              'The Discord channel id this source listens on (digits only). It must match the channel of the target it names.',
           },
         },
         {
           name: 'allowed_authors',
           type: 'text',
           hasMany: true,
+          required: true,
+          validate: validateAllowedAuthors,
           label: 'Allowed authors',
           admin: {
             description:
-              'Discord user ids allowed to use this source. Empty means nobody: the bot refuses every author until an id is added.',
+              'At least one Discord user id allowed to use this source. With none, the inbound listener refuses to start.',
           },
         },
         {
