@@ -29,24 +29,6 @@ services:
     volumes:
       - mongo-data:/data/db
 
-  # Daily host report at 09:00 Europe/London (override with TZ and
-  # HOST_REPORT_CRON). It is schedule-only: cron starts main.py once, the
-  # process sends and exits, and no port is exposed. The wallet is mounted
-  # read-only and ORACLE_TNS_ADMIN points at the mount, not the host path.
-  host-report:
-    image: ghcr.io/tekkifox/rossmoney_me-host-report:latest
-    pull_policy: always
-    hostname: rossmoney-host-report-1
-    env_file:
-      - stack.env
-    restart: unless-stopped
-    environment:
-      ORACLE_TNS_ADMIN: /wallet
-    volumes:
-      - ${ORACLE_WALLET_DIR:-./Wallet_rossadb}:/wallet:ro
-    networks:
-      - rossmoney-stack
-
   # ArchView is a separate stack (ghcr.io/tekkifox/archview) served at
   # archview.rossmoney.me. It brings its own socket proxy because it is the only
   # consumer of the Docker API, so neither container belongs here. The CMS
