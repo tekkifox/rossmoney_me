@@ -13,7 +13,7 @@ This workspace contains a static portfolio site for a developer with a DevOps fo
 ## Architecture feed
 
 The telemetry service lives in the sibling `archview` repo and is deployed as its
-own stack at `https://archview.rossmoney.me`. It is protected by OAuth/OIDC, so a
+own stack at `https://archview.example.com`. It is protected by OAuth/OIDC, so a
 person opening that hostname is sent through the identity provider's login before
 it serves a snapshot. There are no static API keys: the CMS never calls it
 anonymously. Every ArchView deployment the CMS may use is a row in the admin's
@@ -102,7 +102,7 @@ MongoDB database name defaults to `rossmoney_me`.
 ## Go service
 
 ArchView runs from the sibling `archview` repo as its own stack; it is not part of
-this Compose project. The deployed instance at `https://archview.rossmoney.me`
+this Compose project. The deployed instance at `https://archview.example.com`
 requires an OAuth login and exposes:
 
 - `/healthz`
@@ -127,7 +127,7 @@ Portainer stack (CI/production):
 docker compose -f docker-compose.portainer.yml config
 ```
 
-The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.rossmoney.me`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
+The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.example.com`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
 
 ## Environment file
 
@@ -136,27 +136,27 @@ Create a root `stack.env` file for local Compose with these values:
 ```ini
 MONGODB_URI=mongodb://mongo:27017/rossmoney_me
 PAYLOAD_SECRET=rossmoney_payload_secret_key_change_me
-SERVER_URL=https://www.rossmoney.me
+SERVER_URL=https://www.example.com
 PAYLOAD_SEED=true
 NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
 RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key
 
-# ArchView lives in its own stack at https://archview.rossmoney.me and accepts
+# ArchView lives in its own stack at https://archview.example.com and accepts
 # Auth0 client-credentials tokens (no static API keys). At seed time these values
 # also create the default "Production" source; ARCHVIEW_URL is the bootstrap
 # fallback until a default source exists.
-ARCHVIEW_URL=https://archview.rossmoney.me
+ARCHVIEW_URL=https://archview.example.com
 ARCHVIEW_CLIENT_ID=cms
 ARCHVIEW_CLIENT_SECRET=your-archview-client-secret
 ARCHVIEW_TOKEN_URL=https://your-tenant.auth0.com/oauth/token
-ARCHVIEW_AUDIENCE=https://archview.rossmoney.me/api
+ARCHVIEW_AUDIENCE=https://archview.example.com/api
 ARCHVIEW_SCOPE=archview:read
 # 32 random bytes, base64 (`openssl rand -base64 32`); encrypts secrets in the
 # ArchView sources collection.
 ARCHVIEW_SECRET_KEY=your-archview-secret-key
 ```
 
-The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.rossmoney.me/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.example.com/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
 
 ## Seeding ArchView sources
 
@@ -169,8 +169,8 @@ matching on origin so reruns do not duplicate rows or overwrite admin edits:
   collection hook; it is never written into source code. The row is skipped
   unless the origin, token URL, client ID, client secret and
   `ARCHVIEW_SECRET_KEY` are all set, so a local seed without Auth0 still works.
-- **Vortexservers** — `https://archview.vortexservers.co.uk`, audience
-  `https://archview.vortexservers.co.uk/api`, scope `archview:read`, using the
+- **Vortexservers** — `https://archview.example.org`, audience
+  `https://archview.example.org/api`, scope `archview:read`, using the
   same `ARCHVIEW_TOKEN_URL`. It has no client credentials, so it stays anonymous
   until someone enters them in the admin. It is skipped when the token URL is
   unset.
@@ -182,7 +182,7 @@ environment only at seed time.
 
 Media uploads are stored on the deployment's local filesystem by default. On Vercel that filesystem is ephemeral, so set `BLOB_READ_WRITE_TOKEN` (created by Vercel when Blob storage is added to the project) to store media in Vercel Blob instead.
 
-The variable is optional. When it is absent, the CMS keeps writing uploads to `payload-cms/public/media` and builds/tests do not need any Vercel credentials. The self-hosted Portainer stack (`www.rossmoney.me`) must leave it unset so it keeps using its `payload-media` volume.
+The variable is optional. When it is absent, the CMS keeps writing uploads to `payload-cms/public/media` and builds/tests do not need any Vercel credentials. The self-hosted Portainer stack (`www.example.com`) must leave it unset so it keeps using its `payload-media` volume.
 
 ## Portainer webhook
 
@@ -221,7 +221,7 @@ The service runs locally as root because access to the Docker daemon is effectiv
 
 ## Notes
 
-The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is a separate Go service deployed at `https://archview.rossmoney.me` behind OAuth login; the CMS reads it server-side with an Auth0 access token from its own client credentials.
+The CMS (Payload Next app) now serves the frontend and pages directly. The telemetry/architecture API is a separate Go service deployed at `https://archview.example.com` behind OAuth login; the CMS reads it server-side with an Auth0 access token from its own client credentials.
 
 ## Dependency updates and audit
 
@@ -272,7 +272,7 @@ If you prefer server-side conversion (avoid bundling mammoth in the browser), th
 
 ## ArchView / telemetry
 
-ArchView is deployed separately at `https://archview.rossmoney.me`, where the
+ArchView is deployed separately at `https://archview.example.com`, where the
 login is handled by the service's own OAuth/OIDC flow. The CMS obtains a
 short-lived Auth0 token with the `client_credentials` grant and passes it as a
 bearer token on its server-side calls.

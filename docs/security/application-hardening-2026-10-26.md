@@ -20,7 +20,7 @@ is retained and the `X-Frame-Options` values are aligned to it below.
 | 5 | `X-Powered-By` advertises the stack | **Fixed.** `poweredByHeader: false` stops Next.js and prevents `withPayload` from adding `Next.js, Payload`. Verified absent. |
 | 6 | `/api/*` cache policy | **Fixed.** `/api/:path*` defaults to `private, no-store`. The named exception is `/api/og`, deliberately `public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800`. |
 | 7 | Anonymous `/api/access` and `/api/users/init` | **Declined (kept closed).** Anonymous `/api/access` is `401`; anonymous `/api/users/init` is `404`. The public site never requests either endpoint, the admin bootstrap has a session, and the schema/initialised state is unnecessary metadata. Authenticated administrators still receive the real permissions and `{"initialized":true}`. |
-| 8 | No `security.txt` | **Fixed.** `public/.well-known/security.txt`, `Contact: mailto:dev@rossmoney.me`. That address is the app's existing public contact (`contact-page` seed, form recipient and `EMAIL_FROM` fallback), not an invented one. |
+| 8 | No `security.txt` | **Fixed.** `public/.well-known/security.txt`, `Contact: mailto:dev@example.com`. That address is the app's existing public contact (`contact-page` seed, form recipient and `EMAIL_FROM` fallback), not an invented one. |
 | 9 | Internal `http://socket-proxy:2375` in page data | **Fixed.** The ArchView payload is redacted server-side in `/api/architecture`, server-side in the game-servers/travelling templates, and client-side before the DOM is written. Internal or non-HTTPS ArchView values now fall back to the same-origin `/api/architecture` proxy instead of being rendered into `data-architecture-api`/the meta tag. Verified response and rendered DOM contain `[internal]`, not the endpoint URL. |
 | 10 | Analytics pageview beacon not observed | **Declined (no CSP change).** The Vercel Web Analytics SDK deliberately no-ops when `navigator.webdriver` is true or the user agent contains `Headless`; that is why an automated/headless audit sees no beacon. With those automation markers removed, the live site sends `POST /<deployment-hash>/view` → `202` with zero CSP violations. The CSP was not weakened. |
 | 11 | `X-Frame-Options` versus `frame-ancestors` | **Fixed.** Public pages are `SAMEORIGIN` so Live Preview can frame them; the admin path is still `DENY`. Verified on `/admin`, `/admin/login` and `/admin/collections/pages`; the public page is `SAMEORIGIN`. |
@@ -78,5 +78,5 @@ Production build (`next build` + `next start`) on a disposable database:
   reproduced with a real Chromium in which only the automation markers were
   removed. An actual headed browser could not be launched in this environment.
 - **HSTS preload list submission.** The header is now eligible
-  (`includeSubDomains; preload`); actually submitting `rossmoney.me` is a
+  (`includeSubDomains; preload`); actually submitting `example.com` is a
   separate product/deployment decision.
