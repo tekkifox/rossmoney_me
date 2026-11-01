@@ -132,15 +132,19 @@ export const validateBookstackBooks = (value: unknown): string | true => {
   return true
 }
 
+/**
+ * An empty host list is a load-time failure for the agent
+ * (`target host_scope must not be empty`), so it is not a valid state here.
+ * Omitting the key would be worse: an absent scope means no narrowing at all.
+ */
 export const validateHostScope = (value: unknown): string | true => {
-  if (isBlank(value)) {
-    return true
-  }
-  if (!Array.isArray(value)) {
-    return 'Enter the hosts as a list.'
+  const hosts = Array.isArray(value) ? value : []
+
+  if (hosts.length === 0) {
+    return 'At least one hostname is required. The agent refuses to load a target whose host_scope is empty.'
   }
 
-  for (const entry of value) {
+  for (const entry of hosts) {
     const host = stringOrEmpty(entry)
     if (!host) {
       return 'Every host entry must be a hostname, for example example.com'
@@ -148,6 +152,88 @@ export const validateHostScope = (value: unknown): string | true => {
     if (!HOSTNAME_PATTERN.test(host) || host.includes('..')) {
       return `"${host}" is not a hostname. Enter it without a scheme, path or port, for example example.com`
     }
+  }
+  return true
+}
+
+/** Discord ids are snowflakes: 1–32 digits, and nothing else. */
+export const SNOWFLAKE_PATTERN = /^[0-9]{1,32}$/
+
+export const validateChannelId = (value: unknown): string | true => {
+  const id = stringOrEmpty(value)
+  if (!id) {
+    return 'Enter the Discord channel id (digits only).'
+  }
+  if (!SNOWFLAKE_PATTERN.test(id)) {
+    return 'Enter the Discord channel id as 1–32 digits, for example 000000000000000000.'
+  }
+  return true
+}
+
+/**
+ * Composio's id format is not ours to assume: any non-empty value without
+ * whitespace is accepted, and the `ca_` prefix is not required.
+ */
+export const validateConnectedAccountId = (value: unknown): string | true => {
+  const id = stringOrEmpty(value)
+  if (!id) {
+    return 'Enter the Composio connected account id.'
+  }
+  if (/\s/.test(id)) {
+    return 'The Composio connected account id must not contain whitespace.'
+  }
+  return true
+}
+
+/**
+ * With no allowed authors the inbound listener refuses to start, so an empty
+ * list is rejected rather than treated as "nobody may use this source".
+ */
+export const validateAllowedAuthors = (value: unknown): string | true => {
+  const authors = Array.isArray(value)
+    ? value.map((author) => stringOrEmpty(author)).filter(Boolean)
+    : []
+
+  if (authors.length === 0) {
+    return 'At least one Discord user id is required. With no allowed authors the inbound listener refuses to start.'
+  }
+  return true
+}
+
+/** The target row named `name`, compared exactly (it is a JSON key). */
+export const findTargetByName = (targets: unknown, name: string): unknown =>
+  (Array.isArray(targets) ? targets : [])
+    .map((row) => asRecord(row))
+    .find((row) => stringOrEmpty(row.name) === name)
+
+/**
+ * A source must listen on the same channel its target sends to; the agent
+ * refuses to run otherwise ("refusing to send replies to a different channel").
+ * An unknown target is left to the target-reference validator.
+ */
+export const validateSourceChannelMatchesTarget = (
+  channelId: unknown,
+  targetName: unknown,
+  targets: unknown,
+): string | true => {
+  const name = stringOrEmpty(targetName)
+  const channel = stringOrEmpty(channelId)
+  if (!name || !channel) {
+    return true
+  }
+
+  const target = findTargetByName(targets, name)
+  if (!target) {
+    return true
+  }
+
+  const targetChannel = stringOrEmpty(asRecord(target).channel_id)
+  if (!targetChannel) {
+    return true
+  }
+
+  if (channel !== targetChannel) {
+    return `Source channel ${channel} does not match target "${name}" channel ${targetChannel}. The agent refuses to send replies to a different channel.`
   }
   return true
 }

@@ -10,11 +10,15 @@ import {
   duplicateNames,
   splitBookstackBooks,
   toBotSettingsResponse,
+  validateAllowedAuthors,
   validateBookstackBooks,
   validateBookstackUrl,
+  validateChannelId,
+  validateConnectedAccountId,
   validateCredentialName,
   validateHostScope,
   validateRunbookAccess,
+  validateSourceChannelMatchesTarget,
   validateSourceTarget,
   validateTargetName,
 } from '@/utilities/botSettings'
@@ -48,7 +52,7 @@ const baseSource = (): Source => ({
   name: 'example-source',
   connected_account_id: 'ca_exampleconnection',
   channel_id: '000000000000000000',
-  allowed_authors: [],
+  allowed_authors: ['452902515734741002'],
   target: 'admin-chat',
 })
 
@@ -65,7 +69,11 @@ const saveBotSettings = (data: {
 
 const saveTargets = (targets: Target[]) => saveBotSettings({ targets })
 
-const saveSources = (sources: Source[]) => saveBotSettings({ sources })
+// Source tests save the target they point at in the same write, so the channel
+// match rule is exercised against a known target rather than whatever an
+// earlier test left behind.
+const saveSources = (sources: Source[]) =>
+  saveBotSettings({ targets: [baseTarget()], sources })
 
 describe('GET /api/bot-settings', () => {
   beforeAll(async () => {
@@ -161,25 +169,20 @@ describe('GET /api/bot-settings', () => {
     expect(serialised).not.toContain('createdAt')
   })
 
-  it('renders allowed_authors as a comma-separated string and empties it when nobody is allowed', async () => {
+  it('renders allowed_authors as a comma-separated string', async () => {
     await saveSources([
       {
         ...baseSource(),
         name: 'with-authors',
         allowed_authors: ['111111111111111111', '222222222222222222'],
       },
-      { ...baseSource(), name: 'nobody', allowed_authors: [] },
     ])
 
     const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
     const body = await response.json()
 
-    expect(body.sources.map((source: { name: string }) => source.name)).toEqual([
-      'with-authors',
-      'nobody',
-    ])
+    expect(body.sources.map((source: { name: string }) => source.name)).toEqual(['with-authors'])
     expect(body.sources[0].allowed_authors).toBe('111111111111111111,222222222222222222')
-    expect(body.sources[1].allowed_authors).toBe('')
   })
 
   it('exposes a GET handler only', () => {
@@ -270,15 +273,60 @@ describe('bot-settings schema validation', () => {
     })
   })
 
-  it('accepts a source that allows nobody', async () => {
-    await expect(saveSources([{ ...baseSource(), allowed_authors: [] }])).resolves.toBeTruthy()
+  it('accepts a source that names an existing target on the same channel', async () => {
+    await expect(saveSources([baseSource()])).resolves.toBeTruthy()
+  })
 
-    const stored = await payload.findGlobal({
-      slug: 'bot-settings',
-      depth: 0,
-      overrideAccess: true,
+  it('rejects a source with no allowed authors', async () => {
+    await expect(
+      saveSources([{ ...baseSource(), allowed_authors: [] }]),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+  })
+
+  it('rejects a target with no hosts', async () => {
+    await expect(saveTargets([{ ...baseTarget(), host_scope: [] }])).rejects.toMatchObject({
+      name: 'ValidationError',
     })
-    expect(stored.sources?.[0]?.allowed_authors).toEqual([])
+  })
+
+  it('rejects a non-numeric target channel id', async () => {
+    await expect(
+      saveTargets([{ ...baseTarget(), channel_id: 'admin-chat' }]),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+  })
+
+  it('rejects a non-numeric source channel id', async () => {
+    await expect(
+      saveSources([{ ...baseSource(), channel_id: 'general' }]),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+  })
+
+  it('rejects a source whose channel differs from its target, naming both', async () => {
+    const failure = await saveSources([
+      { ...baseSource(), channel_id: '000000000000000009' },
+    ]).then(
+      () => null,
+      (error: unknown) => error,
+    )
+
+    expect(failure).toMatchObject({ name: 'ValidationError' })
+    const messages = (
+      (failure as { data?: { errors?: Array<{ message?: string }> } }).data?.errors ?? []
+    )
+      .map((error) => error.message)
+      .join(' ')
+    expect(messages).toContain('000000000000000009')
+    expect(messages).toContain('000000000000000000')
+  })
+
+  it('rejects whitespace in a connected account id', async () => {
+    await expect(
+      saveTargets([{ ...baseTarget(), connected_account_id: 'ca_example connection' }]),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+
+    await expect(
+      saveSources([{ ...baseSource(), connected_account_id: 'ca_example connection' }]),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
   })
 
   it('rejects a source that names a target which does not exist, and names it', async () => {
@@ -382,15 +430,67 @@ describe('bot-settings validators', () => {
     expect(validateBookstackUrl('https://user:pass@bookstack.example.com')).not.toBe(true)
   })
 
-  it('accepts hostnames without a scheme or path', () => {
+  it('requires at least one hostname without a scheme or path', () => {
     expect(validateHostScope(['example.com', 'host1.example.com'])).toBe(true)
-    expect(validateHostScope([])).toBe(true)
-    expect(validateHostScope(null)).toBe(true)
 
     expect(validateHostScope(['https://example.com'])).not.toBe(true)
     expect(validateHostScope(['example.com/path'])).not.toBe(true)
     expect(validateHostScope(['host 1.example.com'])).not.toBe(true)
     expect(validateHostScope([''])).not.toBe(true)
+
+    // An empty scope is a load-time failure for the agent, not "no narrowing".
+    expect(validateHostScope([])).not.toBe(true)
+    expect(validateHostScope(null)).not.toBe(true)
+    expect(validateHostScope(undefined)).not.toBe(true)
+  })
+
+  it('requires Discord snowflakes for channel ids', () => {
+    expect(validateChannelId('1314326014318481458')).toBe(true)
+    expect(validateChannelId('0')).toBe(true)
+    expect(validateChannelId('1'.repeat(32))).toBe(true)
+
+    expect(validateChannelId('1'.repeat(33))).not.toBe(true)
+    expect(validateChannelId('admin-chat')).not.toBe(true)
+    expect(validateChannelId('123 456')).not.toBe(true)
+    expect(validateChannelId('')).not.toBe(true)
+    expect(validateChannelId(null)).not.toBe(true)
+  })
+
+  it('accepts any non-empty connected account id without whitespace', () => {
+    expect(validateConnectedAccountId('ca_exampleconnection')).toBe(true)
+    expect(validateConnectedAccountId('not-a-ca-id')).toBe(true)
+
+    expect(validateConnectedAccountId('')).not.toBe(true)
+    expect(validateConnectedAccountId(' ')).not.toBe(true)
+    expect(validateConnectedAccountId('ca_example connection')).not.toBe(true)
+    expect(validateConnectedAccountId(null)).not.toBe(true)
+  })
+
+  it('requires at least one allowed author', () => {
+    expect(validateAllowedAuthors(['452902515734741002'])).toBe(true)
+    expect(validateAllowedAuthors(['452902515734741002', '111111111111111111'])).toBe(true)
+
+    expect(validateAllowedAuthors([])).not.toBe(true)
+    expect(validateAllowedAuthors([''])).not.toBe(true)
+    expect(validateAllowedAuthors(null)).not.toBe(true)
+  })
+
+  it('requires a source channel to match its target channel', () => {
+    const targets = [{ name: 'admin-chat', channel_id: '1314326014318481458' }]
+
+    expect(
+      validateSourceChannelMatchesTarget('1314326014318481458', 'admin-chat', targets),
+    ).toBe(true)
+    expect(validateSourceChannelMatchesTarget('1', 'missing-target', targets)).toBe(true)
+
+    const mismatch = validateSourceChannelMatchesTarget(
+      '1549913741280157818',
+      'admin-chat',
+      targets,
+    )
+    expect(mismatch).not.toBe(true)
+    expect(mismatch).toContain('1549913741280157818')
+    expect(mismatch).toContain('1314326014318481458')
   })
 
   it('enforces the runbook cross-field rules', () => {
@@ -468,8 +568,10 @@ describe('bot-settings validators', () => {
           target: 'admin-chat',
         },
         {
+          // Legacy rows from before the allowlist became required still shape
+          // into an empty string rather than breaking the agent's parser.
           id: 'row-3',
-          name: 'nobody',
+          name: 'legacy-empty',
           connected_account_id: 'ca_exampleconnection',
           channel_id: '000000000000000001',
           allowed_authors: [],
@@ -503,7 +605,7 @@ describe('bot-settings validators', () => {
           target: 'admin-chat',
         },
         {
-          name: 'nobody',
+          name: 'legacy-empty',
           connected_account_id: 'ca_exampleconnection',
           channel_id: '000000000000000001',
           allowed_authors: '',
