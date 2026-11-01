@@ -1,2 +1,0 @@
-# Standalone daily host report. Thin-mode oracledb needs no Oracle client.
-oracledb==26.1.0
