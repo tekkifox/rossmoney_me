@@ -41,15 +41,16 @@ export const BOT_SETTINGS_SEED = {
       name: 'vortex-admin',
       connected_account_id: 'ca_VNMfOQ8NwnlH',
       channel_id: '1314326014318481458',
-      // Nobody may use this source until an operator adds their Discord id.
-      allowed_authors: [],
+      // The operator's Discord id. The inbound listener refuses to start with
+      // an empty allowlist, so this is not optional.
+      allowed_authors: ['452902515734741002'],
       target: 'admin-chat',
     },
     {
       name: 'automations-general',
       connected_account_id: 'ca_ia_wDVGF1Pbe',
       channel_id: '1549913741280157818',
-      allowed_authors: [],
+      allowed_authors: ['452902515734741002'],
       target: 'automations',
     },
   ],
