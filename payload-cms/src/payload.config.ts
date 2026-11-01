@@ -25,6 +25,8 @@ import { Categories } from './collections/Categories';
 import { ErrorLogs } from './collections/ErrorLogs';
 import { ArchviewSources } from './collections/ArchviewSources';
 import { HostSamples } from './collections/HostSamples';
+import { BotSettings } from './BotSettings/config';
+import { seedBotSettings } from './endpoints/seed/bot-settings';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
@@ -123,7 +125,7 @@ export default buildConfig({
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   email: emailAdapter,
-  globals: [Header, Footer],
+  globals: [Header, Footer, BotSettings],
   plugins,
   db: useNoopDb
     ? noopDb
@@ -220,6 +222,17 @@ export default buildConfig({
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         payload.logger.warn(`ArchView source seed note: ${message}`);
+      }
+
+      // The notification bot's current configuration, so its panel opens with
+      // real targets. Targets an editor already changed are left alone.
+      try {
+        if (await seedBotSettings(payload, forceSeed)) {
+          payload.logger.info('Seeded bot settings.');
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        payload.logger.warn(`Bot settings seed note: ${message}`);
       }
 
       const defaultPages = [
