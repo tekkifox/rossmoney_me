@@ -2,8 +2,8 @@
 
 **Status:** enforced on every production response.  
 **Date:** 2026-10-26.  
-**Scope:** `www.rossmoney.me` (Portainer/openresty), `rossmoney-me.vercel.app`
-(Vercel production), `dev.rossmoney.me` (Vercel preview), and local
+**Scope:** `www.example.com` (Portainer/openresty), `example.vercel.app`
+(Vercel production), `dev.example.com` (Vercel preview), and local
 `next start`.
 
 The audit that motivated this policy is in
@@ -39,7 +39,7 @@ style-src-attr 'unsafe-inline';
 script-src-attr 'none';
 img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://www.gstatic.com;
 font-src 'self' data:;
-connect-src 'self' https://*.public.blob.vercel-storage.com https://archview.vortexservers.co.uk https://www.google.com https://www.gstatic.com;
+connect-src 'self' https://*.public.blob.vercel-storage.com https://archview.example.org https://www.google.com https://www.gstatic.com;
 media-src 'self' blob:;
 worker-src 'self' blob:;
 manifest-src 'self';
@@ -207,7 +207,7 @@ on `main`/`dev` with a disposable MongoDB service.
   The admin's Monaco codicon font comes from jsDelivr.
 - **`connect-src 'self'`.** The public site fetches its own API, the CV DOCX,
   the architecture API and same-origin Vercel Analytics beacons. The Blob host
-  is where uploaded media is served from. `archview.vortexservers.co.uk`
+  is where uploaded media is served from. `archview.example.org`
   is the browser-side architecture snapshot used by the gameservers page; the
   list is explicit rather than `https:` so a compromised page cannot exfiltrate
   to an arbitrary HTTPS origin. `ARCHVIEW_URL`/`ARCHVIEW_HOST` can add public
