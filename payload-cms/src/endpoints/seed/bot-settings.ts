@@ -36,6 +36,23 @@ export const BOT_SETTINGS_SEED = {
       },
     },
   ],
+  sources: [
+    {
+      name: 'vortex-admin',
+      connected_account_id: 'ca_VNMfOQ8NwnlH',
+      channel_id: '1314326014318481458',
+      // Nobody may use this source until an operator adds their Discord id.
+      allowed_authors: [],
+      target: 'admin-chat',
+    },
+    {
+      name: 'automations-general',
+      connected_account_id: 'ca_ia_wDVGF1Pbe',
+      channel_id: '1549913741280157818',
+      allowed_authors: [],
+      target: 'automations',
+    },
+  ],
 }
 
 /**

@@ -1,15 +1,17 @@
-import type { GlobalBeforeValidateHook, GlobalConfig } from 'payload'
+import type { GlobalBeforeValidateHook, GlobalConfig, Validate } from 'payload'
 
 import { authenticated } from '@/access/authenticated'
 import { asRecord } from '@/utilities/json'
 import {
-  duplicateTargetNames,
+  duplicateNames,
   splitBookstackBooks,
   validateBookstackBooks,
   validateBookstackUrl,
   validateCredentialName,
   validateHostScope,
   validateRunbookAccess,
+  validateSourceName,
+  validateSourceTarget,
   validateTargetName,
 } from '@/utilities/botSettings'
 
@@ -47,6 +49,40 @@ const normaliseTargets: GlobalBeforeValidateHook = ({ data }) => {
   }
 }
 
+const normaliseSources: GlobalBeforeValidateHook = ({ data }) => {
+  if (!data || !Array.isArray(data.sources)) {
+    return data
+  }
+
+  return {
+    ...data,
+    sources: data.sources.map((row: unknown) => {
+      const source = asRecord(row)
+      const authors = Array.isArray(source.allowed_authors) ? source.allowed_authors : null
+
+      return {
+        ...source,
+        name: trim(source.name),
+        connected_account_id: trim(source.connected_account_id),
+        channel_id: trim(source.channel_id),
+        target: trim(source.target),
+        // Empty rows are dropped: `[]` and `['']` both mean "nobody".
+        allowed_authors: authors
+          ? authors.map((author) => trim(author)).filter((author) => author !== '')
+          : source.allowed_authors,
+      }
+    }),
+  }
+}
+
+/**
+ * A source's `target` must exist in the same document. Payload arrays cannot
+ * reference a sibling, so this reads the document data being validated instead
+ * of storing a relationship that could dangle.
+ */
+const validateSourceTargetField: Validate<string> = (value, { data }) =>
+  validateSourceTarget(value, asRecord(data).targets)
+
 /**
  * Configuration for the notification bot.
  *
@@ -75,7 +111,7 @@ export const BotSettings: GlobalConfig = {
     update: authenticated,
   },
   hooks: {
-    beforeValidate: [normaliseTargets],
+    beforeValidate: [normaliseTargets, normaliseSources],
   },
   fields: [
     {
@@ -94,7 +130,7 @@ export const BotSettings: GlobalConfig = {
         },
       },
       validate: (value) => {
-        const duplicates = duplicateTargetNames(value)
+        const duplicates = duplicateNames(value)
         if (duplicates.length > 0) {
           return `Target names must be unique. Duplicated: ${duplicates.join(', ')}.`
         }
@@ -192,6 +228,76 @@ export const BotSettings: GlobalConfig = {
               },
             },
           ],
+        },
+      ],
+    },
+    {
+      name: 'sources',
+      type: 'array',
+      labels: {
+        singular: 'Source',
+        plural: 'Sources',
+      },
+      admin: {
+        initCollapsed: true,
+        description:
+          'Inbound Discord messages the bot answers. Each source maps a channel to one of the targets above.',
+        components: {
+          RowLabel: '@/BotSettings/SourceRowLabel#SourceRowLabel',
+        },
+      },
+      validate: (value) => {
+        const duplicates = duplicateNames(value)
+        if (duplicates.length > 0) {
+          return `Source names must be unique. Duplicated: ${duplicates.join(', ')}.`
+        }
+        return true
+      },
+      fields: [
+        {
+          name: 'name',
+          type: 'text',
+          required: true,
+          validate: validateSourceName,
+          admin: {
+            description: 'The key the agent uses, for example vortex-admin.',
+          },
+        },
+        {
+          name: 'connected_account_id',
+          type: 'text',
+          required: true,
+          admin: {
+            description: 'The Composio connection that receives the message.',
+          },
+        },
+        {
+          name: 'channel_id',
+          type: 'text',
+          required: true,
+          admin: {
+            description: 'The Discord channel id this source listens on.',
+          },
+        },
+        {
+          name: 'allowed_authors',
+          type: 'text',
+          hasMany: true,
+          label: 'Allowed authors',
+          admin: {
+            description:
+              'Discord user ids allowed to use this source. Empty means nobody: the bot refuses every author until an id is added.',
+          },
+        },
+        {
+          name: 'target',
+          type: 'text',
+          required: true,
+          validate: validateSourceTargetField,
+          admin: {
+            description:
+              'Must name one of the Targets in this document. A source whose target does not exist answers to nothing.',
+          },
         },
       ],
     },

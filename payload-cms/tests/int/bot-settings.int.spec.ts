@@ -7,7 +7,7 @@ import type { BotSetting } from '@/payload-types'
 import config from '@/payload.config'
 import { BOT_SETTINGS_SEED, seedBotSettings } from '@/endpoints/seed/bot-settings'
 import {
-  duplicateTargetNames,
+  duplicateNames,
   splitBookstackBooks,
   toBotSettingsResponse,
   validateBookstackBooks,
@@ -15,9 +15,12 @@ import {
   validateCredentialName,
   validateHostScope,
   validateRunbookAccess,
+  validateSourceTarget,
+  validateTargetName,
 } from '@/utilities/botSettings'
 
 type Target = NonNullable<BotSetting['targets']>[number]
+type Source = NonNullable<BotSetting['sources']>[number]
 
 const BOT_EMAIL = 'notification-bot@example.test'
 const BOT_API_KEY = 'notification-bot-test-key'
@@ -41,13 +44,28 @@ const baseTarget = (): Target => ({
   },
 })
 
-const saveTargets = (targets: Target[]) =>
+const baseSource = (): Source => ({
+  name: 'example-source',
+  connected_account_id: 'ca_exampleconnection',
+  channel_id: '000000000000000000',
+  allowed_authors: [],
+  target: 'admin-chat',
+})
+
+const saveBotSettings = (data: {
+  sources?: Source[]
+  targets?: Target[]
+}) =>
   payload.updateGlobal({
     slug: 'bot-settings',
-    data: { targets },
+    data,
     depth: 0,
     overrideAccess: true,
   })
+
+const saveTargets = (targets: Target[]) => saveBotSettings({ targets })
+
+const saveSources = (sources: Source[]) => saveBotSettings({ sources })
 
 describe('GET /api/bot-settings', () => {
   beforeAll(async () => {
@@ -114,8 +132,9 @@ describe('GET /api/bot-settings', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store')
 
     const body = await response.json()
-    expect(Object.keys(body).sort()).toEqual(['targets', 'version'])
+    expect(Object.keys(body).sort()).toEqual(['sources', 'targets', 'version'])
     expect(Object.keys(body.targets).sort()).toEqual(['admin-chat', 'automations'])
+    expect(Array.isArray(body.sources)).toBe(true)
     expect(Number.isNaN(Date.parse(body.version))).toBe(false)
 
     for (const target of BOT_SETTINGS_SEED.targets) {
@@ -123,11 +142,44 @@ describe('GET /api/bot-settings', () => {
       expect(body.targets[name]).toEqual(expected)
     }
 
+    // Sources stay an array; `allowed_authors` is the comma-joined string the
+    // agent's NOTIFY_INBOUND_SOURCES entry used.
+    expect(body.sources).toEqual(
+      BOT_SETTINGS_SEED.sources.map((source) => ({
+        ...source,
+        allowed_authors: source.allowed_authors.join(','),
+      })),
+    )
+    for (const source of body.sources) {
+      expect(typeof source.allowed_authors).toBe('string')
+    }
+
     // Only the resolved shape is exposed: no row ids, timestamps or credentials.
     const serialised = JSON.stringify(body)
     expect(serialised).not.toContain('apiKey')
     expect(serialised).not.toContain('"id"')
     expect(serialised).not.toContain('createdAt')
+  })
+
+  it('renders allowed_authors as a comma-separated string and empties it when nobody is allowed', async () => {
+    await saveSources([
+      {
+        ...baseSource(),
+        name: 'with-authors',
+        allowed_authors: ['111111111111111111', '222222222222222222'],
+      },
+      { ...baseSource(), name: 'nobody', allowed_authors: [] },
+    ])
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    const body = await response.json()
+
+    expect(body.sources.map((source: { name: string }) => source.name)).toEqual([
+      'with-authors',
+      'nobody',
+    ])
+    expect(body.sources[0].allowed_authors).toBe('111111111111111111,222222222222222222')
+    expect(body.sources[1].allowed_authors).toBe('')
   })
 
   it('exposes a GET handler only', () => {
@@ -147,7 +199,12 @@ describe('bot-settings schema validation', () => {
   })
 
   it('saves the seeded configuration', async () => {
-    await expect(saveTargets(BOT_SETTINGS_SEED.targets as Target[])).resolves.toBeTruthy()
+    await expect(
+      saveBotSettings({
+        targets: BOT_SETTINGS_SEED.targets as Target[],
+        sources: BOT_SETTINGS_SEED.sources as Source[],
+      }),
+    ).resolves.toBeTruthy()
   })
 
   it('rejects a credential that looks like a real token', async () => {
@@ -211,6 +268,75 @@ describe('bot-settings schema validation', () => {
     await expect(saveTargets([baseTarget(), second])).rejects.toMatchObject({
       name: 'ValidationError',
     })
+  })
+
+  it('accepts a source that allows nobody', async () => {
+    await expect(saveSources([{ ...baseSource(), allowed_authors: [] }])).resolves.toBeTruthy()
+
+    const stored = await payload.findGlobal({
+      slug: 'bot-settings',
+      depth: 0,
+      overrideAccess: true,
+    })
+    expect(stored.sources?.[0]?.allowed_authors).toEqual([])
+  })
+
+  it('rejects a source that names a target which does not exist, and names it', async () => {
+    const failure = await saveSources([{ ...baseSource(), target: 'no-such-target' }]).then(
+      () => null,
+      (error: unknown) => error,
+    )
+
+    expect(failure).toMatchObject({ name: 'ValidationError' })
+    const messages = (
+      (failure as { data?: { errors?: Array<{ message?: string }> } }).data?.errors ?? []
+    )
+      .map((error) => error.message)
+      .join(' ')
+    expect(messages).toContain('no-such-target')
+  })
+
+  it('rejects duplicate source names', async () => {
+    const second: Source = { ...baseSource(), channel_id: '000000000000000001' }
+
+    await expect(saveSources([baseSource(), second])).rejects.toMatchObject({
+      name: 'ValidationError',
+    })
+  })
+
+  it('drops unknown fields instead of storing them', async () => {
+    const smuggled = {
+      ...baseSource(),
+      bookstack_token: 'super-secret-value',
+      apiKey: 'another-secret-value',
+    } as unknown as Source
+
+    await expect(saveSources([smuggled])).resolves.toBeTruthy()
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    const body = await response.json()
+    const serialised = JSON.stringify(body)
+
+    expect(serialised).not.toContain('super-secret-value')
+    expect(serialised).not.toContain('another-secret-value')
+    expect(Object.keys(body.sources[0]).sort()).toEqual([
+      'allowed_authors',
+      'channel_id',
+      'connected_account_id',
+      'name',
+      'target',
+    ])
+
+    const stored = await payload.findGlobal({
+      slug: 'bot-settings',
+      depth: 0,
+      overrideAccess: true,
+    })
+    expect(JSON.stringify(stored.sources)).not.toContain('super-secret-value')
+  })
+
+  afterAll(async () => {
+    await seedBotSettings(payload, true)
   })
 })
 
@@ -285,11 +411,32 @@ describe('bot-settings validators', () => {
     expect(validateRunbookAccess(false, complete)).not.toBe(true)
   })
 
-  it('finds duplicate target names case-insensitively', () => {
-    expect(duplicateTargetNames([{ name: 'admin-chat' }, { name: 'automations' }])).toEqual([])
-    expect(
-      duplicateTargetNames([{ name: 'admin-chat' }, { name: 'Admin-Chat' }]),
-    ).toEqual(['admin-chat'])
+  it('finds duplicate names case-insensitively', () => {
+    expect(duplicateNames([{ name: 'admin-chat' }, { name: 'automations' }])).toEqual([])
+    expect(duplicateNames([{ name: 'admin-chat' }, { name: 'Admin-Chat' }])).toEqual([
+      'admin-chat',
+    ])
+  })
+
+  it('requires a source to name a target in the same document', () => {
+    const targets = [{ name: 'admin-chat' }, { name: 'automations' }]
+
+    expect(validateSourceTarget('admin-chat', targets)).toBe(true)
+    expect(validateSourceTarget('automations', targets)).toBe(true)
+    expect(validateSourceTarget('', targets)).toBe(true)
+    expect(validateSourceTarget(null, targets)).toBe(true)
+
+    // Case-sensitive on purpose: the agent keys `targets` by exact name.
+    expect(validateSourceTarget('Admin-Chat', targets)).not.toBe(true)
+    expect(validateSourceTarget('no-such-target', targets)).toContain('no-such-target')
+    expect(validateSourceTarget('admin-chat', [])).not.toBe(true)
+    expect(validateSourceTarget('admin-chat', undefined)).not.toBe(true)
+  })
+
+  it('accepts key-safe source names', () => {
+    expect(validateTargetName('vortex-admin')).toBe(true)
+    expect(validateTargetName('automations_general')).toBe(true)
+    expect(validateTargetName('has space')).not.toBe(true)
   })
 
   it('shapes the stored global like the agent parses it', () => {
@@ -311,6 +458,24 @@ describe('bot-settings validators', () => {
           },
         },
       ],
+      sources: [
+        {
+          id: 'row-2',
+          name: 'vortex-admin',
+          connected_account_id: 'ca_exampleconnection',
+          channel_id: '000000000000000000',
+          allowed_authors: ['111111111111111111', '222222222222222222'],
+          target: 'admin-chat',
+        },
+        {
+          id: 'row-3',
+          name: 'nobody',
+          connected_account_id: 'ca_exampleconnection',
+          channel_id: '000000000000000001',
+          allowed_authors: [],
+          target: 'admin-chat',
+        },
+      ],
     })
 
     expect(shaped).toEqual({
@@ -329,6 +494,22 @@ describe('bot-settings validators', () => {
           },
         },
       },
+      sources: [
+        {
+          name: 'vortex-admin',
+          connected_account_id: 'ca_exampleconnection',
+          channel_id: '000000000000000000',
+          allowed_authors: '111111111111111111,222222222222222222',
+          target: 'admin-chat',
+        },
+        {
+          name: 'nobody',
+          connected_account_id: 'ca_exampleconnection',
+          channel_id: '000000000000000001',
+          allowed_authors: '',
+          target: 'admin-chat',
+        },
+      ],
     })
   })
 
