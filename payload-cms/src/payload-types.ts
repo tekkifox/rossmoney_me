@@ -120,10 +120,12 @@ export interface Config {
   globals: {
     header: Header;
     footer: Footer;
+    'bot-settings': BotSetting;
   };
   globalsSelect: {
     header: HeaderSelect<false> | HeaderSelect<true>;
     footer: FooterSelect<false> | FooterSelect<true>;
+    'bot-settings': BotSettingsSelect<false> | BotSettingsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -168,6 +170,10 @@ export interface User {
   name?: string | null;
   updatedAt: string;
   createdAt: string;
+  enableAPIKey?: boolean | null;
+  apiKey?: string | null;
+  apiKeyIndex?: string | null;
+  hasAPIKey?: boolean | null;
   email: string;
   resetPasswordToken?: string | null;
   resetPasswordExpiration?: string | null;
@@ -1190,6 +1196,10 @@ export interface UsersSelect<T extends boolean = true> {
   name?: T;
   updatedAt?: T;
   createdAt?: T;
+  enableAPIKey?: T;
+  apiKey?: T;
+  apiKeyIndex?: T;
+  hasAPIKey?: T;
   email?: T;
   resetPasswordToken?: T;
   resetPasswordExpiration?: T;
@@ -1891,6 +1901,79 @@ export interface Footer {
   createdAt?: string | null;
 }
 /**
+ * Notification bot targets, models and flags. Store the NAME of a BookStack credential, never the token: tokens stay in Portainer.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "bot-settings".
+ */
+export interface BotSetting {
+  id: string;
+  /**
+   * One entry per place the bot reports to. The name is the key the agent uses, so it must be unique.
+   */
+  targets?:
+    | {
+        /**
+         * The key the agent uses, for example admin-chat or automations.
+         */
+        name: string;
+        /**
+         * The Discord channel id this target posts to.
+         */
+        channel_id: string;
+        /**
+         * The Composio connected account the bot acts through.
+         */
+        connected_account_id: string;
+        /**
+         * Hostnames this target may report on, for example example.com. Leave empty to report on nothing host-specific.
+         */
+        host_scope?: string[] | null;
+        /**
+         * Allow this target to read published site content.
+         */
+        allow_content?: boolean | null;
+        /**
+         * Allow this target to read its BookStack wiki. Needs a URL, books and a credential name below.
+         */
+        allow_runbooks?: boolean | null;
+        /**
+         * The wiki this target may read. The credential field holds a name from Portainer, not the token.
+         */
+        bookstack?: {
+          /**
+           * Base URL of the instance, for example https://bookstack.example.com. Must be https://.
+           */
+          url?: string | null;
+          /**
+           * Comma-separated book slugs or ids, at most 16, for example v-rising,scripts.
+           */
+          books?: string | null;
+          /**
+           * The NAME of the credential only, for example vortex. The agent resolves it to BOOKSTACK_TOKEN_*_<NAME> in Portainer. Never paste the token.
+           */
+          token?: string | null;
+        };
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * The model the agent prefers, and the one it falls back to.
+   */
+  model?: {
+    /**
+     * For example opencode/beam-free.
+     */
+    preferred?: string | null;
+    /**
+     * For example opencode-go/deepseek-v4.1-flash.
+     */
+    fallback?: string | null;
+  };
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "header_select".
  */
@@ -1931,6 +2014,39 @@ export interface FooterSelect<T extends boolean = true> {
               label?: T;
             };
         id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "bot-settings_select".
+ */
+export interface BotSettingsSelect<T extends boolean = true> {
+  targets?:
+    | T
+    | {
+        name?: T;
+        channel_id?: T;
+        connected_account_id?: T;
+        host_scope?: T;
+        allow_content?: T;
+        allow_runbooks?: T;
+        bookstack?:
+          | T
+          | {
+              url?: T;
+              books?: T;
+              token?: T;
+            };
+        id?: T;
+      };
+  model?:
+    | T
+    | {
+        preferred?: T;
+        fallback?: T;
       };
   updatedAt?: T;
   createdAt?: T;

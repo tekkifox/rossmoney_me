@@ -52,6 +52,12 @@ export const Users: CollectionConfig = {
       sameSite: 'Lax',
       secure: sessionCookieIsSecure(),
     },
+    /**
+     * Machine callers (the notification bot) authenticate as a dedicated user
+     * with a Payload API key, exactly like a signed-in admin but revocable on
+     * its own. `GET /api/bot-settings` documents the header format.
+     */
+    useAPIKey: true,
   },
   fields: [
     {

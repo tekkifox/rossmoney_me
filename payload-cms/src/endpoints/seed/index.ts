@@ -1,4 +1,4 @@
-import type { CollectionSlug, GlobalSlug, Payload, PayloadRequest, File } from 'payload'
+import type { CollectionSlug, Payload, PayloadRequest, File } from 'payload'
 
 import { contactForm as contactFormData } from './contact-form'
 import { contact as contactPageData } from './contact-page'
@@ -20,7 +20,10 @@ const collections: CollectionSlug[] = [
   'form-submissions',
 ]
 
-const globals: GlobalSlug[] = ['header', 'footer']
+// `bot-settings` is deliberately absent: the seed endpoint must not wipe the
+// bot's targets. Its initial value comes from `endpoints/seed/bot-settings.ts`
+// on an empty database instead.
+const globals: Array<'footer' | 'header'> = ['header', 'footer']
 
 const categories = ['Technology', 'News', 'Finance', 'Design', 'Software', 'Engineering']
 
