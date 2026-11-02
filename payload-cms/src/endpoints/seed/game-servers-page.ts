@@ -2,6 +2,7 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 
 export const gameservers: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'game-servers',
+  template: 'game-servers',
   _status: 'published',
   hero: {
     type: 'none',

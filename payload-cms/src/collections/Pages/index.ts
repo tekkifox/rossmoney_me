@@ -12,6 +12,7 @@ import { slugField } from 'payload'
 import { populatePublishedAt } from '../../hooks/populatePublishedAt'
 import { validateCVFile, syncCVToPublic } from './hooks/cvHooks'
 import { generatePreviewPath } from '../../utilities/generatePreviewPath'
+import { DEFAULT_PAGE_TEMPLATE, PAGE_TEMPLATE_OPTIONS } from '../../utilities/pageTemplates'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
 
 import {
@@ -68,6 +69,17 @@ export const Pages: CollectionConfig<'pages'> = {
     {
       name: 'lead',
       type: 'textarea',
+    },
+    {
+      name: 'template',
+      label: 'Template',
+      type: 'select',
+      defaultValue: DEFAULT_PAGE_TEMPLATE,
+      options: PAGE_TEMPLATE_OPTIONS,
+      admin: {
+        description:
+          'Which template renders this page. “Default” renders the title, eyebrow, lead and content blocks as a generic page, so a new page needs no code change.',
+      },
     },
     {
       name: 'data',
