@@ -130,9 +130,9 @@ jobs:
     needs:
       - build
       - build-arm64
-    env:
-      PORTAINER_WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
         with:
@@ -168,11 +168,37 @@ jobs:
             "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/amd64/digest)" \
             "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/arm64/digest)"
 
-      - name: Trigger Portainer webhook
-        if: ${{ env.PORTAINER_WEBHOOK_URL != '' }}
+      - name: Deploy to Portainer
+        if: ${{ github.ref == 'refs/heads/main' }}
+        env:
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
         run: |
-          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$PORTAINER_WEBHOOK_URL")
-          if [ "$status" != "200" ] && [ "$status" != "202" ] && [ "$status" != "204" ]; then
-            echo "Portainer webhook failed with HTTP $status"
+          set -euo pipefail
+
+          get_status=$(curl -sS -o /tmp/stack.json -w '%{http_code}' \
+            -H "X-API-Key: ${PORTAINER_API_KEY}" \
+            "${PORTAINER_URL}/api/stacks/25")
+          if [ "$get_status" -lt 200 ] || [ "$get_status" -ge 300 ]; then
+            echo "Portainer GET /api/stacks/25 failed with HTTP $get_status"
+            cat /tmp/stack.json
+            exit 1
+          fi
+
+          env_json=$(jq -c '.Env' /tmp/stack.json)
+
+          body=$(jq -n \
+            --rawfile compose docker-compose.deploy.yml \
+            --argjson env "$env_json" \
+            '{StackFileContent: $compose, Env: $env, PullImage: true}')
+
+          put_status=$(curl -sS -o /tmp/put.json -w '%{http_code}' -X PUT \
+            -H "X-API-Key: ${PORTAINER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            --data "$body" \
+            "${PORTAINER_URL}/api/stacks/25?endpointId=3")
+          if [ "$put_status" -lt 200 ] || [ "$put_status" -ge 300 ]; then
+            echo "Portainer PUT /api/stacks/25 failed with HTTP $put_status"
+            cat /tmp/put.json
             exit 1
           fi
