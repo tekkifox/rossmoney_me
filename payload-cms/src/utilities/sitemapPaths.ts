@@ -58,7 +58,7 @@ export type SitemapPayload = Pick<Payload, 'findGlobal' | 'find'>
  *
  * It mirrors the two header definitions in the repository:
  *  - `src/payload.config.ts` seeds `/#work`, `/travelling`, `/game-servers`,
- *    `/#experience`, `/#architecture`, `/cv` and `/contact`;
+ *    `/#experience`, `/#architecture`, `/map`, `/cv` and `/contact`;
  *  - `src/endpoints/seed/index.ts` seeds reference links to the Services and
  *    Contact pages.
  *
@@ -74,6 +74,7 @@ const FALLBACK_HEADER: SitemapHeader = {
     { link: { type: 'custom', url: '/game-servers' } },
     { link: { type: 'custom', url: '/#experience' } },
     { link: { type: 'custom', url: '/#architecture' } },
+    { link: { type: 'custom', url: '/map' } },
     { link: { type: 'custom', url: '/cv' } },
     { link: { type: 'custom', url: '/contact' } },
     // The seed endpoint links to Services, but that page is seeded unpublished,
