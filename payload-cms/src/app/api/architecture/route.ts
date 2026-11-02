@@ -515,15 +515,15 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
           : upstreamStatus !== null
             ? `upstream returned ${upstreamStatus}`
             : 'no response'
-      const body = new TextEncoder().encode(
-        JSON.stringify({
-          archviewSourceFailure: true,
-          source: resolved.origin,
-          reason,
-          title: 'Architecture source unavailable',
-          description: `ArchView source "${resolved.origin}" could not be used: ${reason}.`,
-        }),
-      )
+      const label = resolved.sourceLabel ?? resolved.sourceId ?? 'requested source'
+      const failure = redactInternalEndpoints({
+        archviewSourceFailure: true,
+        source: label,
+        reason,
+        title: 'Architecture source unavailable',
+        description: `ArchView source "${label}" could not be used: ${reason}.`,
+      })
+      const body = new TextEncoder().encode(JSON.stringify(failure))
       return {
         status: 502,
         headers: [['content-type', 'application/json']],

@@ -84,7 +84,8 @@ describe('architecture proxy explicit source failures', () => {
     expect(response.status).toBe(502)
     const body = await response.json()
     expect(body.archviewSourceFailure).toBe(true)
-    expect(body.source).toBe(sourceOne.origin)
+    expect(body.source).toBe('requested source')
+    expect(body.source).not.toContain(sourceOne.origin)
     expect(body.reason).toBe('upstream returned 500')
 
     // Only the requested host was tried, so no other machine's snapshot can
