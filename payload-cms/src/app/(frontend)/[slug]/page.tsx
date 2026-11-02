@@ -17,6 +17,7 @@ import NavigationTemplate from '../templates/navigation'
 import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
+import MapTemplate from '../templates/map'
 import { PageMeta } from '../templates/shared'
 import { PageRoot } from '@/components/PageRoot'
 import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
@@ -105,6 +106,7 @@ export default async function Page({ params: paramsPromise }: Args) {
       {page.slug === 'navigation' && <NavigationTemplate page={page} />}
       {page.slug === 'cv' && <CVTemplate page={page} />}
       {page.slug === 'services' && <ServicesTemplate page={page} />}
+      {page.slug === 'map' && <MapTemplate page={page} />}
       {(page.slug === 'game-servers' || page.slug === 'gameservers') && <GameServersTemplate page={page} />}
     </PageRoot>
   )
