@@ -22,7 +22,7 @@ export const travelling: RequiredDataFromCollectionSlug<'pages'> = {
     ],
   },
     data: {
-      commitRepository: 'tekkifox/image-mosaic',
+      commitRepository: 'tekkifox/travelling-site',
       commitBranch: 'main',
       liveUrl: 'https://travelling.rossmoney.me',
       metrics: [

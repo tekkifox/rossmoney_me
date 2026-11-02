@@ -5,7 +5,7 @@ import { travelling as travellingSeed } from '@/endpoints/seed/travelling-page'
 import { asRecord, asString } from '@/utilities/json'
 
 async function fetchRecentCommits() {
-  return fetch('https://api.github.com/repos/tekkifox/image-mosaic/commits?per_page=5&sha=main', {
+  return fetch('https://api.github.com/repos/tekkifox/travelling-site/commits?per_page=5&sha=main', {
     headers: {
       Accept: 'application/vnd.github+json'
     },
@@ -47,7 +47,7 @@ export async function GET() {
       ...asRecord(travellingDoc.data),
       github: {
         owner: 'tekkifox',
-        repo: 'image-mosaic',
+        repo: 'travelling-site',
         branch: 'main',
       },
       focus: travellingDoc.focus || asRecord(travellingDoc.data).focus,
@@ -64,7 +64,7 @@ export async function GET() {
     },
       commits: {
         items: commits,
-        repo: 'tekkifox/image-mosaic',
+        repo: 'tekkifox/travelling-site',
         branch: 'main'
       },
       navItems: navLinks,
