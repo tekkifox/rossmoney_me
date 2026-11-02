@@ -107,6 +107,13 @@ const nextConfig: NextConfig = {
       {
         pathname: '/api/media/file/**',
       },
+      {
+        // The Map page's diagram is a static file in `public/`, not CMS media.
+        // Allow exactly that path, with no query string, so the default
+        // allowlist stays as narrow as the page requires.
+        pathname: '/infrastructure-map.png',
+        search: '',
+      },
     ],
     qualities: [100],
     remotePatterns: [
