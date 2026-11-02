@@ -33,6 +33,7 @@ import { gameservers } from './endpoints/seed/game-servers-page';
 import { cv } from './endpoints/seed/cv-page';
 import { seedArchviewSources, type SeededArchviewSources } from './endpoints/seed/archview-sources';
 import { asRecord } from './utilities/json';
+import { DEFAULT_PAGE_TEMPLATE, templateFromSlug } from './utilities/pageTemplates';
 import type { Form } from './payload-types';
 import fs from 'fs'
 import os from 'os'
@@ -304,6 +305,26 @@ export default buildConfig({
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           payload.logger.error(`Failed to seed page "${pageData.slug}": ${message}`);
+        }
+      }
+
+      // Older databases predate `pages.template`. Fill it in from the slug
+      // mapping the route used before templates were stored, so their rendering
+      // is unchanged. Never overwrite a template an editor has already set.
+      for (const page of existingPages.docs) {
+        if (typeof page.template === 'string' && page.template.trim() !== '') continue
+        const template = templateFromSlug(page.slug) ?? DEFAULT_PAGE_TEMPLATE
+        try {
+          await pClient.update({
+            collection: 'pages',
+            id: page.id,
+            data: { template },
+            context: seedContext,
+          })
+          payload.logger.info(`Backfilled template "${template}" for page: ${page.slug}`)
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to backfill template for page "${page.slug}": ${message}`)
         }
       }
 
