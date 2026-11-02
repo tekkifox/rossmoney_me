@@ -15,7 +15,7 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
-import { loadArchitectureSnapshot } from '@/utilities/architectureSnapshot'
+import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
 type SitePayload = {
@@ -64,9 +64,13 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     project: 'image-mosaic',
   })
 
-  const archTitle = titleFromPayload(archPayload)
-  const archDesc = descriptionFromPayload(archPayload)
-  const archDiagram = renderDiagram(archPayload)
+  const archFailed = isArchviewSourceFailure(archPayload)
+  const archFailureMessage = archFailed
+    ? String((archPayload as Record<string, unknown>).message || 'Architecture source unavailable')
+    : ''
+  const archTitle = archFailed ? 'Architecture source unavailable' : titleFromPayload(archPayload)
+  const archDesc = archFailed ? archFailureMessage : descriptionFromPayload(archPayload)
+  const archDiagram = archFailed ? '' : renderDiagram(archPayload)
 
   // Server-side fetch recent commits for the travel repo
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
@@ -165,17 +169,21 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
               <p className="panel-kicker">Topology</p>
               <h3 id="architecture-title">{archTitle}</h3>
             </div>
-            <span className="status-pill status-muted" id="architecture-updated">{archPayload ? 'Updated' : 'Loading'}</span>
+            <span className="status-pill status-muted" id="architecture-updated">{archFailed ? 'Failed' : archPayload ? 'Updated' : 'Loading'}</span>
           </div>
 
           <p className="architecture-description" id="architecture-description">{archDesc}</p>
 
-          <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+          {archFailed ? (
+            <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
+          ) : (
+            <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+          )}
 
           <div className="raw-json-wrap">
             <details>
               <summary>Raw snapshot</summary>
-              <pre className="raw-json" id="architecture-raw">{archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
+              <pre className="raw-json" id="architecture-raw">{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
             </details>
           </div>
         </article>

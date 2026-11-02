@@ -8,10 +8,12 @@ import React from 'react'
 export function PageRoot({
   architectureApi,
   architectureProject,
+  architectureUnavailable,
   children,
 }: {
   architectureApi: string
   architectureProject?: string
+  architectureUnavailable?: boolean
   children?: React.ReactNode
 }) {
   return (
@@ -20,6 +22,7 @@ export function PageRoot({
       className="pt-16 pb-24"
       data-architecture-api={architectureApi}
       data-architecture-project={architectureProject}
+      data-architecture-unavailable={architectureUnavailable ? 'true' : undefined}
     >
       {children}
     </article>

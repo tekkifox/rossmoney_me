@@ -470,13 +470,72 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
     resolved: ArchviewRequestSource | null,
     search: string,
   ): Promise<CachedArchitectureResponse | null> => {
+    // When a source is explicitly requested, honour only that source: a failure
+    // must not be masked by falling through to another host.
+    if (resolved) {
+      const target = `${resolved.origin.replace(/\/$/, '')}/api/architecture${search}`
+      let upstreamStatus: number | null = null
+      let networkError: string | null = null
+      try {
+        const res = await fetchCandidate(target, resolved.credentials, env, fetchImpl)
+        if (res && res.ok) {
+          const contentType = res.headers.get('content-type') || ''
+          if (contentType.includes('application/json')) {
+            const data = await res.json()
+            const redacted = redactInternalEndpoints(data)
+            void recordHostSample(resolved, (data as { telemetry?: { metrics?: unknown } })?.telemetry?.metrics)
+            const body = new TextEncoder().encode(JSON.stringify(redacted))
+            return {
+              status: 200,
+              headers: [['content-type', 'application/json']],
+              body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+              expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+            }
+          }
+          const text = await res.text()
+          const redactedText = redactInternalEndpoints(text)
+          const body = new TextEncoder().encode(redactedText)
+          return {
+            status: 200,
+            headers: [['content-type', contentType]],
+            body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+            expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+          }
+        }
+        if (res) {
+          upstreamStatus = res.status
+        }
+      } catch (e) {
+        networkError = e instanceof Error ? e.message : String(e)
+      }
+
+      const reason =
+        networkError !== null
+          ? networkError
+          : upstreamStatus !== null
+            ? `upstream returned ${upstreamStatus}`
+            : 'no response'
+      const label = resolved.sourceLabel ?? resolved.sourceId ?? 'requested source'
+      const failure = redactInternalEndpoints({
+        archviewSourceFailure: true,
+        source: label,
+        reason,
+        title: 'Architecture source unavailable',
+        description: `ArchView source "${label}" could not be used: ${reason}.`,
+      })
+      const body = new TextEncoder().encode(JSON.stringify(failure))
+      return {
+        status: 502,
+        headers: [['content-type', 'application/json']],
+        body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+        expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+      }
+    }
+
     const candidates: Array<{
       host: string
       source?: ArchviewSourceCredentials
     }> = []
-    if (resolved) {
-      candidates.push({ host: resolved.origin, source: resolved.credentials })
-    }
     for (const host of candidateHosts(env)) {
       candidates.push({ host })
     }
