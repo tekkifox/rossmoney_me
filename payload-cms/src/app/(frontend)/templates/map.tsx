@@ -31,9 +31,9 @@ export default function MapTemplate({ page }: { page: PageDoc }) {
       </section>
 
       <Section
+        className="space-y-5! py-6! sm:py-8!"
         eyebrow="Public view"
         title="One edge, a private mesh, and the hosts behind it."
-        lead="The diagram is deliberately address-free: it shows how the pieces fit together rather than how to reach them."
       >
         <figure className="m-0">
           <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
@@ -47,7 +47,7 @@ export default function MapTemplate({ page }: { page: PageDoc }) {
             />
           </div>
 
-          <figcaption className="mt-6">
+          <figcaption className="mt-5">
             <h3 className="text-lg font-medium tracking-tight">Legend</h3>
             <dl className="mt-4 grid gap-x-8 gap-y-3 text-sm leading-6 sm:grid-cols-2">
               {LEGEND.map((item) => (

@@ -90,6 +90,12 @@ h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);
 
 .section{margin-top:var(--primitive-space-5)}
 .section-heading{margin-bottom:var(--primitive-space-25)}
+
+/* Map page: keep the hero, diagram and legend close so they read as one block.
+   The shared Section supplies the default rhythm for every other page. */
+.map-page .hero{padding-bottom:0}
+.map-page .hero .lead{margin-bottom:0}
+.map-page > .my-16{margin-block:var(--primitive-space-8)}
 .services-section{margin-top:0;padding-top:var(--primitive-space-10);padding-bottom:var(--primitive-space-10)}
 .contact-card{display:flex;gap:var(--primitive-space-4);align-items:flex-start}
 .contact-links a{display:block;margin-bottom:var(--primitive-space-2)}
