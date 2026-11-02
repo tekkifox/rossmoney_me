@@ -124,8 +124,13 @@ docker compose -f docker-compose.yml up --build
 Portainer stack (CI/production):
 
 ```bash
-docker compose -f docker-compose.portainer.yml config
+docker compose -f docker-compose.deploy.yml config
 ```
+
+Note: `docker-compose.deploy.yml` is the file Portainer actually runs (deployed via the
+Portainer API from `cms-publish.yml`). `docker-compose.portainer.yml` is stale (it still
+defines a `mongo` service, `ports: 8082:8082` and a `mongo-data` volume) and must not be
+used for deployment.
 
 The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.example.com`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
 
