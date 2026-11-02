@@ -18,7 +18,6 @@ import {
   archviewFetchForPageSource,
   resolvePageArchviewSource,
   isArchviewSourceFailure,
-  type ResolvedArchviewSource,
 } from '@/utilities/archviewPageSource'
 import type { ArchviewEnv } from '@/utilities/archviewAuth'
 import { getSafePayload } from '@/utilities/getSafePayload'
@@ -87,21 +86,15 @@ export async function loadArchitectureSnapshot(
     })
 
     if (isArchviewSourceFailure(resolvedSource)) {
-      const requested = resolvedSource.requestedSource
+      const ref = resolvedSource.ref
+      const reason = resolvedSource.reason
+      const message = `ArchView source "${ref}" could not be used: ${reason}.`
       return {
-        failed: true,
         archviewSourceFailure: true,
-        kind: 'failure',
-        status: 'failed',
-        requestedSource: requested,
-        requested,
-        ref: requested,
-        sourceRef: requested,
-        reference: requested,
-        reason: resolvedSource.reason,
-        message: resolvedSource.message,
+        reason,
+        message,
         title: 'Architecture source unavailable',
-        description: resolvedSource.message,
+        description: message,
       } as Record<string, unknown>
     }
 
@@ -113,7 +106,7 @@ export async function loadArchitectureSnapshot(
     const response = await archviewFetchForPageSource(
       url,
       { cache: 'no-store' },
-      (resolvedSource as ResolvedArchviewSource | null) ?? null,
+      resolvedSource,
       { env, fetchImpl: options.fetchImpl },
     )
 

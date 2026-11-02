@@ -314,6 +314,61 @@ describe('ArchView sources collection', () => {
     ).resolves.toEqual({ kind: 'env', origin: env.ARCHVIEW_URL })
   })
 
+  it('reports failure for a disabled or missing source and never falls back', async () => {
+    const disabled = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('disabled-source', { enabled: false }),
+      overrideAccess: true,
+    })
+    const fallback = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('fallback-for-failure', { isDefault: true }),
+      overrideAccess: true,
+    })
+    const env = { ARCHVIEW_URL: 'https://bootstrap.example.test' }
+
+    await expect(
+      resolvePageArchviewSource({ archviewSource: disabled.id, data: {} }, null, { env, payload }),
+    ).resolves.toMatchObject({ kind: 'failure', ref: disabled.id })
+
+    await expect(
+      resolvePageArchviewSource({ archviewSource: 'does-not-exist', data: {} }, null, { env, payload }),
+    ).resolves.toMatchObject({ kind: 'failure' })
+
+    // The default row must remain untouched as the resolution result.
+    expect(fallback.id).toBeDefined()
+  })
+
+  it('falls back to the default row when no source is named', async () => {
+    const fallback = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('no-source-default', { isDefault: true }),
+      overrideAccess: true,
+    })
+    const env = { ARCHVIEW_URL: 'https://bootstrap.example.test' }
+
+    await expect(
+      resolvePageArchviewSource({ data: {} }, null, { env, payload }),
+    ).resolves.toMatchObject({ kind: 'default', origin: fallback.origin })
+  })
+
+  it('resolves a valid source with its credentials', async () => {
+    const source = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('valid-source'),
+      overrideAccess: true,
+    })
+    const env = { ARCHVIEW_URL: 'https://bootstrap.example.test' }
+
+    await expect(
+      resolvePageArchviewSource({ archviewSource: source.id, data: {} }, null, { env, payload }),
+    ).resolves.toMatchObject({
+      kind: 'relation',
+      origin: source.origin,
+      credentials: { origin: source.origin, clientId: source.clientId },
+    })
+  })
+
   it('seeds the production and Vortexservers sources idempotently', async () => {
     await payload.delete({
       collection: 'archview-sources',

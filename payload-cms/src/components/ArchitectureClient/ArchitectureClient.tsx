@@ -41,9 +41,14 @@ const REFRESH_INTERVAL_MS = 10000
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
   useEffect(() => {
-    // Prefer a page-root data attribute when present (set by page wrapper) to guarantee page-level source
-    let architectureUrl: string = '/api/architecture'
     const pageRoot = document.getElementById('page-root') as HTMLElement | null
+    // When the page's requested source could not be honoured, never fetch the
+    // generic proxy endpoint: it would silently substitute another host's data.
+    if (pageRoot?.dataset?.architectureUnavailable === 'true') {
+      return
+    }
+
+    let architectureUrl: string = '/api/architecture'
     const pageApi = pageRoot?.dataset?.architectureApi
     if (pageApi && pageApi.trim()) {
       architectureUrl = pageApi.trim()

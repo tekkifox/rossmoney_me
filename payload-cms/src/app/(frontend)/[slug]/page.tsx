@@ -95,9 +95,12 @@ export default async function Page({ params: paramsPromise }: Args) {
     resolvedSource !== null &&
     !isArchviewSourceFailure(resolvedSource) &&
     (resolvedSource.kind === 'relation' || resolvedSource.kind === 'default')
-  const architectureApi = browserArchitectureApi(resolvedOrigin, process.env, {
-    forceSource,
-  })
+  const architectureFailed = resolvedSource !== null && isArchviewSourceFailure(resolvedSource)
+  const architectureApi = architectureFailed
+    ? ''
+    : browserArchitectureApi(resolvedOrigin, process.env, {
+        forceSource,
+      })
   const architectureProject = browserArchitectureProject(resolvedProject)
 
   // The page's own `template` field decides how it renders. Documents created
@@ -107,7 +110,7 @@ export default async function Page({ params: paramsPromise }: Args) {
   const template = resolvePageTemplate(page)
 
   return (
-    <PageRoot architectureApi={architectureApi} architectureProject={architectureProject}>
+    <PageRoot architectureApi={architectureApi} architectureProject={architectureProject} architectureUnavailable={architectureFailed}>
       <PageMeta page={page} architectureApi={architectureApi} />
       <PageClient />
       {/* Allows redirects for valid pages too */}

@@ -22,15 +22,8 @@ export type ArchviewResolutionKind = 'relation' | 'legacy' | 'default' | 'env' |
  */
 export type ArchviewSourceFailure = {
   kind: 'failure'
-  status: 'failed'
-  failed: true
   ref: string
-  requested: string
-  requestedSource: string
-  sourceRef: string
-  reference: string
   reason: string
-  message: string
 }
 
 export type ResolvedArchviewSource = {
@@ -139,18 +132,10 @@ const failureFor = (value: unknown): ArchviewSourceFailure => {
       : typeof value === 'number'
         ? String(value)
         : '')
-  const requested = ref
   return {
     kind: 'failure',
-    status: 'failed',
-    failed: true,
     ref,
-    requested,
-    requestedSource: requested,
-    sourceRef: requested,
-    reference: requested,
     reason: failureReason,
-    message: `ArchView source "${requested}" could not be used: ${failureReason}.`,
   }
 }
 
