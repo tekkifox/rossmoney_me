@@ -18,10 +18,12 @@ import CVTemplate from '../templates/cv'
 import GameServersTemplate from '../templates/game-servers'
 import ServicesTemplate from '../templates/services'
 import MapTemplate from '../templates/map'
+import DefaultTemplate from '../templates/default'
 import { PageMeta } from '../templates/shared'
 import { PageRoot } from '@/components/PageRoot'
 import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
 import { resolvePageArchviewSource } from '@/utilities/archviewPageSource'
+import { resolvePageTemplate } from '@/utilities/pageTemplates'
 
 // This page intentionally uses dynamic data from the internal architecture API
 // Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
@@ -91,6 +93,12 @@ export default async function Page({ params: paramsPromise }: Args) {
   })
   const architectureProject = browserArchitectureProject(resolvedSource?.project)
 
+  // The page's own `template` field decides how it renders. Documents created
+  // before that field existed have no value, so `resolvePageTemplate` applies
+  // the old slug chain as a transitional fallback (see pageTemplates.ts) until
+  // the backfill or an editor sets one. An unknown value renders generically.
+  const template = resolvePageTemplate(page)
+
   return (
     <PageRoot architectureApi={architectureApi} architectureProject={architectureProject}>
       <PageMeta page={page} architectureApi={architectureApi} />
@@ -100,14 +108,15 @@ export default async function Page({ params: paramsPromise }: Args) {
 
       {draft && <LivePreviewListener />}
 
-      {page.slug === 'home' && <HomeTemplate page={page} />}
-      {page.slug === 'contact' && <ContactTemplate page={page} />}
-      {page.slug === 'travelling' && <TravellingTemplate page={page} />}
-      {page.slug === 'navigation' && <NavigationTemplate page={page} />}
-      {page.slug === 'cv' && <CVTemplate page={page} />}
-      {page.slug === 'services' && <ServicesTemplate page={page} />}
-      {page.slug === 'map' && <MapTemplate page={page} />}
-      {(page.slug === 'game-servers' || page.slug === 'gameservers') && <GameServersTemplate page={page} />}
+      {template === 'home' && <HomeTemplate page={page} />}
+      {template === 'contact' && <ContactTemplate page={page} />}
+      {template === 'travelling' && <TravellingTemplate page={page} />}
+      {template === 'navigation' && <NavigationTemplate page={page} />}
+      {template === 'cv' && <CVTemplate page={page} />}
+      {template === 'services' && <ServicesTemplate page={page} />}
+      {template === 'map' && <MapTemplate page={page} />}
+      {template === 'game-servers' && <GameServersTemplate page={page} />}
+      {template === 'default' && <DefaultTemplate page={page} />}
     </PageRoot>
   )
 }

@@ -2,6 +2,7 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 
 export const cv: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'cv',
+  template: 'cv',
   _status: 'published',
   // The CV page is a single CV viewer, so it explicitly opts out of the hero.
   hero: {

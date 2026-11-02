@@ -201,6 +201,11 @@ export interface Page {
   title: string;
   eyebrow?: string | null;
   lead?: string | null;
+  /**
+   * Which template renders this page. “Default” renders the title, eyebrow, lead and content blocks as a generic page, so a new page needs no code change.
+   */
+  template?:
+    ('home' | 'contact' | 'cv' | 'travelling' | 'services' | 'game-servers' | 'navigation' | 'map' | 'default') | null;
   data?:
     | {
         [k: string]: unknown;
@@ -1224,6 +1229,7 @@ export interface PagesSelect<T extends boolean = true> {
   title?: T;
   eyebrow?: T;
   lead?: T;
+  template?: T;
   data?: T;
   focus?:
     | T

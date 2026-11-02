@@ -2,6 +2,7 @@ import type { RequiredDataFromCollectionSlug } from 'payload'
 
 export const travelling: RequiredDataFromCollectionSlug<'pages'> = {
   slug: 'travelling',
+  template: 'travelling',
   _status: 'published',
   hero: {
     type: 'none',

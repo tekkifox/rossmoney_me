@@ -68,6 +68,25 @@ for why that needs the small `src/proxy.ts` origin normalisation.
 
 The old root `styles.css` duplicate has been removed; do not reintroduce it.
 
+## Page templates
+
+A page's `template` field decides which module in
+`src/app/(frontend)/templates/` renders it. Adding a page needs no code change:
+choose `Default` to render its title, eyebrow, lead and content blocks, or one
+of the named templates. `src/utilities/pageTemplates.ts` is the single mapping;
+keep its `PAGE_TEMPLATES` list in step with the template modules.
+
+Pages created before the field existed have no value and fall back to the old
+slug chain (`resolvePageTemplate`). Backfill those explicitly with:
+
+```bash
+pnpm --filter payload-cms run backfill:page-templates -- --apply
+```
+
+The helper is a dry run by default and only fills missing values. `onInit`
+applies the same fill-in automatically to older databases; fresh seeds already
+store templates. Never overwrite a template an editor has chosen.
+
 ## Public repository: no real hosts or secrets in documentation
 
 This repository is public. Documentation — `README.md`, any other `*.md`, and any `*.example` env
