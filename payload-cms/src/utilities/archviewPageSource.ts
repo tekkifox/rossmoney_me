@@ -168,6 +168,17 @@ export const resolvePageArchviewSource = async (
       continue
     }
 
+    // Without a database we cannot tell whether the named source is disabled
+    // or missing, so preserve the historical fallback instead of reporting a
+    // failure that could never be verified.
+    if (!deps.payload) {
+      const resolved = await resolveRelation(candidate, undefined)
+      if (resolved) {
+        return resolved
+      }
+      continue
+    }
+
     const resolved = await resolveRelation(candidate, deps.payload)
     if (resolved) {
       return resolved
