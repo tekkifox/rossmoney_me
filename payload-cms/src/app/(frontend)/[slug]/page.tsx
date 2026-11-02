@@ -22,7 +22,7 @@ import DefaultTemplate from '../templates/default'
 import { PageMeta } from '../templates/shared'
 import { PageRoot } from '@/components/PageRoot'
 import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
-import { resolvePageArchviewSource } from '@/utilities/archviewPageSource'
+import { resolvePageArchviewSource, isArchviewSourceFailure } from '@/utilities/archviewPageSource'
 import { resolvePageTemplate } from '@/utilities/pageTemplates'
 
 // This page intentionally uses dynamic data from the internal architecture API
@@ -87,11 +87,21 @@ export default async function Page({ params: paramsPromise }: Args) {
   const resolvedSource = await resolvePageArchviewSource(page, null, {
     payload: await getSafePayload(),
   })
-  const architectureApi = browserArchitectureApi(resolvedSource?.origin, process.env, {
-    forceSource:
-      resolvedSource?.kind === 'relation' || resolvedSource?.kind === 'default',
-  })
-  const architectureProject = browserArchitectureProject(resolvedSource?.project)
+  const resolvedOrigin =
+    resolvedSource && !isArchviewSourceFailure(resolvedSource) ? resolvedSource.origin : undefined
+  const resolvedProject =
+    resolvedSource && !isArchviewSourceFailure(resolvedSource) ? resolvedSource.project : undefined
+  const forceSource =
+    resolvedSource !== null &&
+    !isArchviewSourceFailure(resolvedSource) &&
+    (resolvedSource.kind === 'relation' || resolvedSource.kind === 'default')
+  const architectureFailed = resolvedSource !== null && isArchviewSourceFailure(resolvedSource)
+  const architectureApi = architectureFailed
+    ? ''
+    : browserArchitectureApi(resolvedOrigin, process.env, {
+        forceSource,
+      })
+  const architectureProject = browserArchitectureProject(resolvedProject)
 
   // The page's own `template` field decides how it renders. Documents created
   // before that field existed have no value, so `resolvePageTemplate` applies
@@ -100,7 +110,7 @@ export default async function Page({ params: paramsPromise }: Args) {
   const template = resolvePageTemplate(page)
 
   return (
-    <PageRoot architectureApi={architectureApi} architectureProject={architectureProject}>
+    <PageRoot architectureApi={architectureApi} architectureProject={architectureProject} architectureUnavailable={architectureFailed}>
       <PageMeta page={page} architectureApi={architectureApi} />
       <PageClient />
       {/* Allows redirects for valid pages too */}

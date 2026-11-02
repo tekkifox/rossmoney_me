@@ -41,9 +41,14 @@ const REFRESH_INTERVAL_MS = 10000
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
   useEffect(() => {
-    // Prefer a page-root data attribute when present (set by page wrapper) to guarantee page-level source
-    let architectureUrl: string = '/api/architecture'
     const pageRoot = document.getElementById('page-root') as HTMLElement | null
+    // When the page's requested source could not be honoured, never fetch the
+    // generic proxy endpoint: it would silently substitute another host's data.
+    if (pageRoot?.dataset?.architectureUnavailable === 'true') {
+      return
+    }
+
+    let architectureUrl: string = '/api/architecture'
     const pageApi = pageRoot?.dataset?.architectureApi
     if (pageApi && pageApi.trim()) {
       architectureUrl = pageApi.trim()
@@ -66,12 +71,29 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
         const res = await fetch(url, { cache: 'no-store' })
-        if (!res.ok) throw new Error(`Architecture fetch returned ${res.status}`)
+        if (!res.ok) {
+          let reason = `Architecture fetch returned ${res.status}`
+          try {
+            const ct = res.headers.get('content-type') || ''
+            if (ct.includes('application/json')) {
+              const body = await res.json()
+              if (body && typeof body.reason === 'string') reason = body.reason
+              if (body && typeof body.description === 'string') reason = body.description
+            }
+          } catch {
+          }
+          throw new Error(reason)
+        }
 
         const ct = res.headers.get('content-type') || ''
         const payload = ct.includes('application/json') ? await res.json() : { raw: await res.text() }
         updateDom(payload)
-      } catch {
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'Architecture request failed'
+        const descEl = document.getElementById('architecture-description')
+        const updatedEl = document.getElementById('architecture-updated')
+        if (descEl) descEl.textContent = reason
+        if (updatedEl) updatedEl.textContent = 'Failed'
       } finally {
         inFlight = false
       }

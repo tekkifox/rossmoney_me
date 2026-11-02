@@ -13,7 +13,18 @@ import {
 } from './archviewSources'
 import { asRecord, asString, isObjectLike } from './json'
 
-export type ArchviewResolutionKind = 'relation' | 'legacy' | 'default' | 'env'
+export type ArchviewResolutionKind = 'relation' | 'legacy' | 'default' | 'env' | 'failure'
+
+/**
+ * Carried when a page explicitly names an ArchView source that cannot be
+ * honoured (disabled, deleted or malformed reference). `ref` is the reference
+ * the page asked for.
+ */
+export type ArchviewSourceFailure = {
+  kind: 'failure'
+  ref: string
+  reason: string
+}
 
 export type ResolvedArchviewSource = {
   kind: ArchviewResolutionKind
@@ -21,6 +32,11 @@ export type ResolvedArchviewSource = {
   project?: string
   credentials?: ArchviewSourceCredentials
 }
+
+export type PageArchviewSourceResolution =
+  | ResolvedArchviewSource
+  | ArchviewSourceFailure
+  | null
 
 export type PageSourceDeps = {
   payload?: Payload
@@ -105,11 +121,29 @@ const resolveRelation = async (
  * A relation or default row also carries its credentials, so server-side
  * renders can authenticate to that source instead of calling it anonymously.
  */
+const failureReason = 'requested source is disabled, deleted, or malformed'
+
+const failureFor = (value: unknown): ArchviewSourceFailure => {
+  const refs = relationRefs(value)
+  const ref =
+    refs[0] ??
+    (typeof value === 'string'
+      ? value.trim()
+      : typeof value === 'number'
+        ? String(value)
+        : '')
+  return {
+    kind: 'failure',
+    ref,
+    reason: failureReason,
+  }
+}
+
 export const resolvePageArchviewSource = async (
   page: unknown,
   section?: unknown,
   deps: PageSourceDeps = {},
-): Promise<ResolvedArchviewSource | null> => {
+): Promise<PageArchviewSourceResolution> => {
   const pageRecord = asRecord(page)
   const sectionRecord = asRecord(section)
   const pageData = asRecord(pageRecord.data)
@@ -119,10 +153,38 @@ export const resolvePageArchviewSource = async (
     sectionRecord.archviewSource,
     pageData.archviewSource,
   ]) {
+    if (candidate === undefined || candidate === null) {
+      continue
+    }
+    // An empty string / empty object counts as "no source named" so the
+    // normal fallback chain still applies.
+    const refs = relationRefs(candidate)
+    const isEmpty =
+      (typeof candidate === 'string' && candidate.trim() === '') ||
+      (isObjectLike(candidate) &&
+        refs.length === 0 &&
+        Object.keys(candidate as Record<string, unknown>).length === 0)
+    if (isEmpty) {
+      continue
+    }
+
+    // Without a database we cannot tell whether the named source is disabled
+    // or missing, so preserve the historical fallback instead of reporting a
+    // failure that could never be verified.
+    if (!deps.payload) {
+      const resolved = await resolveRelation(candidate, undefined)
+      if (resolved) {
+        return resolved
+      }
+      continue
+    }
+
     const resolved = await resolveRelation(candidate, deps.payload)
     if (resolved) {
       return resolved
     }
+    // An explicit choice that cannot be honoured must not fall through.
+    return failureFor(candidate)
   }
 
   const legacy =
@@ -156,6 +218,10 @@ export const resolvePageArchviewSource = async (
 
   return null
 }
+
+export const isArchviewSourceFailure = (value: unknown): value is ArchviewSourceFailure =>
+  isObjectLike(value) &&
+  (value.kind === 'failure' || value.failed === true || value.archviewSourceFailure === true)
 
 /**
  * Server-side fetch for a resolved page source. Credentials are attached only

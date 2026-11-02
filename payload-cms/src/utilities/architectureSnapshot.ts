@@ -17,6 +17,7 @@ import type { Payload } from 'payload'
 import {
   archviewFetchForPageSource,
   resolvePageArchviewSource,
+  isArchviewSourceFailure,
 } from '@/utilities/archviewPageSource'
 import type { ArchviewEnv } from '@/utilities/archviewAuth'
 import { getSafePayload } from '@/utilities/getSafePayload'
@@ -66,6 +67,8 @@ const architectureURL = (origin: string, project?: string): string => {
  * Returns `null` when no source answers, so templates keep their existing
  * degraded state ("Loading", "No snapshot returned") instead of throwing.
  */
+export { isArchviewSourceFailure } from '@/utilities/archviewPageSource'
+
 export async function loadArchitectureSnapshot(
   page: unknown,
   section?: unknown,
@@ -81,6 +84,20 @@ export async function loadArchitectureSnapshot(
       // `null` is the "no database" signal; the resolver treats undefined the same.
       payload: payload ?? undefined,
     })
+
+    if (isArchviewSourceFailure(resolvedSource)) {
+      const ref = resolvedSource.ref
+      const reason = resolvedSource.reason
+      const message = `ArchView source "${ref}" could not be used: ${reason}.`
+      return {
+        archviewSourceFailure: true,
+        reason,
+        message,
+        title: 'Architecture source unavailable',
+        description: message,
+      } as Record<string, unknown>
+    }
+
     const url = architectureURL(
       resolvedSource?.origin || fallbackOrigin(env),
       options.project,
