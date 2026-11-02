@@ -71,12 +71,29 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
         const res = await fetch(url, { cache: 'no-store' })
-        if (!res.ok) throw new Error(`Architecture fetch returned ${res.status}`)
+        if (!res.ok) {
+          let reason = `Architecture fetch returned ${res.status}`
+          try {
+            const ct = res.headers.get('content-type') || ''
+            if (ct.includes('application/json')) {
+              const body = await res.json()
+              if (body && typeof body.reason === 'string') reason = body.reason
+              if (body && typeof body.description === 'string') reason = body.description
+            }
+          } catch {
+          }
+          throw new Error(reason)
+        }
 
         const ct = res.headers.get('content-type') || ''
         const payload = ct.includes('application/json') ? await res.json() : { raw: await res.text() }
         updateDom(payload)
-      } catch {
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'Architecture request failed'
+        const descEl = document.getElementById('architecture-description')
+        const updatedEl = document.getElementById('architecture-updated')
+        if (descEl) descEl.textContent = reason
+        if (updatedEl) updatedEl.textContent = 'Failed'
       } finally {
         inFlight = false
       }

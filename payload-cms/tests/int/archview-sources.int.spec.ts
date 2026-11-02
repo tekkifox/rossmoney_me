@@ -320,7 +320,7 @@ describe('ArchView sources collection', () => {
       data: sourceData('disabled-source', { enabled: false }),
       overrideAccess: true,
     })
-    const fallback = await payload.create({
+    await payload.create({
       collection: 'archview-sources',
       data: sourceData('fallback-for-failure', { isDefault: true }),
       overrideAccess: true,
@@ -335,8 +335,6 @@ describe('ArchView sources collection', () => {
       resolvePageArchviewSource({ archviewSource: 'does-not-exist', data: {} }, null, { env, payload }),
     ).resolves.toMatchObject({ kind: 'failure' })
 
-    // The default row must remain untouched as the resolution result.
-    expect(fallback.id).toBeDefined()
   })
 
   it('falls back to the default row when no source is named', async () => {
