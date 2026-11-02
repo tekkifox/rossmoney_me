@@ -1,0 +1,24 @@
+services:
+  cms:
+    image: ghcr.io/tekkifox/rossmoney_me-cms:latest
+    hostname: rossmoney_me-cms-1
+    pull_policy: always
+    env_file:
+      - stack.env
+    restart: unless-stopped
+    environment:
+      PORT: "8082"
+    networks:
+      - rossmoney-stack
+      - proxy
+    volumes:
+      - payload-media:/app/payload-cms/public/media:rw
+
+networks:
+  proxy:
+    external: true
+  rossmoney-stack:
+    driver: bridge
+
+volumes:
+  payload-media:
