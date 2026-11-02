@@ -137,6 +137,7 @@ describe('header sitemap resolver', () => {
       '/game-servers',
       '/experience',
       '/architecture',
+      '/map',
       '/cv',
       '/contact',
     ])
