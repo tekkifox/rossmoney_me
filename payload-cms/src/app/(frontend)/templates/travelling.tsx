@@ -72,7 +72,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
   try {
     const { getGithubCommits } = await import('@/utilities/getGithubCommits')
-    const commits = await getGithubCommits('tekkifox', 'image-mosaic', 'main', 5)
+    const commits = await getGithubCommits('tekkifox', 'travelling-site', 'main', 5)
     if (Array.isArray(commits) && commits.length > 0) {
       commitsText = ['$ git log --oneline -n 5', ...commits.map((c) => `${String(c.sha || '').slice(0, 7)} ${c.message || 'No commit message'}`)].join('\n')
     } else {
@@ -235,7 +235,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
     <section className="section container">
       <div className="section-heading">
         <p className="eyebrow">Recent commits</p>
-        <h2>Recent changes in the image-mosaic repo.</h2>
+        <h2>Recent changes in the travelling-site repo.</h2>
       </div>
       <div className="card architecture-summary">
         <div className="panel-header">
