@@ -180,7 +180,7 @@ export const ArchviewSources: CollectionConfig = {
     useAsTitle: 'name',
     defaultColumns: ['name', 'origin', 'audience', 'enabled'],
     description:
-      'Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES.',
+      'Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES. Each row also tells the notification agent which SSH port to probe on that host.',
   },
   access: {
     // Configuration contains credentials: every operation needs a signed-in
@@ -215,6 +215,26 @@ export const ArchviewSources: CollectionConfig = {
         description:
           'The instance root, for example https://archview.example.com. Its token is only ever sent to this origin.',
       },
+    },
+    {
+      name: 'sshPort',
+      type: 'number',
+      defaultValue: 22,
+      min: 1,
+      max: 65535,
+      admin: {
+        step: 1,
+        description:
+          'SSH port for this host. Set it per source when the host answers somewhere other than the conventional port.',
+      },
+      // A custom validate replaces Payload's default, so the range is checked
+      // here as well as advertised to the admin through `min` / `max`.
+      validate: (value: number | null | undefined) =>
+        value === null ||
+        value === undefined ||
+        (Number.isInteger(value) && value >= 1 && value <= 65535)
+          ? true
+          : 'Enter a whole port number between 1 and 65535.',
     },
     {
       name: 'project',
