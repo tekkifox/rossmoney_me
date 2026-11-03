@@ -72,8 +72,8 @@ export type BotSettingsResponse = {
   hosts: BotSettingsHost[]
 }
 
-/** The port used when a source does not set one. */
-export const DEFAULT_SSH_PORT = 32
+/** The conventional port used when a source does not set one. */
+export const DEFAULT_SSH_PORT = 22
 
 const isBlank = (value: unknown): boolean =>
   value === null || value === undefined || value === ''
@@ -383,8 +383,8 @@ export const toBotSettingsResponse = (
 /**
  * Turns the enabled ArchView sources into the host-to-port list the notification
  * agent consumes. The source's `name` is its hostname, and an empty `sshPort`
- * keeps working as the fleet default of 32. A source without a name is skipped
- * rather than emitted with an empty name.
+ * reads as the conventional default. A source without a name is skipped rather
+ * than emitted with an empty name.
  */
 const toHosts = (rows: unknown): BotSettingsHost[] => {
   const hosts: BotSettingsHost[] = []
