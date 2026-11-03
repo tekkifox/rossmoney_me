@@ -931,6 +931,7 @@ export interface HostSample {
   memoryUsedBytes?: number | null;
   memoryTotalBytes?: number | null;
   memoryPercent?: number | null;
+  cpuCores?: number | null;
   loadAvg?: number | null;
   diskPercent?: number | null;
   swapPercent?: number | null;
@@ -1596,6 +1597,7 @@ export interface HostSamplesSelect<T extends boolean = true> {
   memoryUsedBytes?: T;
   memoryTotalBytes?: T;
   memoryPercent?: T;
+  cpuCores?: T;
   loadAvg?: T;
   diskPercent?: T;
   swapPercent?: T;
