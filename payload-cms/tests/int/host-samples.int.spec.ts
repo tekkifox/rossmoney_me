@@ -419,12 +419,18 @@ describe('host sampling scheduler', () => {
     expect(polled).toBe(
       `https://project-query.example.test/api/architecture?project=${encodeURIComponent('image mosaic/2026')}`,
     )
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(src.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBeGreaterThan(0)
 
     await payload.delete({ collection: 'host-samples', where: { host: { equals: String(src.id) } }, overrideAccess: true })
     await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
   })
 
-  it('skips a source without a project and writes nothing', async () => {
+  it('samples a source without a project as the whole host overview', async () => {
     const src = await payload.create({
       collection: 'archview-sources',
       data: {
@@ -445,24 +451,68 @@ describe('host sampling scheduler', () => {
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }) as typeof fetch
+    const info = vi.spyOn(payload.logger, 'info')
+
+    await sampleAllEnabledHosts(payload)
+
+    const polled = urls.find((url) => url.startsWith('https://no-project.example.test/api/architecture'))
+    expect(polled).toBe('https://no-project.example.test/api/architecture')
+    expect(polled).not.toContain('project=')
+    expect(info.mock.calls.map((call) => call.map(String).join(' ')).join('\n')).toContain(
+      `host sample: ${String(src.name)} fetched (host overview)`,
+    )
+    info.mockRestore()
+
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(src.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBeGreaterThan(0)
+    expect(samples.docs[0]).toMatchObject({ cpuAvg: 7, memoryPercent: 11, diskPercent: 33 })
+
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: String(src.id) } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
+  })
+
+  it('logs a failing fetch without a project as a failure', async () => {
+    const src = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `no-project-fail-${Date.now()}`,
+        origin: 'https://no-project-fail.example.test',
+        audience: 'https://no-project-fail.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.startsWith('https://no-project-fail.example.test')) {
+        throw new Error('ECONNREFUSED no-project-fail')
+      }
+      return new Response(
+        JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as typeof fetch
     const warn = vi.spyOn(payload.logger, 'warn')
 
     await sampleAllEnabledHosts(payload)
 
-    expect(urls.some((url) => url.startsWith('https://no-project.example.test'))).toBe(false)
-    expect(
-      (
-        await payload.find({
-          collection: 'host-samples',
-          where: { host: { equals: String(src.id) } },
-          overrideAccess: true,
-        })
-      ).totalDocs,
-    ).toBe(0)
-    expect(
-      warn.mock.calls.map((call) => call.map(String).join(' ')).join('\n'),
-    ).toContain('no project configured')
+    expect(warn.mock.calls.map((call) => call.map(String).join(' ')).join('\n')).toContain(
+      `host sampling: failed ${String(src.name)}: ECONNREFUSED no-project-fail`,
+    )
     warn.mockRestore()
+
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(src.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBe(0)
 
     await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
   })
