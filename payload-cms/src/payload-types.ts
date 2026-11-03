@@ -786,7 +786,7 @@ export interface Form {
   createdAt: string;
 }
 /**
- * Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES.
+ * Additional ArchView instances the CMS can call with their own OAuth client credentials. Sources without a row here are anonymous at most, and only when listed in ARCHVIEW_ALLOWED_SOURCES. Each row also tells the notification agent which SSH port to probe on that host.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "archview-sources".
@@ -801,6 +801,10 @@ export interface ArchviewSource {
    * The instance root, for example https://archview.example.com. Its token is only ever sent to this origin.
    */
   origin: string;
+  /**
+   * SSH port for this host. Most of the fleet uses 32; some hosts answer elsewhere.
+   */
+  sshPort?: number | null;
   /**
    * The ArchView project label used when polling this instance, for example rossmoney_me, image-mosaic or vortexservers. Rows without a project are skipped by the host sampler.
    */
@@ -1568,6 +1572,7 @@ export interface ErrorLogsSelect<T extends boolean = true> {
 export interface ArchviewSourcesSelect<T extends boolean = true> {
   name?: T;
   origin?: T;
+  sshPort?: T;
   project?: T;
   audience?: T;
   tokenUrl?: T;

@@ -1,4 +1,6 @@
-import { getPayload, type Payload } from 'payload'
+import { randomBytes } from 'node:crypto'
+
+import { getPayload, type Payload, type RequiredDataFromCollectionSlug } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import * as botSettingsRoute from '@/app/api/bot-settings/route'
@@ -140,7 +142,7 @@ describe('GET /api/bot-settings', () => {
     expect(response.headers.get('Cache-Control')).toBe('no-store')
 
     const body = await response.json()
-    expect(Object.keys(body).sort()).toEqual(['sources', 'targets', 'version'])
+    expect(Object.keys(body).sort()).toEqual(['hosts', 'sources', 'targets', 'version'])
     expect(Object.keys(body.targets).sort()).toEqual(['admin-chat', 'automations'])
     expect(Array.isArray(body.sources)).toBe(true)
     expect(Number.isNaN(Date.parse(body.version))).toBe(false)
@@ -191,6 +193,106 @@ describe('GET /api/bot-settings', () => {
     expect('PUT' in botSettingsRoute).toBe(false)
     expect('PATCH' in botSettingsRoute).toBe(false)
     expect('DELETE' in botSettingsRoute).toBe(false)
+  })
+})
+
+describe('GET /api/bot-settings hosts', () => {
+  let payload: Payload
+  const prefix = `hosts-${randomBytes(4).toString('hex')}`
+  const createdIds: string[] = []
+
+  const createSource = async (
+    suffix: string,
+    overrides: Partial<RequiredDataFromCollectionSlug<'archview-sources'>> = {},
+  ) => {
+    const name = `${prefix}-${suffix}.example.test`
+    const created = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name,
+        origin: `https://${name}`,
+        audience: `https://${name}/api`,
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+        ...overrides,
+      },
+      overrideAccess: true,
+    })
+    createdIds.push(String(created.id))
+    return created
+  }
+
+  beforeAll(async () => {
+    payload = await getPayload({ config: await config })
+  })
+
+  afterAll(async () => {
+    if (createdIds.length > 0) {
+      await payload.delete({
+        collection: 'archview-sources',
+        where: { id: { in: createdIds } },
+        overrideAccess: true,
+      })
+    }
+  })
+
+  it('returns every enabled source with a port, sorted by name', async () => {
+    await createSource('mike', { sshPort: 2222 })
+    // No sshPort: the stored default applies.
+    await createSource('alpha')
+    await createSource('zulu', { enabled: false, sshPort: 2200 })
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+
+    const enabled = await payload.find({
+      collection: 'archview-sources',
+      depth: 0,
+      overrideAccess: true,
+      pagination: false,
+      where: { enabled: { equals: true } },
+    })
+    expect(body.hosts).toHaveLength(enabled.docs.length)
+
+    const names = body.hosts.map((host: { name: string }) => host.name)
+    expect(names).toEqual([...names].sort())
+
+    expect(body.hosts).toContainEqual({ name: `${prefix}-alpha.example.test`, sshPort: 32 })
+    expect(body.hosts).toContainEqual({ name: `${prefix}-mike.example.test`, sshPort: 2222 })
+    expect(names).not.toContain(`${prefix}-zulu.example.test`)
+
+    for (const doc of enabled.docs) {
+      expect(body.hosts).toContainEqual({ name: doc.name, sshPort: doc.sshPort ?? 32 })
+    }
+  })
+
+  it('rejects a port outside 1-65535, and a fractional port', async () => {
+    await expect(createSource('port-zero', { sshPort: 0 })).rejects.toMatchObject({
+      name: 'ValidationError',
+    })
+    await expect(createSource('port-high', { sshPort: 65536 })).rejects.toMatchObject({
+      name: 'ValidationError',
+    })
+    await expect(createSource('port-fraction', { sshPort: 22.5 })).rejects.toMatchObject({
+      name: 'ValidationError',
+    })
+  })
+
+  it('leaves targets and sources byte-identical when hosts are added', async () => {
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    const body = await response.json()
+
+    const doc = await payload.findGlobal({
+      slug: 'bot-settings',
+      depth: 0,
+      overrideAccess: true,
+    })
+    const withoutHosts = toBotSettingsResponse(doc)
+    expect(withoutHosts).not.toBeNull()
+
+    expect(JSON.stringify(body.targets)).toBe(JSON.stringify(withoutHosts?.targets))
+    expect(JSON.stringify(body.sources)).toBe(JSON.stringify(withoutHosts?.sources))
   })
 })
 
@@ -612,7 +714,26 @@ describe('bot-settings validators', () => {
           target: 'admin-chat',
         },
       ],
+      hosts: [],
     })
+  })
+
+  it('shapes hosts sorted by name, defaulting the port and skipping a nameless source', () => {
+    const shaped = toBotSettingsResponse(
+      { updatedAt: '2026-11-01T00:00:00.000Z' },
+      [
+        { name: 'zulu.example.test', sshPort: 2222 },
+        { name: '   ' },
+        { name: 'alpha.example.test' },
+        { name: 'mike.example.test', sshPort: 0 },
+      ],
+    )
+
+    expect(shaped?.hosts).toEqual([
+      { name: 'alpha.example.test', sshPort: 32 },
+      { name: 'mike.example.test', sshPort: 32 },
+      { name: 'zulu.example.test', sshPort: 2222 },
+    ])
   })
 
   it('returns null when the global has never been saved', () => {

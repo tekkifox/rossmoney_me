@@ -52,11 +52,24 @@ export type BotSettingsSource = {
   target: string
 }
 
+/**
+ * One host the notification agent may probe, taken from the enabled ArchView
+ * sources. `name` is the source's hostname and `sshPort` is its SSH port.
+ */
+export type BotSettingsHost = {
+  name: string
+  sshPort: number
+}
+
 export type BotSettingsResponse = {
   version: string
   targets: Record<string, BotSettingsTarget>
   sources: BotSettingsSource[]
+  hosts: BotSettingsHost[]
 }
+
+/** The port used when a source does not set one. */
+export const DEFAULT_SSH_PORT = 32
 
 const isBlank = (value: unknown): boolean =>
   value === null || value === undefined || value === ''
@@ -339,7 +352,10 @@ export const duplicateNames = (rows: unknown): string[] => {
  * the old `NOTIFY_TARGETS` / `NOTIFY_INBOUND_SOURCES` variables. Nothing else is
  * exposed.
  */
-export const toBotSettingsResponse = (doc: unknown): BotSettingsResponse | null => {
+export const toBotSettingsResponse = (
+  doc: unknown,
+  sourceRows: unknown = [],
+): BotSettingsResponse | null => {
   const global = asRecord(doc)
   const version = asString(global.updatedAt)
   if (!version) {
@@ -347,7 +363,48 @@ export const toBotSettingsResponse = (doc: unknown): BotSettingsResponse | null 
   }
 
   const targets = toTargets(global.targets)
-  return { version, targets, sources: toSources(global.sources) }
+  return {
+    version,
+    targets,
+    sources: toSources(global.sources),
+    hosts: toHosts(sourceRows),
+  }
+}
+
+/**
+ * Turns the enabled ArchView sources into the host-to-port list the notification
+ * agent consumes. The source's `name` is its hostname, and an empty `sshPort`
+ * keeps working as the fleet default of 32. A source without a name is skipped
+ * rather than emitted with an empty name.
+ */
+const toHosts = (rows: unknown): BotSettingsHost[] => {
+  const hosts: BotSettingsHost[] = []
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const source = asRecord(row)
+    const name = stringOrEmpty(source.name)
+    if (!name) {
+      continue
+    }
+    hosts.push({ name, sshPort: toSshPort(source.sshPort) })
+  }
+
+  return hosts.sort((left, right) =>
+    left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
+  )
+}
+
+const toSshPort = (value: unknown): number => {
+  if (isBlank(value)) {
+    return DEFAULT_SSH_PORT
+  }
+
+  const port = typeof value === 'number' ? value : Number(value)
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    // The field rejects this, so a stored value that gets here is defensive.
+    return DEFAULT_SSH_PORT
+  }
+  return port
 }
 
 const toTargets = (rows: unknown): Record<string, BotSettingsTarget> => {
