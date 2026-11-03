@@ -917,7 +917,7 @@ export interface ErrorLog {
   lastSeen: string;
 }
 /**
- * Sampled ArchView host metrics, one row per refresh.
+ * Sampled ArchView host metrics, one row per source per sampler sweep.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "host-samples".

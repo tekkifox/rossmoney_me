@@ -16,7 +16,7 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-describe('host sampling on architecture cache fill', () => {
+describe('architecture route leaves host sampling to the sampler', () => {
   let payload: Payload
   let sourceId: string
   let sourceName: string
@@ -65,31 +65,7 @@ describe('host sampling on architecture cache fill', () => {
       })
     ).totalDocs
 
-  it('writes one sample on a cache fill', async () => {
-    let calls = 0
-    const fetchImpl: typeof fetch = async () => {
-      calls += 1
-      return jsonResponse({
-        telemetry: { metrics: { cpuAvg: 12, memoryPercent: 45, loadAvg: 0.7, diskPercent: 60 } },
-      })
-    }
-    const GET = createArchitectureGet({
-      env: {},
-      fetchImpl,
-      lookupSource: async () => null,
-      lookupDefaultSource,
-    })
-
-    await GET(new Request('https://cms.example/api/architecture?project=p'))
-
-    expect(calls).toBe(1)
-    for (let i = 0; i < 20 && (await sampleCount()) < 1; i++) {
-      await new Promise((r) => setTimeout(r, 50))
-    }
-    expect(await sampleCount()).toBe(1)
-  })
-
-  it('writes no sample on a cache hit', async () => {
+  it('does not write to host-samples on a page view', async () => {
     const before = await sampleCount()
     let calls = 0
     const fetchImpl: typeof fetch = async () => {
@@ -105,53 +81,45 @@ describe('host sampling on architecture cache fill', () => {
       lookupDefaultSource,
     })
 
-    await GET(new Request('https://cms.example/api/architecture?project=p2'))
-    await GET(new Request('https://cms.example/api/architecture?project=p2&t=2'))
+    // Record every create the proxy could make. The sampler shares this
+    // payload instance, so a write from the route would show up here.
+    const create = vi.spyOn(payload, 'create')
+    try {
+      const first = await GET(new Request('https://cms.example/api/architecture?project=p'))
+      // A second page view both fills and hits the cache; neither may sample.
+      const second = await GET(new Request('https://cms.example/api/architecture?project=p2'))
 
-    expect(calls).toBe(1)
-    for (let i = 0; i < 20 && (await sampleCount()) < before + 1; i++) {
-      await new Promise((r) => setTimeout(r, 50))
+      expect(first.status).toBe(200)
+      expect(second.status).toBe(200)
+      expect(calls).toBe(2)
+
+      const hostSampleWrites = create.mock.calls.filter(
+        ([args]) => (args as { collection?: string } | undefined)?.collection === 'host-samples',
+      )
+      expect(hostSampleWrites).toHaveLength(0)
+    } finally {
+      create.mockRestore()
     }
-    expect(await sampleCount()).toBe(before + 1)
-  })
-
-  it('writes no sample on a throttled repeat within 60s', async () => {
-    const before = await sampleCount()
-    let calls = 0
-    const fetchImpl: typeof fetch = async () => {
-      calls += 1
-      return jsonResponse({
-        telemetry: { metrics: { cpuAvg: 12, memoryPercent: 45, loadAvg: 0.7, diskPercent: 60 } },
-      })
-    }
-    const GET = createArchitectureGet({
-      env: {},
-      fetchImpl,
-      lookupSource: async () => null,
-      lookupDefaultSource,
-    })
-
-    await GET(new Request('https://cms.example/api/architecture?project=p3'))
-    await new Promise((resolve) => setTimeout(resolve, 5200))
-    await GET(new Request('https://cms.example/api/architecture?project=p3&t=2'))
-
-    expect(calls).toBe(2)
-    expect(await sampleCount()).toBe(before + 1)
-  })
-
-  it('writes no sample on a failed upstream', async () => {
-    const before = await sampleCount()
-    const fetchImpl: typeof fetch = async () => new Response('boom', { status: 500 })
-    const GET = createArchitectureGet({
-      env: {},
-      fetchImpl,
-      lookupSource: async () => null,
-      lookupDefaultSource,
-    })
-
-    await GET(new Request('https://cms.example/api/architecture?project=p4'))
 
     expect(await sampleCount()).toBe(before)
+  })
+
+  it('still returns the telemetry body the route proxies', async () => {
+    const body = {
+      telemetry: { metrics: { cpuAvg: 12 } },
+      services: [{ name: 'cms' }],
+    }
+    const GET = createArchitectureGet({
+      env: {},
+      fetchImpl: async () => jsonResponse(body),
+      lookupSource: async () => null,
+      lookupDefaultSource,
+    })
+
+    const response = await GET(new Request('https://cms.example/api/architecture?project=p3'))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(body)
   })
 })
 

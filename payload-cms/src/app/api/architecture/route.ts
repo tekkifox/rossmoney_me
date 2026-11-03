@@ -13,7 +13,6 @@ import {
   type ArchviewSourceRecord,
 } from '@/utilities/archviewSources'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
-import { buildHostSampleRecord } from '@/utilities/hostSampling'
 
 // ArchView runs as a separate stack (archview.rossmoney.me), so there is no
 // in-stack service name to fall back to. ARCHVIEW_URL points at the public
@@ -404,44 +403,6 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   // across all visitors). Bounded to keep memory in check.
   const cache = new Map<string, CachedArchitectureResponse>()
   const inFlight = new Map<string, Promise<CachedArchitectureResponse | null>>()
-  const sampleThrottle = new Map<string, number>()
-
-  const recordHostSample = async (
-    resolved: ArchviewRequestSource | null,
-    telemetry: { metrics?: unknown; hosts?: unknown } | null | undefined,
-  ): Promise<void> => {
-    try {
-      if (!resolved?.sourceId) return
-      const metrics = telemetry?.metrics
-      if (!metrics || typeof metrics !== 'object') return
-      const key = resolved.sourceId
-      const now = Date.now()
-      const last = sampleThrottle.get(key) ?? 0
-      if (now - last < 60000) return
-      sampleThrottle.set(key, now)
-
-      const { getPayload } = await import('payload')
-      const payloadConfig = (await import('@payload-config')).default
-      const payload = await getPayload({ config: payloadConfig })
-      const label = resolved.sourceLabel ?? resolved.origin
-
-      await payload.create({
-        collection: 'host-samples',
-        // The same record builder as the background sampler, so a page view
-        // and a scheduled sample store the same fields.
-        data: buildHostSampleRecord({
-          hostId: resolved.sourceId,
-          hostLabel: label,
-          sampledAt: new Date(now).toISOString(),
-          metrics: metrics as Record<string, unknown>,
-          hosts: telemetry?.hosts,
-        }),
-        overrideAccess: true,
-      })
-    } catch (error) {
-      console.warn('host sample write failed:', error instanceof Error ? error.message : error)
-    }
-  }
 
   const setCache = (key: string, value: CachedArchitectureResponse): void => {
     if (cache.size >= ARCHVIEW_CACHE_MAX_ENTRIES && !cache.has(key)) {
@@ -507,10 +468,6 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
           if (contentType.includes('application/json')) {
             const data = await res.json()
             const redacted = redactInternalEndpoints(data)
-            void recordHostSample(
-              resolved,
-              (data as { telemetry?: { metrics?: unknown; hosts?: unknown } })?.telemetry,
-            )
             const body = new TextEncoder().encode(JSON.stringify(redacted))
             return {
               status: 200,
@@ -591,10 +548,6 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         if (contentType.includes('application/json')) {
           const data = await res.json()
           const redacted = redactInternalEndpoints(data)
-          void recordHostSample(
-            resolved,
-            (data as { telemetry?: { metrics?: unknown; hosts?: unknown } })?.telemetry,
-          )
           const body = new TextEncoder().encode(JSON.stringify(redacted))
           return {
             status: 200,
