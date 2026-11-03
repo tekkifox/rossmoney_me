@@ -37,7 +37,11 @@ export type BotSettingsBookstack = {
 export type BotSettingsTarget = {
   channel_id: string
   connected_account_id: string
-  host_scope: string[]
+  /**
+   * An absent key means "no narrowing": the agent reports on every host it may
+   * reach. An empty array is a different, invalid state and is never emitted.
+   */
+  host_scope?: string[]
   allow_content: boolean
   allow_runbooks: boolean
   bookstack: BotSettingsBookstack
@@ -133,15 +137,20 @@ export const validateBookstackBooks = (value: unknown): string | true => {
 }
 
 /**
- * An empty host list is a load-time failure for the agent
- * (`target host_scope must not be empty`), so it is not a valid state here.
- * Omitting the key would be worse: an absent scope means no narrowing at all.
+ * An absent host list means no narrowing at all: the target reports on every
+ * host the agent may reach. An empty list is a load-time failure for the agent
+ * (`target host_scope must not be empty`), so a list that is present must hold
+ * at least one hostname.
  */
 export const validateHostScope = (value: unknown): string | true => {
+  if (value === undefined || value === null) {
+    return true
+  }
+
   const hosts = Array.isArray(value) ? value : []
 
   if (hosts.length === 0) {
-    return 'At least one hostname is required. The agent refuses to load a target whose host_scope is empty.'
+    return 'The agent refuses to load an empty host_scope list. Enter at least one hostname, or leave the field unset to report on every host.'
   }
 
   for (const entry of hosts) {
@@ -361,12 +370,17 @@ const toTargets = (rows: unknown): Record<string, BotSettingsTarget> => {
     }
 
     const bookstack = asRecord(target.bookstack)
+    // The agent treats an absent host_scope as "no narrowing" and refuses an
+    // empty list, so only a non-empty list is emitted. A scope-less target must
+    // not turn into `host_scope: []`.
+    const hostScope = Array.isArray(target.host_scope)
+      ? target.host_scope.map((host) => stringOrEmpty(host)).filter(Boolean)
+      : []
+
     const entry: BotSettingsTarget = {
       channel_id: stringOrEmpty(target.channel_id),
       connected_account_id: stringOrEmpty(target.connected_account_id),
-      host_scope: Array.isArray(target.host_scope)
-        ? target.host_scope.map((host) => stringOrEmpty(host)).filter(Boolean)
-        : [],
+      ...(hostScope.length > 0 ? { host_scope: hostScope } : {}),
       allow_content: target.allow_content === true,
       allow_runbooks: target.allow_runbooks === true,
       bookstack: {},

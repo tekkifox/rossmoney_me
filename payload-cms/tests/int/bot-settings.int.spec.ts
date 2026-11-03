@@ -48,6 +48,13 @@ const baseTarget = (): Target => ({
   },
 })
 
+/** A target with no `host_scope` key at all: the agent's "every host" shape. */
+const targetWithoutScope = (): Target => {
+  const target = baseTarget()
+  delete target.host_scope
+  return target
+}
+
 const baseSource = (): Source => ({
   name: 'example-source',
   connected_account_id: 'ca_exampleconnection',
@@ -283,7 +290,29 @@ describe('bot-settings schema validation', () => {
     ).rejects.toMatchObject({ name: 'ValidationError' })
   })
 
-  it('rejects a target with no hosts', async () => {
+  it('accepts a target with no host scope and returns it as unrestricted', async () => {
+    await expect(saveTargets([targetWithoutScope()])).resolves.toBeTruthy()
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    const body = await response.json()
+
+    // Absence is the shape the agent treats as "every host". `[]` would be
+    // refused at load time, so the key must not appear at all.
+    expect(body.targets['admin-chat']).not.toHaveProperty('host_scope')
+    expect(JSON.stringify(body.targets['admin-chat'])).not.toContain('host_scope')
+  })
+
+  it('returns a target host list exactly as stored', async () => {
+    const hosts = ['host1.example.com', 'host2.example.com']
+    await expect(saveTargets([{ ...baseTarget(), host_scope: hosts }])).resolves.toBeTruthy()
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    const body = await response.json()
+
+    expect(body.targets['admin-chat'].host_scope).toEqual(hosts)
+  })
+
+  it('rejects a target with an empty host list', async () => {
     await expect(saveTargets([{ ...baseTarget(), host_scope: [] }])).rejects.toMatchObject({
       name: 'ValidationError',
     })
@@ -430,8 +459,12 @@ describe('bot-settings validators', () => {
     expect(validateBookstackUrl('https://user:pass@bookstack.example.com')).not.toBe(true)
   })
 
-  it('requires at least one hostname without a scheme or path', () => {
+  it('accepts an absent host scope and requires any present list to be non-empty', () => {
     expect(validateHostScope(['example.com', 'host1.example.com'])).toBe(true)
+
+    // Absent means unrestricted: nothing to validate.
+    expect(validateHostScope(undefined)).toBe(true)
+    expect(validateHostScope(null)).toBe(true)
 
     expect(validateHostScope(['https://example.com'])).not.toBe(true)
     expect(validateHostScope(['example.com/path'])).not.toBe(true)
@@ -440,8 +473,6 @@ describe('bot-settings validators', () => {
 
     // An empty scope is a load-time failure for the agent, not "no narrowing".
     expect(validateHostScope([])).not.toBe(true)
-    expect(validateHostScope(null)).not.toBe(true)
-    expect(validateHostScope(undefined)).not.toBe(true)
   })
 
   it('requires Discord snowflakes for channel ids', () => {
@@ -613,6 +644,35 @@ describe('bot-settings validators', () => {
         },
       ],
     })
+  })
+
+  it('omits host_scope for a target that has no list', () => {
+    const shaped = toBotSettingsResponse({
+      updatedAt: '2026-11-01T00:00:00.000Z',
+      targets: [
+        {
+          name: 'every-host',
+          channel_id: '000000000000000000',
+          connected_account_id: 'ca_exampleconnection',
+          allow_content: false,
+          allow_runbooks: false,
+          bookstack: {},
+        },
+        {
+          name: 'scoped',
+          channel_id: '000000000000000001',
+          connected_account_id: 'ca_exampleconnection',
+          host_scope: ['host1.example.com'],
+          allow_content: false,
+          allow_runbooks: false,
+          bookstack: {},
+        },
+      ],
+      sources: [],
+    })
+
+    expect(shaped?.targets['every-host']).not.toHaveProperty('host_scope')
+    expect(shaped?.targets.scoped.host_scope).toEqual(['host1.example.com'])
   })
 
   it('returns null when the global has never been saved', () => {
