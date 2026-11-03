@@ -110,6 +110,16 @@ may reach.
 
 MongoDB database name defaults to `rossmoney_me`.
 
+## Bot settings
+
+The notification agent reads its configuration from `GET /api/bot-settings`
+(authenticated with a Payload API key), which returns `version`, `targets`,
+`sources` and `hosts`. `hosts` is built from the **ArchView → ArchView sources**
+collection — one `{ "name": "<hostname>", "sshPort": <port> }` entry per enabled
+source, sorted by name — and the agent uses it as its host-to-SSH-port map. Set
+the **SSH port** field on a source to the port that host answers on; an empty
+field reads as the conventional SSH port.
+
 ## Go service
 
 ArchView runs from the sibling `archview` repo as its own stack; it is not part of

@@ -29,6 +29,10 @@ export type BotSettingsRouteDeps = {
  * The response is shaped like the agent's old `NOTIFY_TARGETS` variable:
  * `targets` keyed by name, snake_case fields, `bookstack` nested. It contains
  * the NAME of each BookStack credential and never a token.
+ *
+ * `hosts` is the host-to-SSH-port map, built from the enabled ArchView sources
+ * so an editor records a port next to the hostname instead of the agent
+ * hard-coding one for every machine.
  */
 export function createBotSettingsGet(deps: BotSettingsRouteDeps = {}) {
   const loadPayload = deps.loadPayload ?? (async () => getPayload({ config: await config }))
@@ -45,8 +49,17 @@ export function createBotSettingsGet(deps: BotSettingsRouteDeps = {}) {
     }
 
     let doc: unknown
+    let sourceRows: unknown[]
     try {
       doc = await payload.findGlobal({ slug: 'bot-settings', depth: 0, overrideAccess: true })
+      const sources = await payload.find({
+        collection: 'archview-sources',
+        depth: 0,
+        overrideAccess: true,
+        pagination: false,
+        where: { enabled: { equals: true } },
+      })
+      sourceRows = sources.docs
     } catch (error) {
       payload.logger?.error(
         `Bot settings could not be read: ${error instanceof Error ? error.message : String(error)}`,
@@ -54,7 +67,7 @@ export function createBotSettingsGet(deps: BotSettingsRouteDeps = {}) {
       return json({ errors: [{ message: 'Bot settings are unavailable.' }] }, 500)
     }
 
-    const body = toBotSettingsResponse(doc)
+    const body = toBotSettingsResponse(doc, sourceRows)
     if (!body) {
       return json({ errors: [{ message: 'Bot settings have not been configured.' }] }, 404)
     }
