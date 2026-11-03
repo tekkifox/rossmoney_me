@@ -103,6 +103,16 @@ Open `/admin/` to manage the home page, projects, experience entries, and contac
 
 MongoDB database name defaults to `rossmoney_me`.
 
+## Bot settings
+
+The notification agent reads its configuration from `GET /api/bot-settings`
+(authenticated with a Payload API key), which returns `version`, `targets`,
+`sources` and `hosts`. `hosts` is built from the **ArchView → ArchView sources**
+collection — one `{ "name": "<hostname>", "sshPort": 32 }` entry per enabled
+source, sorted by name — and the agent uses it as its host-to-SSH-port map. Set
+the **SSH port** field on a source to override the default of 32, for example
+`2222`; an empty field reads as 32.
+
 ## Go service
 
 ArchView runs from the sibling `archview` repo as its own stack; it is not part of
