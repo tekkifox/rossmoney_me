@@ -80,6 +80,13 @@ export async function sampleOneSource(
       const n = Number(v)
       return Number.isFinite(n) ? n : null
     }
+    // A failed-login count is only meaningful as a non-negative integer.
+    // Anything else (missing, null, a string, a fraction) is stored as null so
+    // the panel can tell "unavailable" apart from a real zero.
+    const toCount = (v: unknown): number | null => {
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) return null
+      return v
+    }
     const updatedAt =
       metrics.updatedAt === null || metrics.updatedAt === undefined
         ? null
@@ -112,6 +119,7 @@ export async function sampleOneSource(
         cpuCores: cpuCores ?? undefined,
         loadAvg: toNumber(metrics.loadAvg),
         diskPercent: toNumber(metrics.diskPercent),
+        failedLogins: toCount(metrics.failedLogins),
         swapPercent: toNumber(metrics.swapPercent),
         processCount: toNumber(metrics.processCount),
         hostCount: toNumber(metrics.hostCount),

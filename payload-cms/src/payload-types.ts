@@ -934,6 +934,10 @@ export interface HostSample {
   cpuCores?: number | null;
   loadAvg?: number | null;
   diskPercent?: number | null;
+  /**
+   * Count of SSH password failures in the hour before the sample. Null means the host could not read its logs; it is not zero.
+   */
+  failedLogins?: number | null;
   swapPercent?: number | null;
   processCount?: number | null;
   hostCount?: number | null;
@@ -1600,6 +1604,7 @@ export interface HostSamplesSelect<T extends boolean = true> {
   cpuCores?: T;
   loadAvg?: T;
   diskPercent?: T;
+  failedLogins?: T;
   swapPercent?: T;
   processCount?: T;
   hostCount?: T;
