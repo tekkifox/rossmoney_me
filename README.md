@@ -104,9 +104,9 @@ Open `/admin/` to manage the home page, projects, experience entries, and contac
 ### Bot settings
 
 The `bot-settings` global (Operations → Bot settings) configures the notification
-bot's targets, sources and model. A target's **Hosts** list restricts it to those
-hostnames; leave the list empty to let that target report on every host the bot
-may reach.
+bot's targets, sources and model. Tick a target's **Report on all hosts** to let
+it report on every host the bot may reach; leave it unticked and list hostnames
+under **Hosts** to restrict the target to them.
 
 MongoDB database name defaults to `rossmoney_me`.
 

@@ -11,11 +11,11 @@ import {
   validateChannelId,
   validateConnectedAccountId,
   validateCredentialName,
-  validateHostScope,
   validateRunbookAccess,
   validateSourceChannelMatchesTarget,
   validateSourceName,
   validateSourceTarget,
+  validateTargetHostScope,
   validateTargetName,
 } from '@/utilities/botSettings'
 
@@ -33,15 +33,14 @@ const normaliseTargets: GlobalBeforeValidateHook = ({ data }) => {
       const target = asRecord(row)
       const bookstack = asRecord(target.bookstack)
       const books = typeof bookstack.books === 'string' ? bookstack.books : undefined
+      const allHosts = target.all_hosts === true
 
-      return {
+      const normalised: Record<string, unknown> = {
         ...target,
         name: trim(target.name),
         channel_id: trim(target.channel_id),
         connected_account_id: trim(target.connected_account_id),
-        host_scope: Array.isArray(target.host_scope)
-          ? target.host_scope.map((host) => trim(host))
-          : target.host_scope,
+        all_hosts: allHosts,
         bookstack: {
           ...bookstack,
           url: trim(bookstack.url),
@@ -49,6 +48,17 @@ const normaliseTargets: GlobalBeforeValidateHook = ({ data }) => {
           books: books === undefined ? bookstack.books : splitBookstackBooks(books).join(','),
         },
       }
+
+      if (allHosts) {
+        // An unrestricted target stores no list at all. Deleting the key before
+        // validation is what stops Payload coercing it to `[]`, which the agent
+        // refuses to load.
+        delete normalised.host_scope
+      } else if (Array.isArray(target.host_scope)) {
+        normalised.host_scope = target.host_scope.map((host) => trim(host))
+      }
+
+      return normalised
     }),
   }
 }
@@ -181,14 +191,25 @@ export const BotSettings: GlobalConfig = {
           },
         },
         {
+          name: 'all_hosts',
+          type: 'checkbox',
+          defaultValue: false,
+          label: 'Report on all hosts',
+          admin: {
+            description:
+              'Report on every host the agent may reach. Leave unticked to limit this target to the host list below.',
+          },
+        },
+        {
           name: 'host_scope',
           type: 'text',
           hasMany: true,
-          validate: validateHostScope,
+          validate: (value, { siblingData }) =>
+            validateTargetHostScope(value, asRecord(siblingData).all_hosts === true),
           label: 'Hosts',
           admin: {
             description:
-              'Leave empty to report on every host the agent may reach. Add hostnames to restrict this target to them, for example example.com. A list that is present must not be empty: the agent refuses to load a target whose host_scope is empty.',
+              'The hostnames this target may report on, for example example.com. Required unless "Report on all hosts" is ticked; an empty list is refused when the agent loads its configuration.',
           },
         },
         {

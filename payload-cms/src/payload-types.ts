@@ -1937,7 +1937,11 @@ export interface BotSetting {
          */
         connected_account_id: string;
         /**
-         * Leave empty to report on every host the agent may reach. Add hostnames to restrict this target to them, for example example.com. A list that is present must not be empty: the agent refuses to load a target whose host_scope is empty.
+         * Report on every host the agent may reach. Leave unticked to limit this target to the host list below.
+         */
+        all_hosts?: boolean | null;
+        /**
+         * The hostnames this target may report on, for example example.com. Required unless "Report on all hosts" is ticked; an empty list is refused when the agent loads its configuration.
          */
         host_scope?: string[] | null;
         /**
@@ -2069,6 +2073,7 @@ export interface BotSettingsSelect<T extends boolean = true> {
         name?: T;
         channel_id?: T;
         connected_account_id?: T;
+        all_hosts?: T;
         host_scope?: T;
         allow_content?: T;
         allow_runbooks?: T;
