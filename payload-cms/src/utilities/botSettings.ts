@@ -150,20 +150,15 @@ export const validateBookstackBooks = (value: unknown): string | true => {
 }
 
 /**
- * An absent host list means no narrowing at all: the target reports on every
- * host the agent may reach. An empty list is a load-time failure for the agent
- * (`target host_scope must not be empty`), so a list that is present must hold
- * at least one hostname.
+ * A target that is restricted to a host list needs at least one hostname: the
+ * agent refuses an empty list (`target host_scope must not be empty`). This is
+ * reached for an unrestricted target only through `validateTargetHostScope`.
  */
 export const validateHostScope = (value: unknown): string | true => {
-  if (value === undefined || value === null) {
-    return true
-  }
-
   const hosts = Array.isArray(value) ? value : []
 
   if (hosts.length === 0) {
-    return 'The agent refuses to load an empty host_scope list. Enter at least one hostname, or leave the field unset to report on every host.'
+    return 'Add at least one hostname, or tick "Report on all hosts". The agent refuses to load a target whose host_scope is empty.'
   }
 
   for (const entry of hosts) {
@@ -177,6 +172,15 @@ export const validateHostScope = (value: unknown): string | true => {
   }
   return true
 }
+
+/**
+ * `all_hosts` removes the list entirely, so there is nothing to validate. With
+ * it unticked the list is required and must hold at least one hostname.
+ */
+export const validateTargetHostScope = (
+  value: unknown,
+  allHosts: boolean,
+): string | true => (allHosts ? true : validateHostScope(value))
 
 /** Discord ids are snowflakes: 1–32 digits, and nothing else. */
 export const SNOWFLAKE_PATTERN = /^[0-9]{1,32}$/
@@ -427,9 +431,10 @@ const toTargets = (rows: unknown): Record<string, BotSettingsTarget> => {
     }
 
     const bookstack = asRecord(target.bookstack)
-    // The agent treats an absent host_scope as "no narrowing" and refuses an
-    // empty list, so only a non-empty list is emitted. A scope-less target must
-    // not turn into `host_scope: []`.
+    // A target that reports on all hosts carries no list, and the agent treats
+    // an absent host_scope as "no narrowing". An empty list is not emitted: the
+    // agent refuses to load one. Legacy targets with no list keep that meaning.
+    const allHosts = target.all_hosts === true
     const hostScope = Array.isArray(target.host_scope)
       ? target.host_scope.map((host) => stringOrEmpty(host)).filter(Boolean)
       : []
@@ -437,7 +442,7 @@ const toTargets = (rows: unknown): Record<string, BotSettingsTarget> => {
     const entry: BotSettingsTarget = {
       channel_id: stringOrEmpty(target.channel_id),
       connected_account_id: stringOrEmpty(target.connected_account_id),
-      ...(hostScope.length > 0 ? { host_scope: hostScope } : {}),
+      ...(allHosts || hostScope.length === 0 ? {} : { host_scope: hostScope }),
       allow_content: target.allow_content === true,
       allow_runbooks: target.allow_runbooks === true,
       bookstack: {},

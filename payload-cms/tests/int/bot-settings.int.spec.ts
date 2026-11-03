@@ -22,6 +22,7 @@ import {
   validateRunbookAccess,
   validateSourceChannelMatchesTarget,
   validateSourceTarget,
+  validateTargetHostScope,
   validateTargetName,
 } from '@/utilities/botSettings'
 
@@ -40,6 +41,7 @@ const baseTarget = (): Target => ({
   name: 'admin-chat',
   channel_id: '000000000000000000',
   connected_account_id: 'ca_exampleconnection',
+  all_hosts: false,
   host_scope: ['host1.example.com'],
   allow_content: false,
   allow_runbooks: true,
@@ -50,9 +52,10 @@ const baseTarget = (): Target => ({
   },
 })
 
-/** A target with no `host_scope` key at all: the agent's "every host" shape. */
-const targetWithoutScope = (): Target => {
+/** An unrestricted target: the checkbox is ticked and no list is stored. */
+const allHostsTarget = (): Target => {
   const target = baseTarget()
+  target.all_hosts = true
   delete target.host_scope
   return target
 }
@@ -77,6 +80,15 @@ const saveBotSettings = (data: {
   })
 
 const saveTargets = (targets: Target[]) => saveBotSettings({ targets })
+
+const storedTargets = async (): Promise<Target[]> => {
+  const stored = await payload.findGlobal({
+    slug: 'bot-settings',
+    depth: 0,
+    overrideAccess: true,
+  })
+  return stored.targets ?? []
+}
 
 // Source tests save the target they point at in the same write, so the channel
 // match rule is exercised against a known target rather than whatever an
@@ -155,9 +167,19 @@ describe('GET /api/bot-settings', () => {
     expect(Number.isNaN(Date.parse(body.version))).toBe(false)
 
     for (const target of BOT_SETTINGS_SEED.targets) {
-      const { name, ...expected } = target
+      const { name, all_hosts, host_scope, ...rest } = target
+      const expected = all_hosts ? rest : { ...rest, host_scope }
       expect(body.targets[name]).toEqual(expected)
     }
+
+    // An unrestricted target carries no host list at all; a restricted one
+    // still carries exactly its list. `all_hosts` itself is panel state and is
+    // not part of the agent's contract.
+    expect(body.targets['admin-chat']).not.toHaveProperty('all_hosts')
+    expect(body.targets['admin-chat']).toHaveProperty('host_scope', [
+      'vortexservers.co.uk',
+    ])
+    expect(body.targets['automations']).not.toHaveProperty('host_scope')
 
     // Sources stay an array; `allowed_authors` is the comma-joined string the
     // agent's NOTIFY_INBOUND_SOURCES entry used.
@@ -392,8 +414,12 @@ describe('bot-settings schema validation', () => {
     ).rejects.toMatchObject({ name: 'ValidationError' })
   })
 
-  it('accepts a target with no host scope and returns it as unrestricted', async () => {
-    await expect(saveTargets([targetWithoutScope()])).resolves.toBeTruthy()
+  it('saves a target that reports on all hosts with no host list', async () => {
+    await expect(saveTargets([allHostsTarget()])).resolves.toBeTruthy()
+
+    const [stored] = await storedTargets()
+    expect(stored?.all_hosts).toBe(true)
+    expect(stored).not.toHaveProperty('host_scope')
 
     const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
     const body = await response.json()
@@ -404,9 +430,40 @@ describe('bot-settings schema validation', () => {
     expect(JSON.stringify(body.targets['admin-chat'])).not.toContain('host_scope')
   })
 
-  it('returns a target host list exactly as stored', async () => {
+  it('drops a stale host list when report on all hosts is ticked', async () => {
+    await expect(
+      saveTargets([{ ...baseTarget(), all_hosts: true, host_scope: ['stale.example.com'] }]),
+    ).resolves.toBeTruthy()
+
+    // The beforeValidate hook removes the list, so Payload cannot store `[]`.
+    const [stored] = await storedTargets()
+    expect(stored?.all_hosts).toBe(true)
+    expect(stored).not.toHaveProperty('host_scope')
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    const body = await response.json()
+    expect(body.targets['admin-chat']).not.toHaveProperty('host_scope')
+  })
+
+  it('rejects a restricted target with no host list', async () => {
+    const target = baseTarget()
+    target.all_hosts = false
+    delete target.host_scope
+
+    await expect(saveTargets([target])).rejects.toMatchObject({ name: 'ValidationError' })
+  })
+
+  it('rejects a restricted target with an empty host list', async () => {
+    await expect(
+      saveTargets([{ ...baseTarget(), all_hosts: false, host_scope: [] }]),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+  })
+
+  it('returns a restricted target host list exactly as stored', async () => {
     const hosts = ['host1.example.com', 'host2.example.com']
-    await expect(saveTargets([{ ...baseTarget(), host_scope: hosts }])).resolves.toBeTruthy()
+    await expect(
+      saveTargets([{ ...baseTarget(), all_hosts: false, host_scope: hosts }]),
+    ).resolves.toBeTruthy()
 
     const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
     const body = await response.json()
@@ -414,10 +471,18 @@ describe('bot-settings schema validation', () => {
     expect(body.targets['admin-chat'].host_scope).toEqual(hosts)
   })
 
-  it('rejects a target with an empty host list', async () => {
-    await expect(saveTargets([{ ...baseTarget(), host_scope: [] }])).rejects.toMatchObject({
-      name: 'ValidationError',
-    })
+  it('requires a list when a previously unrestricted target is unticked', async () => {
+    await expect(saveTargets([allHostsTarget()])).resolves.toBeTruthy()
+
+    const unticked = baseTarget()
+    unticked.all_hosts = false
+    delete unticked.host_scope
+
+    await expect(saveTargets([unticked])).rejects.toMatchObject({ name: 'ValidationError' })
+
+    await expect(
+      saveTargets([{ ...baseTarget(), all_hosts: false, host_scope: ['host1.example.com'] }]),
+    ).resolves.toBeTruthy()
   })
 
   it('rejects a non-numeric target channel id', async () => {
@@ -561,20 +626,29 @@ describe('bot-settings validators', () => {
     expect(validateBookstackUrl('https://user:pass@bookstack.example.com')).not.toBe(true)
   })
 
-  it('accepts an absent host scope and requires any present list to be non-empty', () => {
+  it('requires at least one hostname for a restricted target', () => {
     expect(validateHostScope(['example.com', 'host1.example.com'])).toBe(true)
-
-    // Absent means unrestricted: nothing to validate.
-    expect(validateHostScope(undefined)).toBe(true)
-    expect(validateHostScope(null)).toBe(true)
 
     expect(validateHostScope(['https://example.com'])).not.toBe(true)
     expect(validateHostScope(['example.com/path'])).not.toBe(true)
     expect(validateHostScope(['host 1.example.com'])).not.toBe(true)
     expect(validateHostScope([''])).not.toBe(true)
 
-    // An empty scope is a load-time failure for the agent, not "no narrowing".
+    // An empty or missing list is a load-time failure for the agent.
     expect(validateHostScope([])).not.toBe(true)
+    expect(validateHostScope(undefined)).not.toBe(true)
+    expect(validateHostScope(null)).not.toBe(true)
+  })
+
+  it('skips the host list when the target reports on all hosts', () => {
+    expect(validateTargetHostScope(undefined, true)).toBe(true)
+    expect(validateTargetHostScope(null, true)).toBe(true)
+    expect(validateTargetHostScope([], true)).toBe(true)
+    expect(validateTargetHostScope(['example.com'], true)).toBe(true)
+
+    expect(validateTargetHostScope(undefined, false)).not.toBe(true)
+    expect(validateTargetHostScope([], false)).not.toBe(true)
+    expect(validateTargetHostScope(['example.com'], false)).toBe(true)
   })
 
   it('requires Discord snowflakes for channel ids', () => {
@@ -767,7 +841,7 @@ describe('bot-settings validators', () => {
     ])
   })
 
-  it('omits host_scope for a target that has no list', () => {
+  it('omits host_scope for a target that reports on all hosts', () => {
     const shaped = toBotSettingsResponse({
       updatedAt: '2026-11-01T00:00:00.000Z',
       targets: [
@@ -775,6 +849,9 @@ describe('bot-settings validators', () => {
           name: 'every-host',
           channel_id: '000000000000000000',
           connected_account_id: 'ca_exampleconnection',
+          all_hosts: true,
+          // Defensive: even a stale list must not leak for an unrestricted target.
+          host_scope: ['stale.example.com'],
           allow_content: false,
           allow_runbooks: false,
           bookstack: {},
@@ -783,6 +860,7 @@ describe('bot-settings validators', () => {
           name: 'scoped',
           channel_id: '000000000000000001',
           connected_account_id: 'ca_exampleconnection',
+          all_hosts: false,
           host_scope: ['host1.example.com'],
           allow_content: false,
           allow_runbooks: false,
