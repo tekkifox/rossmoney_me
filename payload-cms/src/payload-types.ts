@@ -1937,9 +1937,9 @@ export interface BotSetting {
          */
         connected_account_id: string;
         /**
-         * At least one hostname this target may report on, for example example.com. An empty list is refused when the agent loads its configuration.
+         * Leave empty to report on every host the agent may reach. Add hostnames to restrict this target to them, for example example.com. A list that is present must not be empty: the agent refuses to load a target whose host_scope is empty.
          */
-        host_scope: string[];
+        host_scope?: string[] | null;
         /**
          * Allow this target to read published site content.
          */
