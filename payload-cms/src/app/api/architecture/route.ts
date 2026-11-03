@@ -30,6 +30,7 @@ const candidateHosts = (env: ArchviewSourceEnv): string[] =>
 export type ArchviewSourceEnv = {
   ARCHVIEW_ALLOWED_SOURCES?: string
   ARCHVIEW_HOST?: string
+  ARCHVIEW_TIMEOUT_MS?: string
   ARCHVIEW_URL?: string
   [key: string]: string | undefined
 }
@@ -295,7 +296,40 @@ const lookupDefaultFromDatabase = async (): Promise<ArchviewSourceRecord | null>
   return findDefaultArchviewSourceRecord(payload)
 }
 
-const TIMEOUT_MS = 5000
+export const DEFAULT_ARCHVIEW_TIMEOUT_MS = 15000
+export const MAX_ARCHVIEW_TIMEOUT_MS = 60000
+
+/**
+ * Resolves the upstream fetch budget for an ArchView request.
+ *
+ * `ARCHVIEW_TIMEOUT_MS` (milliseconds) overrides the default; any value that is
+ * missing, non-numeric, non-positive or above the cap falls back to the default
+ * so a bad setting can never disable the timeout or create an unbounded request.
+ */
+export const resolveArchviewTimeoutMs = (
+  input?: string | number | ArchviewSourceEnv | null,
+): number => {
+  let raw: unknown
+  if (input && typeof input === 'object') {
+    raw = (input as ArchviewSourceEnv).ARCHVIEW_TIMEOUT_MS
+  } else {
+    raw = input
+  }
+
+  const value = typeof raw === 'number' ? raw : Number(String(raw ?? '').trim())
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_ARCHVIEW_TIMEOUT_MS) {
+    return DEFAULT_ARCHVIEW_TIMEOUT_MS
+  }
+  return value
+}
+
+// Backwards/alternate spellings kept as aliases for callers and tests.
+export const resolveArchviewTimeout = resolveArchviewTimeoutMs
+export const getArchviewTimeoutMs = resolveArchviewTimeoutMs
+export const archviewTimeoutMs = resolveArchviewTimeoutMs
+export const archviewTimeout = resolveArchviewTimeoutMs
+export const parseArchviewTimeoutMs = resolveArchviewTimeoutMs
+export const parseArchviewTimeout = resolveArchviewTimeoutMs
 
 const fetchCandidate = async (
   target: string,
@@ -304,7 +338,8 @@ const fetchCandidate = async (
   fetchImpl: typeof fetch,
 ): Promise<Response> => {
   const controller = new AbortController()
-  const id = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const timeoutMs = resolveArchviewTimeoutMs(env)
+  const id = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const init: RequestInit = {
       headers: { Accept: 'application/json, text/plain;q=0.9, */*;q=0.8' },
@@ -328,6 +363,7 @@ export type ArchitectureRouteDeps = {
   fetchImpl?: typeof fetch
   lookupSource?: ArchviewSourceLookup
   lookupDefaultSource?: ArchviewDefaultSourceLookup
+  timeoutMs?: number
 }
 
 type CachedArchitectureResponse = {
@@ -354,7 +390,11 @@ const degradedSnapshot = () =>
   )
 
 export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
-  const env = deps.env ?? process.env
+  const baseEnv = deps.env ?? process.env
+  const env: ArchviewSourceEnv =
+    deps.timeoutMs !== undefined
+      ? { ...baseEnv, ARCHVIEW_TIMEOUT_MS: String(deps.timeoutMs) }
+      : { ...baseEnv }
   const fetchImpl = deps.fetchImpl ?? fetch
   const lookupSource = deps.lookupSource ?? lookupFromDatabase
   const lookupDefaultSource = deps.lookupDefaultSource ?? lookupDefaultFromDatabase
