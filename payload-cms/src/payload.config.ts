@@ -420,7 +420,8 @@ export default buildConfig({
       payload.logger.error(`Error seeding default documents: ${message}`);
     }
 
-    // Independent host sampler: covers hosts that nobody browses. Runs in the
+    // Independent host sampler: the only writer of host samples. It covers
+    // every enabled source, including hosts nobody browses, and runs in the
     // long-lived Node process (disabled on Vercel/serverless where an interval
     // cannot survive). Retention (30 days) happens in the same sweep, daily.
     // Cadence lives in utilities/hostUsage.ts next to the "last hour" bucket
