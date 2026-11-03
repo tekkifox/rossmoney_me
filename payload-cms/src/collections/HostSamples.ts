@@ -61,6 +61,14 @@ export const HostSamples: CollectionConfig = {
     numericField('cpuCores'),
     numericField('loadAvg'),
     numericField('diskPercent'),
+    {
+      name: 'failedLogins',
+      type: 'number',
+      admin: {
+        description:
+          'Count of SSH password failures in the hour before the sample. Null means the host could not read its logs; it is not zero.',
+      },
+    },
     numericField('swapPercent'),
     numericField('processCount'),
     numericField('hostCount'),
