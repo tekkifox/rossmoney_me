@@ -41,6 +41,10 @@ anonymous by design: the variable admits them, but no credential is attached.
 Anything that is neither an enabled source nor allowlisted falls back to
 `ARCHVIEW_URL`.
 
+`ARCHVIEW_TIMEOUT_MS` sets the upstream fetch budget in milliseconds for
+`/api/architecture` (default 15000, max 60000; invalid values fall back to the
+default).
+
 A source's client secret is optional and encrypted at rest in MongoDB with
 AES-256-GCM (a random 12-byte IV per value) using `ARCHVIEW_SECRET_KEY`.
 Generate the key once with `openssl rand -base64 32` and set it before adding
