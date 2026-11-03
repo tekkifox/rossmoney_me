@@ -938,6 +938,16 @@ export interface HostSample {
    * Count of SSH password failures in the hour before the sample. Null means the host could not read its logs; it is not zero.
    */
   failedLogins?: number | null;
+  /**
+   * Usernames targeted by SSH password failures in the hour before the sample, most-targeted first. Empty means the host could not report a breakdown; older samples have no value.
+   */
+  failedLoginUsers?:
+    | {
+        user: string;
+        count: number;
+        id?: string | null;
+      }[]
+    | null;
   swapPercent?: number | null;
   processCount?: number | null;
   hostCount?: number | null;
@@ -1605,6 +1615,13 @@ export interface HostSamplesSelect<T extends boolean = true> {
   loadAvg?: T;
   diskPercent?: T;
   failedLogins?: T;
+  failedLoginUsers?:
+    | T
+    | {
+        user?: T;
+        count?: T;
+        id?: T;
+      };
   swapPercent?: T;
   processCount?: T;
   hostCount?: T;

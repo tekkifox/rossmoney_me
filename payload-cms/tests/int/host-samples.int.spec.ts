@@ -591,6 +591,109 @@ describe('host sampling scheduler', () => {
   })
 })
 
+describe('failed login user sampling', () => {
+  let payload: Payload
+  const sourceIds: string[] = []
+  const originalFetch = global.fetch
+
+  beforeAll(async () => {
+    payload = await getPayload({ config: await config })
+  })
+
+  afterAll(async () => {
+    global.fetch = originalFetch
+    await payload.delete({
+      collection: 'host-samples',
+      where: { host: { in: sourceIds } },
+      overrideAccess: true,
+    })
+    await payload.delete({
+      collection: 'archview-sources',
+      where: { id: { in: sourceIds } },
+      overrideAccess: true,
+    })
+  })
+
+  const sampleWith = async (failedLoginUsers?: unknown) => {
+    const suffix = `${Date.now()}-${sourceIds.length}`
+    const source = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `failed-users-${suffix}`,
+        origin: `https://failed-users-${suffix}.example.test`,
+        audience: `https://failed-users-${suffix}.example.test/api`,
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    sourceIds.push(String(source.id))
+
+    const metrics: Record<string, unknown> = { cpuAvg: 3 }
+    if (failedLoginUsers !== undefined) metrics.failedLoginUsers = failedLoginUsers
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ telemetry: { metrics } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
+
+    await sampleAllEnabledHosts(payload)
+
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(source.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBe(1)
+    return samples.docs[0]
+  }
+
+  it('stores the per-user breakdown in count order', async () => {
+    const sample = await sampleWith([
+      { user: 'root', count: 4 },
+      { user: 'admin', count: 2 },
+    ])
+    expect(sample.failedLoginUsers).toMatchObject([
+      { user: 'root', count: 4 },
+      { user: 'admin', count: 2 },
+    ])
+  })
+
+  it('stores an empty breakdown when the host does not report one', async () => {
+    const sample = await sampleWith()
+    expect(sample.failedLoginUsers).toEqual([])
+  })
+
+  it('stores an empty breakdown when the value is not an array', async () => {
+    const sample = await sampleWith('root')
+    expect(sample.failedLoginUsers).toEqual([])
+  })
+
+  it('drops entries whose user is not a string', async () => {
+    const sample = await sampleWith([
+      { user: 42, count: 3 },
+      { user: 'root', count: 1 },
+    ])
+    expect(sample.failedLoginUsers).toMatchObject([{ user: 'root', count: 1 }])
+  })
+
+  it('drops entries with a negative count but keeps zero', async () => {
+    const sample = await sampleWith([
+      { user: 'root', count: -1 },
+      { user: 'admin', count: 0 },
+    ])
+    expect(sample.failedLoginUsers).toMatchObject([{ user: 'admin', count: 0 }])
+  })
+
+  it('keeps at most 20 users', async () => {
+    const sample = await sampleWith(
+      Array.from({ length: 25 }, (_, i) => ({ user: `user-${i}`, count: 25 - i })),
+    )
+    expect(sample.failedLoginUsers).toHaveLength(20)
+    expect(sample.failedLoginUsers?.at(-1)).toMatchObject({ user: 'user-19', count: 6 })
+  })
+})
+
 describe('host rename keeps history by id', () => {
   let payload: Payload
   let sourceId: string
