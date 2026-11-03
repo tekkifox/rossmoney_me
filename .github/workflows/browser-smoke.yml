@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, paseo]
     timeout-minutes: 30
 
     services:
@@ -77,10 +77,15 @@ jobs:
       - name: Build production app
         run: corepack pnpm --filter payload-cms run build
 
+      # The runner hosts Chromium's system libraries already, so this only
+      # downloads the browsers the config's projects use (chromium and
+      # firefox) at the version pinned in payload-cms/package.json. No
+      # `--with-deps`: that shells out to sudo, which the runner user does
+      # not have.
       - name: Install Playwright browsers
         run: >-
           corepack pnpm --filter payload-cms exec playwright install
-          --with-deps chromium firefox
+          chromium firefox
 
       # Playwright starts the production server itself (see webServer in
       # payload-cms/playwright.config.ts). `CI=true` selects `pnpm start` and
