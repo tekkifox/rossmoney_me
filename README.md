@@ -180,9 +180,41 @@ ARCHVIEW_SCOPE=archview:read
 # 32 random bytes, base64 (`openssl rand -base64 32`); encrypts secrets in the
 # ArchView sources collection.
 ARCHVIEW_SECRET_KEY=your-archview-secret-key
+
+# Host sampling runs on exactly one deployment. Give each deployment its own
+# short HOST_SAMPLER_INSTANCE and point HOST_SAMPLER_OWNER at the one allowed
+# to sample. An owner set without an instance means nobody samples.
+# HOST_SAMPLER=off disables sampling everywhere; HOST_SAMPLER=on forces it,
+# Vercel included. With neither set, sampling keeps the old behaviour.
+HOST_SAMPLER_INSTANCE=portainer
+HOST_SAMPLER_OWNER=portainer
 ```
 
 The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.example.com/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+
+### Host sampling
+
+The host sampler records ArchView telemetry on a timer, so it must run on exactly
+one deployment. Name each deployment with `HOST_SAMPLER_INSTANCE` and name the
+one allowed to sample with `HOST_SAMPLER_OWNER`. The decision is made in this
+order:
+
+1. `HOST_SAMPLER=off` never samples, whatever else is set.
+2. If `HOST_SAMPLER_OWNER` is set, only the deployment whose
+   `HOST_SAMPLER_INSTANCE` equals it (trimmed, case-insensitive) samples. An
+   owner with no instance means nobody samples.
+3. `HOST_SAMPLER=on` samples, Vercel included.
+4. Otherwise sampling follows the old behaviour: on unless `VERCEL` is set.
+
+Empty values count as unset, and a deployment that sets neither new variable
+behaves exactly as before. The chosen deployment logs its instance, the owner
+and whether it will sample once at startup.
+
+For example, to keep sampling on the host: set
+`HOST_SAMPLER_OWNER=portainer` on both deployments,
+`HOST_SAMPLER_INSTANCE=portainer` on the Portainer host and
+`HOST_SAMPLER_INSTANCE=vercel` on Vercel. Only the host samples. Change the
+owner to `vercel` on both deployments to move sampling to Vercel.
 
 ## Seeding ArchView sources
 

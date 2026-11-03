@@ -9,13 +9,157 @@ import {
 import { toArchviewSourceRecord } from './archviewSources'
 import { decryptArchviewSecret } from './archviewSourceSecret'
 
+function envLabel(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Decides whether this deployment is the one allowed to sample hosts.
+ *
+ * Precedence:
+ * 1. `HOST_SAMPLER=off` never samples.
+ * 2. `HOST_SAMPLER_OWNER` names the single deployment that samples; this one
+ *    only samples when `HOST_SAMPLER_INSTANCE` matches it (trimmed,
+ *    case-insensitive). An owner without an instance means nobody samples.
+ * 3. `HOST_SAMPLER=on` samples, Vercel included.
+ * 4. Otherwise sample unless `VERCEL` is set, as before.
+ *
+ * Empty strings count as unset. Pure so it stays directly testable.
+ */
 export function shouldRunHostSampler(env: Record<string, string | undefined> = process.env): boolean {
-  if (env.HOST_SAMPLER === 'off') return false
-  if (env.HOST_SAMPLER === 'on') return true
-  return !env.VERCEL
+  const mode = envLabel(env.HOST_SAMPLER).toLowerCase()
+  if (mode === 'off') return false
+
+  const owner = envLabel(env.HOST_SAMPLER_OWNER)
+  if (owner) return envLabel(env.HOST_SAMPLER_INSTANCE).toLowerCase() === owner.toLowerCase()
+
+  if (mode === 'on') return true
+  return !envLabel(env.VERCEL)
+}
+
+/**
+ * One-line startup summary. Both values are deployment labels, never secrets.
+ */
+export function describeHostSamplerDecision(env: Record<string, string | undefined> = process.env): string {
+  const instance = envLabel(env.HOST_SAMPLER_INSTANCE) || '(unset)'
+  const owner = envLabel(env.HOST_SAMPLER_OWNER) || '(unset)'
+  const verdict = shouldRunHostSampler(env) ? 'sampling' : 'not sampling'
+  return `host sampler: instance "${instance}", owner "${owner}" - ${verdict}`
 }
 
 let lastPruneAt = 0
+
+const toNumber = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+// A failed-login count is only meaningful as a non-negative integer. Anything
+// else (missing, null, a string, a fraction) is stored as null so the panel can
+// tell "unavailable" apart from a real zero.
+const toCount = (v: unknown): number | null => {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) return null
+  return v
+}
+
+// The upstream breakdown is a list of { user, count } pairs. Entries that are
+// not a non-empty username with a non-negative whole-number count are dropped
+// rather than failing the sample, and the list is capped so one noisy host
+// cannot bloat a row.
+const toFailedLoginUsers = (v: unknown): Array<{ user: string; count: number }> => {
+  if (!Array.isArray(v)) return []
+  const users: Array<{ user: string; count: number }> = []
+  for (const raw of v) {
+    if (users.length >= 20) break
+    if (!raw || typeof raw !== 'object') continue
+    const entry = raw as Record<string, unknown>
+    const user = typeof entry.user === 'string' ? entry.user.trim() : ''
+    const count = toCount(entry.count)
+    if (!user || count === null) continue
+    users.push({ user, count })
+  }
+  return users
+}
+
+export type HostSampleInput = {
+  hostId: string
+  hostLabel: string
+  sampledAt: string
+  metrics: Record<string, unknown>
+  /** The upstream `telemetry.hosts` array, when the payload carried one. */
+  hosts?: unknown
+}
+
+export type HostSampleRecord = {
+  host: string
+  hostLabel: string
+  sampledAt: string
+  cpuAvg: number | null
+  memoryUsedBytes: number | null
+  memoryTotalBytes: number | null
+  memoryPercent: number | null
+  cpuCores?: number
+  loadAvg: number | null
+  diskPercent: number | null
+  failedLogins: number | null
+  failedLoginUsers: Array<{ user: string; count: number }>
+  swapPercent: number | null
+  processCount: number | null
+  hostCount: number | null
+  networkRxMB: number | null
+  networkTxMB: number | null
+  updatedAt: string | null
+}
+
+/**
+ * The one place a `host-samples` row is shaped. Both writers call this — the
+ * ArchView proxy route when a page view fills the cache, and the background
+ * sampler — so a field added or validated here applies to both.
+ */
+export function buildHostSampleRecord({
+  hostId,
+  hostLabel,
+  sampledAt,
+  metrics,
+  hosts,
+}: HostSampleInput): HostSampleRecord {
+  // A source is one host's ArchView, so `telemetry.hosts` normally holds a
+  // single entry. If a source aggregates several, keep the largest `cpuCount`:
+  // an aggregate must not under-report the machine it runs on. A missing or
+  // nonsensical count is simply not stored — it never fails the sample.
+  const hostList = Array.isArray(hosts) ? hosts : []
+  const cpuCores = hostList.reduce<number | null>((largest, host) => {
+    const entry = host && typeof host === 'object' ? (host as Record<string, unknown>) : null
+    const count = entry ? toNumber(entry.cpuCount) : null
+    if (count === null || count <= 0) return largest
+    return largest === null || count > largest ? count : largest
+  }, null)
+
+  return {
+    host: hostId,
+    hostLabel,
+    sampledAt,
+    cpuAvg: toNumber(metrics.cpuAvg),
+    memoryUsedBytes: toNumber(metrics.memoryUsedBytes),
+    memoryTotalBytes: toNumber(metrics.memoryTotalBytes),
+    memoryPercent: toNumber(metrics.memoryPercent),
+    ...(cpuCores === null ? {} : { cpuCores }),
+    loadAvg: toNumber(metrics.loadAvg),
+    diskPercent: toNumber(metrics.diskPercent),
+    failedLogins: toCount(metrics.failedLogins),
+    failedLoginUsers: toFailedLoginUsers(metrics.failedLoginUsers),
+    swapPercent: toNumber(metrics.swapPercent),
+    processCount: toNumber(metrics.processCount),
+    hostCount: toNumber(metrics.hostCount),
+    networkRxMB: toNumber(metrics.networkRxMB),
+    networkTxMB: toNumber(metrics.networkTxMB),
+    updatedAt:
+      metrics.updatedAt === null || metrics.updatedAt === undefined
+        ? null
+        : new Date(metrics.updatedAt as string | number).toISOString(),
+  }
+}
 
 export type SampleResult =
   | { status: 'written' }
@@ -75,77 +219,16 @@ export async function sampleOneSource(
       return { status: 'skipped', reason: 'no metrics' }
     }
 
-    const toNumber = (v: unknown): number | null => {
-      if (v === null || v === undefined) return null
-      const n = Number(v)
-      return Number.isFinite(n) ? n : null
-    }
-    // A failed-login count is only meaningful as a non-negative integer.
-    // Anything else (missing, null, a string, a fraction) is stored as null so
-    // the panel can tell "unavailable" apart from a real zero.
-    const toCount = (v: unknown): number | null => {
-      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) return null
-      return v
-    }
-    // The upstream breakdown is a list of { user, count } pairs. Entries that
-    // are not a non-empty username with a non-negative whole-number count are
-    // dropped rather than failing the sample, and the list is capped so one
-    // noisy host cannot bloat a row.
-    const toFailedLoginUsers = (v: unknown): Array<{ user: string; count: number }> => {
-      if (!Array.isArray(v)) return []
-      const users: Array<{ user: string; count: number }> = []
-      for (const raw of v) {
-        if (users.length >= 20) break
-        if (!raw || typeof raw !== 'object') continue
-        const entry = raw as Record<string, unknown>
-        const user = typeof entry.user === 'string' ? entry.user.trim() : ''
-        const count = toCount(entry.count)
-        if (!user || count === null) continue
-        users.push({ user, count })
-      }
-      return users
-    }
-    const updatedAt =
-      metrics.updatedAt === null || metrics.updatedAt === undefined
-        ? null
-        : new Date(metrics.updatedAt as string | number).toISOString()
-
-    // A source is one host's ArchView, so `telemetry.hosts` normally holds a
-    // single entry. If a source aggregates several, keep the largest
-    // `cpuCount`: an aggregate must not under-report the machine it runs on.
-    // A missing or nonsensical count is simply not stored — it never fails the
-    // sample.
-    const hosts = Array.isArray(data?.telemetry?.hosts) ? data.telemetry.hosts : []
-    const cpuCores = hosts.reduce<number | null>((largest, host) => {
-      const entry = host && typeof host === 'object' ? (host as Record<string, unknown>) : null
-      const count = entry ? toNumber(entry.cpuCount) : null
-      if (count === null || count <= 0) return largest
-      return largest === null || count > largest ? count : largest
-    }, null)
-
     log(`host sample: ${record.name ?? record.origin} fetched${project ? '' : ' (host overview)'}`)
     await payload.create({
       collection: 'host-samples',
-      data: {
-        host: record.id,
+      data: buildHostSampleRecord({
+        hostId: record.id,
         hostLabel: record.name ?? record.origin,
         sampledAt: new Date().toISOString(),
-        cpuAvg: toNumber(metrics.cpuAvg),
-        memoryUsedBytes: toNumber(metrics.memoryUsedBytes),
-        memoryTotalBytes: toNumber(metrics.memoryTotalBytes),
-        memoryPercent: toNumber(metrics.memoryPercent),
-        cpuCores: cpuCores ?? undefined,
-        loadAvg: toNumber(metrics.loadAvg),
-        diskPercent: toNumber(metrics.diskPercent),
-        failedLogins: toCount(metrics.failedLogins),
-        failedLoginUsers: toFailedLoginUsers(metrics.failedLoginUsers),
-        swapPercent: toNumber(metrics.swapPercent),
-        processCount: toNumber(metrics.processCount),
-        hostCount: toNumber(metrics.hostCount),
-        networkRxMB: toNumber(metrics.networkRxMB),
-        networkTxMB: toNumber(metrics.networkTxMB),
-        updatedAt,
-      },
+        metrics,
+        hosts: data?.telemetry?.hosts,
+      }),
       overrideAccess: true,
     })
     return { status: 'written' }
