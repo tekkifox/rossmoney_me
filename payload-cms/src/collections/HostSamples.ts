@@ -58,6 +58,7 @@ export const HostSamples: CollectionConfig = {
     numericField('memoryUsedBytes'),
     numericField('memoryTotalBytes'),
     numericField('memoryPercent'),
+    numericField('cpuCores'),
     numericField('loadAvg'),
     numericField('diskPercent'),
     numericField('swapPercent'),
