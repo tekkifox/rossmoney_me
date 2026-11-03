@@ -22,8 +22,11 @@ on:
       - '.github/workflows/browser-smoke.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Not keyed by ref: the smoke job publishes a fixed host port for its mongo
+  # service container (27017), so two runs on different branches collide even
+  # though only one can hold the port. Queue them instead of cancelling.
+  group: browser-smoke
+  cancel-in-progress: false
 
 permissions:
   contents: read
