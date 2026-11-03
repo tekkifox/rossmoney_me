@@ -41,16 +41,15 @@ export async function sampleOneSource(
       log(`host sample: ${record.name ?? record.origin} skipped (no id)`)
       return { status: 'skipped', reason: 'no id' }
     }
+    // A project is optional: ArchView answers without one by returning the
+    // whole host overview, telemetry included.
     const project = typeof record.project === 'string' ? record.project.trim() : ''
-    if (!project) {
-      log(`host sample: ${record.name ?? record.origin} skipped (no project configured)`)
-      return { status: 'skipped', reason: 'no project configured' }
-    }
     const init: RequestInit = {
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     }
-    const url = `${record.origin.replace(/\/$/, '')}/api/architecture?project=${encodeURIComponent(project)}`
+    const base = `${record.origin.replace(/\/$/, '')}/api/architecture`
+    const url = project ? `${base}?project=${encodeURIComponent(project)}` : base
     const res = record.credentials
       ? await archviewSourceFetch(url, init, record.credentials)
       : await archviewFetch(url, init, process.env)
@@ -84,7 +83,7 @@ export async function sampleOneSource(
         ? null
         : new Date(metrics.updatedAt as string | number).toISOString()
 
-    log(`host sample: ${record.name ?? record.origin} fetched`)
+    log(`host sample: ${record.name ?? record.origin} fetched${project ? '' : ' (host overview)'}`)
     await payload.create({
       collection: 'host-samples',
       data: {
