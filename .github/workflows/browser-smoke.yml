@@ -22,9 +22,12 @@ on:
       - '.github/workflows/browser-smoke.yml'
 
 concurrency:
-  # Not keyed by ref: the smoke job publishes a fixed host port for its mongo
-  # service container (27017), so two runs on different branches collide even
-  # though only one can hold the port. Queue them instead of cancelling.
+  # The mongo port is chosen per run, so the database no longer collides. The
+  # app under test still cannot move off port 3000 without a code change: the
+  # legacy e2e specs and tests/helpers/login.ts hardcode
+  # `http://localhost:3000`, so a second run would fail on a host port already
+  # in use. Not keyed by ref: queue runs from every branch instead of letting
+  # one start and fail.
   group: browser-smoke
   cancel-in-progress: false
 
@@ -36,22 +39,8 @@ jobs:
     runs-on: [self-hosted, paseo]
     timeout-minutes: 30
 
-    services:
-      mongo:
-        image: mongo:9
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --quiet --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
     env:
       CI: true
-      # The production server and the Playwright worker must see the same
-      # database: the worker seeds the admin account directly through Payload.
-      MONGODB_URI: mongodb://127.0.0.1:27017/rossmoney_smoke
       NEXT_PUBLIC_SERVER_URL: http://localhost:3000
       PAYLOAD_SECRET: browser-smoke-ci-secret
       # Live Preview builds this into the iframe URL and checks it on the
@@ -61,6 +50,52 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      # The service container published a fixed host port (27017), so two smoke
+      # runs could never overlap on a shared runner. Start mongo ourselves on a
+      # port the kernel picks: `-p 127.0.0.1::27017` leaves the host port empty
+      # and `docker port` reads back the one that was assigned. Bound to
+      # 127.0.0.1 only, so the database is not reachable from the LAN.
+      #
+      # The production server and the Playwright worker must see the same
+      # database: the worker seeds the admin account directly through Payload.
+      - name: Start MongoDB
+        run: |
+          set -euo pipefail
+          NAME="mongo-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run -d --name "$NAME" -p 127.0.0.1::27017 mongo:9
+
+          ADDR=$(docker port "$NAME" 27017/tcp)
+          PORT="${ADDR##*:}"
+          if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+            echo "::error::could not read a host port for $NAME (docker port said '$ADDR')"
+            exit 1
+          fi
+
+          echo "MONGO_CONTAINER=$NAME" >> "$GITHUB_ENV"
+          echo "MONGODB_URI=mongodb://127.0.0.1:${PORT}/rossmoney_smoke" >> "$GITHUB_ENV"
+          echo "MongoDB container $NAME listening on 127.0.0.1:${PORT}"
+
+          # The service container's health check used to cover readiness. Poll
+          # the container instead, bounded, so the suites never race the first
+          # boot and a dead container fails here with its logs rather than in
+          # Playwright.
+          for attempt in $(seq 1 60); do
+            if OUT=$(docker exec "$NAME" mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null) && [ "$OUT" = "1" ]; then
+              echo "MongoDB ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != "true" ]; then
+              echo "::error::MongoDB container exited during startup"
+              docker logs "$NAME" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "::error::MongoDB did not answer a ping within 120s"
+          docker logs "$NAME" || true
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -106,3 +141,13 @@ jobs:
             payload-cms/test-results
           if-no-files-found: ignore
           retention-days: 7
+
+      # Always remove the container, so a failed, cancelled or aborted run
+      # leaves no mongo process behind on the shared runner.
+      - name: Remove MongoDB container
+        if: always()
+        run: |
+          NAME="${MONGO_CONTAINER:-mongo-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}}"
+          if docker inspect "$NAME" > /dev/null 2>&1; then
+            docker rm -f "$NAME"
+          fi
