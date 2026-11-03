@@ -219,13 +219,13 @@ export const ArchviewSources: CollectionConfig = {
     {
       name: 'sshPort',
       type: 'number',
-      defaultValue: 32,
+      defaultValue: 22,
       min: 1,
       max: 65535,
       admin: {
         step: 1,
         description:
-          'SSH port for this host. Most of the fleet uses 32; some hosts answer elsewhere.',
+          'SSH port for this host. Set it per source when the host answers somewhere other than the conventional port.',
       },
       // A custom validate replaces Payload's default, so the range is checked
       // here as well as advertised to the admin through `min` / `max`.

@@ -244,10 +244,10 @@ describe('GET /api/bot-settings hosts', () => {
   })
 
   it('returns every enabled source with a port, sorted by name', async () => {
-    await createSource('mike', { sshPort: 2222 })
+    await createSource('mike', { sshPort: 2200 })
     // No sshPort: the stored default applies.
     await createSource('alpha')
-    await createSource('zulu', { enabled: false, sshPort: 2200 })
+    await createSource('zulu', { enabled: false, sshPort: 2201 })
 
     const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
     expect(response.status).toBe(200)
@@ -265,12 +265,12 @@ describe('GET /api/bot-settings hosts', () => {
     const names = body.hosts.map((host: { name: string }) => host.name)
     expect(names).toEqual([...names].sort())
 
-    expect(body.hosts).toContainEqual({ name: `${prefix}-alpha.example.test`, sshPort: 32 })
-    expect(body.hosts).toContainEqual({ name: `${prefix}-mike.example.test`, sshPort: 2222 })
+    expect(body.hosts).toContainEqual({ name: `${prefix}-alpha.example.test`, sshPort: 22 })
+    expect(body.hosts).toContainEqual({ name: `${prefix}-mike.example.test`, sshPort: 2200 })
     expect(names).not.toContain(`${prefix}-zulu.example.test`)
 
     for (const doc of enabled.docs) {
-      expect(body.hosts).toContainEqual({ name: doc.name, sshPort: doc.sshPort ?? 32 })
+      expect(body.hosts).toContainEqual({ name: doc.name, sshPort: doc.sshPort ?? 22 })
     }
   })
 
@@ -753,7 +753,7 @@ describe('bot-settings validators', () => {
     const shaped = toBotSettingsResponse(
       { updatedAt: '2026-11-01T00:00:00.000Z' },
       [
-        { name: 'zulu.example.test', sshPort: 2222 },
+        { name: 'zulu.example.test', sshPort: 2200 },
         { name: '   ' },
         { name: 'alpha.example.test' },
         { name: 'mike.example.test', sshPort: 0 },
@@ -761,9 +761,9 @@ describe('bot-settings validators', () => {
     )
 
     expect(shaped?.hosts).toEqual([
-      { name: 'alpha.example.test', sshPort: 32 },
-      { name: 'mike.example.test', sshPort: 32 },
-      { name: 'zulu.example.test', sshPort: 2222 },
+      { name: 'alpha.example.test', sshPort: 22 },
+      { name: 'mike.example.test', sshPort: 22 },
+      { name: 'zulu.example.test', sshPort: 2200 },
     ])
   })
 

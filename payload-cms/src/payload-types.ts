@@ -802,7 +802,7 @@ export interface ArchviewSource {
    */
   origin: string;
   /**
-   * SSH port for this host. Most of the fleet uses 32; some hosts answer elsewhere.
+   * SSH port for this host. Set it per source when the host answers somewhere other than the conventional port.
    */
   sshPort?: number | null;
   /**
