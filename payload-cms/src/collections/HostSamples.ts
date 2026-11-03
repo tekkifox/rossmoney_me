@@ -7,6 +7,31 @@ const numericField = (name: string) => ({
   type: 'number' as const,
 })
 
+const userCountsField = (name: string, description: string) => ({
+  name,
+  type: 'array' as const,
+  admin: {
+    description,
+  },
+  fields: [
+    {
+      name: 'user',
+      type: 'text' as const,
+      required: true,
+      validate: (value: string | null | undefined) =>
+        value === null || value === undefined || value.trim().length > 0 || 'Username must not be empty',
+    },
+    {
+      name: 'count',
+      type: 'number' as const,
+      required: true,
+      min: 0,
+      validate: (value: number | null | undefined) =>
+        value === null || value === undefined || Number.isInteger(value) || 'Count must be a whole number',
+    },
+  ],
+})
+
 export const HostSamples: CollectionConfig = {
   slug: 'host-samples',
   labels: {
@@ -96,6 +121,38 @@ export const HostSamples: CollectionConfig = {
             'Count must be a whole number',
         },
       ],
+    },
+    {
+      name: 'sshLogins',
+      type: 'number',
+      admin: {
+        description:
+          'Count of accepted SSH password logins in the hour before the sample. Null means the host could not read its logs; it is not zero.',
+      },
+    },
+    userCountsField(
+      'sshLoginUsers',
+      'Users with accepted SSH password logins in the hour before the sample, most logins first. Empty means the host could not report a breakdown; older samples have no value.',
+    ),
+    {
+      name: 'sshLoginsToday',
+      type: 'number',
+      admin: {
+        description:
+          'Count of accepted SSH password logins since the start of the host day. Null means the host could not read its logs; it is not zero.',
+      },
+    },
+    userCountsField(
+      'sshLoginUsersToday',
+      'Users with accepted SSH password logins since the start of the host day, most logins first. Empty means the host could not report a breakdown; older samples have no value.',
+    ),
+    {
+      name: 'sshLoginsTodaySince',
+      type: 'text',
+      admin: {
+        description:
+          'Start of the window counted by sshLoginsToday, as an RFC 3339 timestamp in UTC. Empty means the host did not report the window.',
+      },
     },
     numericField('swapPercent'),
     numericField('processCount'),

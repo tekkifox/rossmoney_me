@@ -948,6 +948,38 @@ export interface HostSample {
         id?: string | null;
       }[]
     | null;
+  /**
+   * Count of accepted SSH password logins in the hour before the sample. Null means the host could not read its logs; it is not zero.
+   */
+  sshLogins?: number | null;
+  /**
+   * Users with accepted SSH password logins in the hour before the sample, most logins first. Empty means the host could not report a breakdown; older samples have no value.
+   */
+  sshLoginUsers?:
+    | {
+        user: string;
+        count: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Count of accepted SSH password logins since the start of the host day. Null means the host could not read its logs; it is not zero.
+   */
+  sshLoginsToday?: number | null;
+  /**
+   * Users with accepted SSH password logins since the start of the host day, most logins first. Empty means the host could not report a breakdown; older samples have no value.
+   */
+  sshLoginUsersToday?:
+    | {
+        user: string;
+        count: number;
+        id?: string | null;
+      }[]
+    | null;
+  /**
+   * Start of the window counted by sshLoginsToday, as an RFC 3339 timestamp in UTC. Empty means the host did not report the window.
+   */
+  sshLoginsTodaySince?: string | null;
   swapPercent?: number | null;
   processCount?: number | null;
   hostCount?: number | null;
@@ -1622,6 +1654,23 @@ export interface HostSamplesSelect<T extends boolean = true> {
         count?: T;
         id?: T;
       };
+  sshLogins?: T;
+  sshLoginUsers?:
+    | T
+    | {
+        user?: T;
+        count?: T;
+        id?: T;
+      };
+  sshLoginsToday?: T;
+  sshLoginUsersToday?:
+    | T
+    | {
+        user?: T;
+        count?: T;
+        id?: T;
+      };
+  sshLoginsTodaySince?: T;
   swapPercent?: T;
   processCount?: T;
   hostCount?: T;

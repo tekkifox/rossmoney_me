@@ -765,6 +765,128 @@ describe('failed login user sampling', () => {
   })
 })
 
+describe('accepted login sampling', () => {
+  let payload: Payload
+  const sourceIds: string[] = []
+  const originalFetch = global.fetch
+
+  beforeAll(async () => {
+    payload = await getPayload({ config: await config })
+  })
+
+  afterAll(async () => {
+    global.fetch = originalFetch
+    await payload.delete({
+      collection: 'host-samples',
+      where: { host: { in: sourceIds } },
+      overrideAccess: true,
+    })
+    await payload.delete({
+      collection: 'archview-sources',
+      where: { id: { in: sourceIds } },
+      overrideAccess: true,
+    })
+  })
+
+  const sampleWith = async (sshMetrics: Record<string, unknown>) => {
+    const suffix = `${Date.now()}-${sourceIds.length}`
+    const source = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `accepted-users-${suffix}`,
+        origin: `https://accepted-users-${suffix}.example.test`,
+        audience: `https://accepted-users-${suffix}.example.test/api`,
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+    sourceIds.push(String(source.id))
+
+    const metrics: Record<string, unknown> = { cpuAvg: 3, ...sshMetrics }
+    global.fetch = (async () =>
+      new Response(JSON.stringify({ telemetry: { metrics } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch
+
+    await sampleAllEnabledHosts(payload)
+
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(source.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBe(1)
+    return samples.docs[0]
+  }
+
+  it('stores accepted logins, today totals and the window', async () => {
+    const sample = await sampleWith({
+      sshLogins: 6,
+      sshLoginUsers: [
+        { user: 'deploy', count: 4 },
+        { user: 'root', count: 2 },
+      ],
+      sshLoginsToday: 11,
+      sshLoginUsersToday: [
+        { user: 'deploy', count: 8 },
+        { user: 'root', count: 3 },
+      ],
+      sshLoginsTodaySince: '2026-11-03T00:00:00Z',
+    })
+
+    expect(sample.sshLogins).toBe(6)
+    expect(sample.sshLoginUsers).toMatchObject([
+      { user: 'deploy', count: 4 },
+      { user: 'root', count: 2 },
+    ])
+    expect(sample.sshLoginsToday).toBe(11)
+    expect(sample.sshLoginUsersToday).toMatchObject([
+      { user: 'deploy', count: 8 },
+      { user: 'root', count: 3 },
+    ])
+    expect(sample.sshLoginsTodaySince).toBe('2026-11-03T00:00:00.000Z')
+  })
+
+  it('stores nulls and empty breakdowns when the host reports no accepted logins', async () => {
+    const sample = await sampleWith({})
+
+    expect(sample.sshLogins ?? null).toBeNull()
+    expect(sample.sshLoginUsers).toEqual([])
+    expect(sample.sshLoginsToday ?? null).toBeNull()
+    expect(sample.sshLoginUsersToday).toEqual([])
+    expect(sample.sshLoginsTodaySince ?? null).toBeNull()
+  })
+
+  it('drops unusable breakdown entries and an unparseable window', async () => {
+    const sample = await sampleWith({
+      sshLoginUsers: [
+        { user: 42, count: 3 },
+        { user: 'root', count: -1 },
+        { user: 'admin', count: 0 },
+      ],
+      sshLoginUsersToday: 'root',
+      sshLoginsToday: 2,
+      sshLoginsTodaySince: 'not-a-timestamp',
+    })
+
+    expect(sample.sshLoginUsers).toMatchObject([{ user: 'admin', count: 0 }])
+    expect(sample.sshLoginUsersToday).toEqual([])
+    expect(sample.sshLoginsToday).toBe(2)
+    expect(sample.sshLoginsTodaySince ?? null).toBeNull()
+  })
+
+  it('keeps at most 20 accepted-login users', async () => {
+    const sample = await sampleWith({
+      sshLoginUsers: Array.from({ length: 25 }, (_, i) => ({ user: `user-${i}`, count: 25 - i })),
+    })
+
+    expect(sample.sshLoginUsers).toHaveLength(20)
+    expect(sample.sshLoginUsers?.at(-1)).toMatchObject({ user: 'user-19', count: 6 })
+  })
+})
+
 describe('host rename keeps history by id', () => {
   let payload: Payload
   let sourceId: string
