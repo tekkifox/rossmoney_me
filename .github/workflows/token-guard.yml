@@ -9,7 +9,7 @@ on:
 
 jobs:
   tokens:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, paseo]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
