@@ -101,6 +101,13 @@ The CMS API exposes:
 
 Open `/admin/` to manage the home page, projects, experience entries, and contact block.
 
+### Bot settings
+
+The `bot-settings` global (Operations → Bot settings) configures the notification
+bot's targets, sources and model. A target's **Hosts** list restricts it to those
+hostnames; leave the list empty to let that target report on every host the bot
+may reach.
+
 MongoDB database name defaults to `rossmoney_me`.
 
 ## Go service
