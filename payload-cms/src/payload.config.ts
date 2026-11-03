@@ -425,16 +425,19 @@ export default buildConfig({
     // cannot survive). Retention (30 days) happens in the same sweep, daily.
     // Cadence lives in utilities/hostUsage.ts next to the "last hour" bucket
     // width; the two are deliberately equal (one sample per bucket).
-    const { sampleAllEnabledHosts, shouldRunHostSampler } = await import('./utilities/hostSampling')
-    if (process.env.NODE_ENV === 'production' && shouldRunHostSampler(process.env)) {
-    try {
-      const interval = setInterval(() => {
-        void sampleAllEnabledHosts(payload)
-      }, SAMPLER_INTERVAL_MS)
-      interval.unref?.()
-    } catch (err) {
-      console.warn('host sampler schedule failed:', err)
+    const { describeHostSamplerDecision, sampleAllEnabledHosts, shouldRunHostSampler } =
+      await import('./utilities/hostSampling')
+    const runsHostSampler = shouldRunHostSampler(process.env)
+    payload.logger.info(describeHostSamplerDecision(process.env))
+    if (process.env.NODE_ENV === 'production' && runsHostSampler) {
+      try {
+        const interval = setInterval(() => {
+          void sampleAllEnabledHosts(payload)
+        }, SAMPLER_INTERVAL_MS)
+        interval.unref?.()
+      } catch (err) {
+        console.warn('host sampler schedule failed:', err)
+      }
     }
-  }
   },
 });

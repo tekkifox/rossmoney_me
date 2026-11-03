@@ -259,7 +259,11 @@ describe('host usage data path', () => {
   })
 })
 
-import { sampleAllEnabledHosts, shouldRunHostSampler } from '@/utilities/hostSampling'
+import {
+  describeHostSamplerDecision,
+  sampleAllEnabledHosts,
+  shouldRunHostSampler,
+} from '@/utilities/hostSampling'
 
 describe('shouldRunHostSampler', () => {
   it('on by default locally', () => {
@@ -273,6 +277,105 @@ describe('shouldRunHostSampler', () => {
   })
   it('on with HOST_SAMPLER=on even under Vercel', () => {
     expect(shouldRunHostSampler({ VERCEL: '1', HOST_SAMPLER: 'on' })).toBe(true)
+  })
+  it('off beats everything, including a matching owner and HOST_SAMPLER=on', () => {
+    expect(
+      shouldRunHostSampler({
+        HOST_SAMPLER: 'off',
+        HOST_SAMPLER_INSTANCE: 'portainer',
+        HOST_SAMPLER_OWNER: 'portainer',
+      }),
+    ).toBe(false)
+    expect(
+      shouldRunHostSampler({ HOST_SAMPLER: 'off', HOST_SAMPLER_OWNER: 'vercel', VERCEL: '1' }),
+    ).toBe(false)
+  })
+  it('on when owner matches instance', () => {
+    expect(
+      shouldRunHostSampler({ HOST_SAMPLER_INSTANCE: 'portainer', HOST_SAMPLER_OWNER: 'portainer' }),
+    ).toBe(true)
+  })
+  it('matches owner to instance ignoring case and surrounding spaces', () => {
+    expect(
+      shouldRunHostSampler({
+        HOST_SAMPLER_INSTANCE: '  PortAiner  ',
+        HOST_SAMPLER_OWNER: ' porTAINER ',
+      }),
+    ).toBe(true)
+    expect(
+      shouldRunHostSampler({ HOST_SAMPLER_INSTANCE: ' vercel-eu ', HOST_SAMPLER_OWNER: 'VERCEL' }),
+    ).toBe(false)
+  })
+  it('off when owner is set without an instance', () => {
+    expect(shouldRunHostSampler({ HOST_SAMPLER_OWNER: 'portainer' })).toBe(false)
+    expect(shouldRunHostSampler({ HOST_SAMPLER_OWNER: 'portainer', VERCEL: '' })).toBe(false)
+  })
+  it('off when owner is set and instance is a different deployment, even with HOST_SAMPLER=on', () => {
+    expect(
+      shouldRunHostSampler({ HOST_SAMPLER_INSTANCE: 'vercel', HOST_SAMPLER_OWNER: 'portainer' }),
+    ).toBe(false)
+    expect(
+      shouldRunHostSampler({
+        HOST_SAMPLER: 'on',
+        HOST_SAMPLER_INSTANCE: 'portainer',
+        HOST_SAMPLER_OWNER: 'vercel',
+      }),
+    ).toBe(false)
+  })
+  it('on with owner unset and HOST_SAMPLER=on, even under Vercel', () => {
+    expect(shouldRunHostSampler({ HOST_SAMPLER: 'on', VERCEL: '1' })).toBe(true)
+    expect(
+      shouldRunHostSampler({ HOST_SAMPLER: 'on', HOST_SAMPLER_INSTANCE: 'vercel' }),
+    ).toBe(true)
+  })
+  it('off with owner unset on Vercel', () => {
+    expect(shouldRunHostSampler({ VERCEL: '1', HOST_SAMPLER_INSTANCE: 'vercel' })).toBe(false)
+  })
+  it('on with owner unset off Vercel', () => {
+    expect(shouldRunHostSampler({ HOST_SAMPLER_INSTANCE: 'portainer' })).toBe(true)
+    expect(shouldRunHostSampler({ HOST_SAMPLER: '' })).toBe(true)
+  })
+  it('treats empty-string values as unset', () => {
+    expect(
+      shouldRunHostSampler({
+        HOST_SAMPLER_OWNER: '',
+        HOST_SAMPLER_INSTANCE: '',
+        VERCEL: '',
+      }),
+    ).toBe(true)
+    expect(
+      shouldRunHostSampler({
+        HOST_SAMPLER_OWNER: '',
+        HOST_SAMPLER_INSTANCE: 'portainer',
+        VERCEL: '1',
+      }),
+    ).toBe(false)
+    expect(
+      shouldRunHostSampler({
+        HOST_SAMPLER: ' ',
+        HOST_SAMPLER_OWNER: '   ',
+        HOST_SAMPLER_INSTANCE: '',
+        VERCEL: '1',
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('describeHostSamplerDecision', () => {
+  it('names the instance and owner and says whether this deployment samples', () => {
+    const message = describeHostSamplerDecision({
+      HOST_SAMPLER_INSTANCE: 'vercel',
+      HOST_SAMPLER_OWNER: 'portainer',
+    })
+    expect(message).toContain('instance "vercel"')
+    expect(message).toContain('owner "portainer"')
+    expect(message).toContain('not sampling')
+  })
+  it('falls back to unset labels without inventing values', () => {
+    const message = describeHostSamplerDecision({})
+    expect(message).toContain('instance "(unset)"')
+    expect(message).toContain('owner "(unset)"')
+    expect(message).toContain('sampling')
   })
 })
 

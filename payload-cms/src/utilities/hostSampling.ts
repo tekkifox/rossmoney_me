@@ -9,10 +9,42 @@ import {
 import { toArchviewSourceRecord } from './archviewSources'
 import { decryptArchviewSecret } from './archviewSourceSecret'
 
+function envLabel(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+/**
+ * Decides whether this deployment is the one allowed to sample hosts.
+ *
+ * Precedence:
+ * 1. `HOST_SAMPLER=off` never samples.
+ * 2. `HOST_SAMPLER_OWNER` names the single deployment that samples; this one
+ *    only samples when `HOST_SAMPLER_INSTANCE` matches it (trimmed,
+ *    case-insensitive). An owner without an instance means nobody samples.
+ * 3. `HOST_SAMPLER=on` samples, Vercel included.
+ * 4. Otherwise sample unless `VERCEL` is set, as before.
+ *
+ * Empty strings count as unset. Pure so it stays directly testable.
+ */
 export function shouldRunHostSampler(env: Record<string, string | undefined> = process.env): boolean {
-  if (env.HOST_SAMPLER === 'off') return false
-  if (env.HOST_SAMPLER === 'on') return true
-  return !env.VERCEL
+  const mode = envLabel(env.HOST_SAMPLER).toLowerCase()
+  if (mode === 'off') return false
+
+  const owner = envLabel(env.HOST_SAMPLER_OWNER)
+  if (owner) return envLabel(env.HOST_SAMPLER_INSTANCE).toLowerCase() === owner.toLowerCase()
+
+  if (mode === 'on') return true
+  return !envLabel(env.VERCEL)
+}
+
+/**
+ * One-line startup summary. Both values are deployment labels, never secrets.
+ */
+export function describeHostSamplerDecision(env: Record<string, string | undefined> = process.env): string {
+  const instance = envLabel(env.HOST_SAMPLER_INSTANCE) || '(unset)'
+  const owner = envLabel(env.HOST_SAMPLER_OWNER) || '(unset)'
+  const verdict = shouldRunHostSampler(env) ? 'sampling' : 'not sampling'
+  return `host sampler: instance "${instance}", owner "${owner}" - ${verdict}`
 }
 
 let lastPruneAt = 0
