@@ -13,6 +13,7 @@ export const BOT_SETTINGS_SEED = {
       name: 'admin-chat',
       channel_id: '1314326014318481458',
       connected_account_id: 'ca_VNMfOQ8NwnlH',
+      all_hosts: false,
       host_scope: ['vortexservers.co.uk'],
       allow_content: false,
       allow_runbooks: true,
@@ -26,7 +27,7 @@ export const BOT_SETTINGS_SEED = {
       name: 'automations',
       channel_id: '1549913741280157818',
       connected_account_id: 'ca_ia_wDVGF1Pbe',
-      host_scope: ['rossmoney.me', 'photos.rossmoney.me', 'vortexservers.co.uk'],
+      all_hosts: true,
       allow_content: false,
       allow_runbooks: true,
       bookstack: {
