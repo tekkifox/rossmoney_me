@@ -113,9 +113,9 @@ export type HostSampleRecord = {
 }
 
 /**
- * The one place a `host-samples` row is shaped. Both writers call this — the
- * ArchView proxy route when a page view fills the cache, and the background
- * sampler — so a field added or validated here applies to both.
+ * The one place a `host-samples` row is shaped. The scheduled sampler calls
+ * this for every enabled source, so a field added or validated here applies to
+ * every stored sample.
  */
 export function buildHostSampleRecord({
   hostId,

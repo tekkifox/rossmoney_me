@@ -23,7 +23,7 @@ export const HostSamples: CollectionConfig = {
   admin: {
     group: 'ArchView',
     defaultColumns: ['hostLabel', 'sampledAt', 'cpuAvg', 'memoryPercent', 'loadAvg', 'diskPercent'],
-    description: 'Sampled ArchView host metrics, one row per refresh.',
+    description: 'Sampled ArchView host metrics, one row per source per sampler sweep.',
     components: {
       views: {
         list: {
