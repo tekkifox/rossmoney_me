@@ -516,6 +516,79 @@ describe('host sampling scheduler', () => {
 
     await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
   })
+
+  it('records the core count from the sampled telemetry hosts', async () => {
+    const src = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `cpu-cores-${Date.now()}`,
+        origin: 'https://cpu-cores.example.test',
+        audience: 'https://cpu-cores.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    global.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          telemetry: {
+            metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 },
+            // A source that aggregates several hosts must not under-report the
+            // machine it runs on, so the sampler keeps the largest count.
+            hosts: [{ cpuCount: 4 }, { cpuCount: 16 }, { cpuCount: 8 }],
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as typeof fetch
+
+    await sampleAllEnabledHosts(payload)
+
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(src.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBe(1)
+    expect(samples.docs[0]).toMatchObject({ cpuCores: 16, cpuAvg: 7, memoryPercent: 11 })
+
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: String(src.id) } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
+  })
+
+  it('still samples when the payload carries no core count', async () => {
+    const src = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `no-cpu-cores-${Date.now()}`,
+        origin: 'https://no-cpu-cores.example.test',
+        audience: 'https://no-cpu-cores.example.test/api',
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    global.fetch = (async () =>
+      new Response(
+        JSON.stringify({ telemetry: { metrics: { cpuAvg: 7, memoryPercent: 11, loadAvg: 0.2, diskPercent: 33 } } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as typeof fetch
+
+    await sampleAllEnabledHosts(payload)
+
+    const samples = await payload.find({
+      collection: 'host-samples',
+      where: { host: { equals: String(src.id) } },
+      overrideAccess: true,
+    })
+    expect(samples.totalDocs).toBe(1)
+    expect(samples.docs[0].cpuCores ?? null).toBeNull()
+
+    await payload.delete({ collection: 'host-samples', where: { host: { equals: String(src.id) } }, overrideAccess: true })
+    await payload.delete({ collection: 'archview-sources', where: { id: { equals: String(src.id) } }, overrideAccess: true })
+  })
 })
 
 describe('host rename keeps history by id', () => {

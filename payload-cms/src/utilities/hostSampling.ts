@@ -66,7 +66,9 @@ export async function sampleOneSource(
       log(`host sample: ${record.name ?? record.origin} skipped (non-JSON)`)
       return { status: 'skipped', reason: 'non-JSON' }
     }
-    const data = (await res.json()) as { telemetry?: { metrics?: Record<string, unknown> } }
+    const data = (await res.json()) as {
+      telemetry?: { metrics?: Record<string, unknown>; hosts?: unknown }
+    }
     const metrics = data?.telemetry?.metrics
     if (!metrics) {
       log(`host sample: ${record.name ?? record.origin} skipped (no metrics)`)
@@ -83,6 +85,19 @@ export async function sampleOneSource(
         ? null
         : new Date(metrics.updatedAt as string | number).toISOString()
 
+    // A source is one host's ArchView, so `telemetry.hosts` normally holds a
+    // single entry. If a source aggregates several, keep the largest
+    // `cpuCount`: an aggregate must not under-report the machine it runs on.
+    // A missing or nonsensical count is simply not stored — it never fails the
+    // sample.
+    const hosts = Array.isArray(data?.telemetry?.hosts) ? data.telemetry.hosts : []
+    const cpuCores = hosts.reduce<number | null>((largest, host) => {
+      const entry = host && typeof host === 'object' ? (host as Record<string, unknown>) : null
+      const count = entry ? toNumber(entry.cpuCount) : null
+      if (count === null || count <= 0) return largest
+      return largest === null || count > largest ? count : largest
+    }, null)
+
     log(`host sample: ${record.name ?? record.origin} fetched${project ? '' : ' (host overview)'}`)
     await payload.create({
       collection: 'host-samples',
@@ -94,6 +109,7 @@ export async function sampleOneSource(
         memoryUsedBytes: toNumber(metrics.memoryUsedBytes),
         memoryTotalBytes: toNumber(metrics.memoryTotalBytes),
         memoryPercent: toNumber(metrics.memoryPercent),
+        cpuCores: cpuCores ?? undefined,
         loadAvg: toNumber(metrics.loadAvg),
         diskPercent: toNumber(metrics.diskPercent),
         swapPercent: toNumber(metrics.swapPercent),
