@@ -87,6 +87,24 @@ export async function sampleOneSource(
       if (typeof v !== 'number' || !Number.isInteger(v) || v < 0) return null
       return v
     }
+    // The upstream breakdown is a list of { user, count } pairs. Entries that
+    // are not a non-empty username with a non-negative whole-number count are
+    // dropped rather than failing the sample, and the list is capped so one
+    // noisy host cannot bloat a row.
+    const toFailedLoginUsers = (v: unknown): Array<{ user: string; count: number }> => {
+      if (!Array.isArray(v)) return []
+      const users: Array<{ user: string; count: number }> = []
+      for (const raw of v) {
+        if (users.length >= 20) break
+        if (!raw || typeof raw !== 'object') continue
+        const entry = raw as Record<string, unknown>
+        const user = typeof entry.user === 'string' ? entry.user.trim() : ''
+        const count = toCount(entry.count)
+        if (!user || count === null) continue
+        users.push({ user, count })
+      }
+      return users
+    }
     const updatedAt =
       metrics.updatedAt === null || metrics.updatedAt === undefined
         ? null
@@ -120,6 +138,7 @@ export async function sampleOneSource(
         loadAvg: toNumber(metrics.loadAvg),
         diskPercent: toNumber(metrics.diskPercent),
         failedLogins: toCount(metrics.failedLogins),
+        failedLoginUsers: toFailedLoginUsers(metrics.failedLoginUsers),
         swapPercent: toNumber(metrics.swapPercent),
         processCount: toNumber(metrics.processCount),
         hostCount: toNumber(metrics.hostCount),
