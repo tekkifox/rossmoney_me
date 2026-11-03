@@ -22,7 +22,7 @@ on:
       - '.github/workflows/lint.yml'
 
 concurrency:
-  group: lint-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
