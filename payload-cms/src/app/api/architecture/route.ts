@@ -13,6 +13,7 @@ import {
   type ArchviewSourceRecord,
 } from '@/utilities/archviewSources'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
+import { buildHostSampleRecord } from '@/utilities/hostSampling'
 
 // ArchView runs as a separate stack (archview.rossmoney.me), so there is no
 // in-stack service name to fall back to. ARCHVIEW_URL points at the public
@@ -405,20 +406,14 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   const inFlight = new Map<string, Promise<CachedArchitectureResponse | null>>()
   const sampleThrottle = new Map<string, number>()
 
-  const toSampleNumber = (value: unknown): number | null => {
-    if (value === null || value === undefined) return null
-    const n = Number(value)
-    return Number.isFinite(n) ? n : null
-  }
-
   const recordHostSample = async (
     resolved: ArchviewRequestSource | null,
-    metrics: unknown,
+    telemetry: { metrics?: unknown; hosts?: unknown } | null | undefined,
   ): Promise<void> => {
     try {
       if (!resolved?.sourceId) return
+      const metrics = telemetry?.metrics
       if (!metrics || typeof metrics !== 'object') return
-      const m = metrics as Record<string, unknown>
       const key = resolved.sourceId
       const now = Date.now()
       const last = sampleThrottle.get(key) ?? 0
@@ -432,26 +427,15 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
 
       await payload.create({
         collection: 'host-samples',
-        data: {
-          host: resolved.sourceId,
+        // The same record builder as the background sampler, so a page view
+        // and a scheduled sample store the same fields.
+        data: buildHostSampleRecord({
+          hostId: resolved.sourceId,
           hostLabel: label,
           sampledAt: new Date(now).toISOString(),
-          cpuAvg: toSampleNumber(m.cpuAvg),
-          memoryUsedBytes: toSampleNumber(m.memoryUsedBytes),
-          memoryTotalBytes: toSampleNumber(m.memoryTotalBytes),
-          memoryPercent: toSampleNumber(m.memoryPercent),
-          loadAvg: toSampleNumber(m.loadAvg),
-          diskPercent: toSampleNumber(m.diskPercent),
-          swapPercent: toSampleNumber(m.swapPercent),
-          processCount: toSampleNumber(m.processCount),
-          hostCount: toSampleNumber(m.hostCount),
-          networkRxMB: toSampleNumber(m.networkRxMB),
-          networkTxMB: toSampleNumber(m.networkTxMB),
-          updatedAt:
-            m.updatedAt === null || m.updatedAt === undefined
-              ? null
-              : new Date(m.updatedAt as string | number).toISOString(),
-        },
+          metrics: metrics as Record<string, unknown>,
+          hosts: telemetry?.hosts,
+        }),
         overrideAccess: true,
       })
     } catch (error) {
@@ -523,7 +507,10 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
           if (contentType.includes('application/json')) {
             const data = await res.json()
             const redacted = redactInternalEndpoints(data)
-            void recordHostSample(resolved, (data as { telemetry?: { metrics?: unknown } })?.telemetry?.metrics)
+            void recordHostSample(
+              resolved,
+              (data as { telemetry?: { metrics?: unknown; hosts?: unknown } })?.telemetry,
+            )
             const body = new TextEncoder().encode(JSON.stringify(redacted))
             return {
               status: 200,
@@ -604,7 +591,10 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         if (contentType.includes('application/json')) {
           const data = await res.json()
           const redacted = redactInternalEndpoints(data)
-          void recordHostSample(resolved, (data as { telemetry?: { metrics?: unknown } })?.telemetry?.metrics)
+          void recordHostSample(
+            resolved,
+            (data as { telemetry?: { metrics?: unknown; hosts?: unknown } })?.telemetry,
+          )
           const body = new TextEncoder().encode(JSON.stringify(redacted))
           return {
             status: 200,
