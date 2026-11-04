@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
-import { getServerSideURL } from './getURL'
+import { getSiteURL } from './siteURL'
 
 const defaultOpenGraph: Metadata['openGraph'] = {
   type: 'website',
   description: 'Ross Money — DevOps-focused developer. Portfolio showcasing projects, infrastructure, and tooling.',
   images: [
     {
-      url: `${getServerSideURL()}/og.png`,
+      url: `${getSiteURL()}/og.png`,
+      alt: 'Ross Money — DevOps-focused developer portfolio',
     },
   ],
   siteName: 'Ross Money - Developer & DevOps Portfolio',

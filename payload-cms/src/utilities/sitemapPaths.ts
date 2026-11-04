@@ -13,6 +13,13 @@ export const SITEMAP_EXCLUDED_PATHS = [
   '/search',
   // Legacy alias for `/experience`; it is never a canonical destination.
   '/experience-page',
+  // Retired pages. `redirects.ts` 308s each of these to a homepage section, so
+  // advertising them makes Search Console report "Page with redirect" and
+  // spends crawl budget on URLs that are not pages.
+  '/work',
+  '/commits',
+  '/experience',
+  '/architecture',
 ] as const
 
 const EXCLUDED_PATHS = new Set<string>(SITEMAP_EXCLUDED_PATHS)
@@ -63,8 +70,8 @@ export type SitemapPayload = Pick<Payload, 'findGlobal' | 'find'>
  *    Contact pages.
  *
  * The Services page is seeded as a draft, so a reference to it is not emitted
- * by the live resolver; after expanding anchors and de-duplicating, both
- * definitions reduce to the paths below. Keep this list in step with those
+ * by the live resolver; after reducing homepage fragments and de-duplicating,
+ * both definitions reduce to the paths below. Keep this list in step with those
  * headers if the seeded navigation changes.
  */
 const FALLBACK_HEADER: SitemapHeader = {
@@ -97,11 +104,10 @@ const FALLBACK_HEADER: SitemapHeader = {
  *
  * Only site-relative URLs are eligible. Absolute URLs point at another site and
  * a protocol-relative URL has no local path to advertise, so both are skipped.
- * A fragment names a section that also exists as a full page, so it is expanded
- * to that variant: `/#work` becomes `/work`, `/#architecture` becomes
- * `/architecture`, and `/#experience` becomes `/experience`. Query strings are
- * dropped, and a non-root path keeps its own pathname (`/travelling#notes`
- * becomes `/travelling`).
+ * A fragment on the homepage names a section of `/`, so its canonical URL is
+ * the homepage itself: `/#work` and `#cv` both reduce to `/`. Query strings are
+ * dropped, and a non-root path keeps its own pathname
+ * (`/travelling#notes` becomes `/travelling`).
  */
 function customPath(url: string | null | undefined): string | null {
   if (!url) return null
@@ -122,7 +128,8 @@ function customPath(url: string | null | undefined): string | null {
 
   if (!path) return null
 
-  if (fragment && path === '/') return `/${fragment}`
+  // A homepage fragment is a position on the homepage, never a separate page.
+  if (fragment && path === '/') return '/'
 
   return path
 }
@@ -264,14 +271,22 @@ async function loadPublishedIndex(
 /**
  * Resolve the paths the global header links to.
  *
+ * The homepage is prepended because it is the most important URL on the site
+ * and is not a nav item (the brand links home). Without it the sitemap listed
+ * only the pages behind the navigation.
+ *
  * Without a Payload client (the build-time generator, or a DB-less build) the
  * documented seeded-header fallback is used. A client that returns no global
  * data at all is treated the same way; a global that exists but has no nav
- * items deliberately produces an empty sitemap.
+ * items deliberately produces a homepage-only sitemap.
  */
 export async function resolveHeaderSitemapPaths(
   payload?: SitemapPayload | null,
 ): Promise<string[]> {
+  return withHomepage(await headerPaths(payload))
+}
+
+async function headerPaths(payload?: SitemapPayload | null): Promise<string[]> {
   if (!payload) return pathsFromHeader(FALLBACK_HEADER)
 
   let header: SitemapHeader
@@ -287,4 +302,8 @@ export async function resolveHeaderSitemapPaths(
 
   const published = await loadPublishedIndex(payload, collectReferenceIds(header))
   return pathsFromHeader(header, published)
+}
+
+function withHomepage(paths: string[]): string[] {
+  return paths[0] === '/' ? paths : ['/', ...paths]
 }

@@ -66,7 +66,7 @@ describe('header sitemap resolver', () => {
     expect(pathsFromHeader(header)).toEqual(['/travelling'])
   })
 
-  it('expands fragment links to their full page variants', () => {
+  it('reduces homepage fragments to the homepage', () => {
     const header: SitemapHeader = {
       navItems: [
         { link: { type: 'custom', url: '/#work' } },
@@ -78,14 +78,7 @@ describe('header sitemap resolver', () => {
       ],
     }
 
-    expect(pathsFromHeader(header)).toEqual([
-      '/work',
-      '/architecture',
-      '/commits',
-      '/experience',
-      '/cv',
-      '/travelling',
-    ])
+    expect(pathsFromHeader(header)).toEqual(['/', '/travelling'])
   })
 
   it('skips external URLs', () => {
@@ -102,19 +95,19 @@ describe('header sitemap resolver', () => {
     expect(pathsFromHeader(header)).toEqual(['/contact'])
   })
 
-  it('de-duplicates after expanding fragments', () => {
+  it('de-duplicates after reducing fragments', () => {
     const header: SitemapHeader = {
       navItems: [
         { link: { type: 'custom', url: '/#work' } },
-        { link: { type: 'custom', url: '/work' } },
+        { link: { type: 'custom', url: '/' } },
         { link: { type: 'custom', url: '/#work' } },
       ],
     }
 
-    expect(pathsFromHeader(header)).toEqual(['/work'])
+    expect(pathsFromHeader(header)).toEqual(['/'])
   })
 
-  it('never emits an excluded path, including an expanded one', () => {
+  it('never emits an excluded path, including a retired page', () => {
     const header: SitemapHeader = {
       navItems: [
         { link: { type: 'custom', url: '/posts' } },
@@ -122,21 +115,24 @@ describe('header sitemap resolver', () => {
         { link: { type: 'custom', url: '/experience-page/' } },
         { link: { type: 'custom', url: '/#experience-page' } },
         { link: { type: 'custom', url: '/work' } },
+        { link: { type: 'custom', url: '/architecture' } },
       ],
     }
 
-    expect(pathsFromHeader(header)).toEqual(['/work'])
+    expect(pathsFromHeader(header)).toEqual(['/'])
     expect(isSitemapExcluded('/experience-page/')).toBe(true)
-    expect(isSitemapExcluded('/work')).toBe(false)
+    expect(isSitemapExcluded('/work')).toBe(true)
+    expect(isSitemapExcluded('/commits')).toBe(true)
+    expect(isSitemapExcluded('/experience')).toBe(true)
+    expect(isSitemapExcluded('/architecture')).toBe(true)
+    expect(isSitemapExcluded('/contact')).toBe(false)
   })
 
-  it('uses the seeded-header fallback when no database is available', async () => {
+  it('always starts the sitemap with the homepage', async () => {
     await expect(resolveHeaderSitemapPaths()).resolves.toEqual([
-      '/work',
+      '/',
       '/travelling',
       '/game-servers',
-      '/experience',
-      '/architecture',
       '/map',
       '/cv',
       '/contact',
