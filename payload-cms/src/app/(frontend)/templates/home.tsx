@@ -1,3 +1,6 @@
+// Scrollable snapshot regions must be reachable and scrollable with the keyboard.
+// The <pre> is the element that scrolls, so it owns tabIndex and the region role.
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import Link from 'next/link'
 import React from 'react'
 import { assembleSite } from '@/utilities/assembleSite'
@@ -199,6 +202,8 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           <button className="btn btn-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
         </div>
 
+        <output aria-atomic="true" aria-live="polite" className="sr-only" id="architecture-status" />
+
         <div className="architecture-layout">
           {/* Left: topology + raw */}
           <article className="architecture-diagram card">
@@ -215,13 +220,13 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
             {archFailed ? (
               <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
             ) : (
-              <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+              <pre aria-label="Architecture diagram" className="diagram-view" id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
             )}
 
             <div className="raw-json-wrap">
               <details>
                 <summary>Raw payload</summary>
-                <pre className="raw-json" id="architecture-raw">{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
+                <pre aria-label="Raw architecture payload" className="raw-json" id="architecture-raw" role="region" tabIndex={0}>{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
               </details>
             </div>
           </article>
@@ -289,7 +294,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
             </div>
           </div>
 
-          <pre className="diagram-view" id="github-commits">{homepageCommitsText || '$ git log --oneline -n 5\nLoading recent commits...'}</pre>
+          <pre aria-label="Recent commits" className="diagram-view" id="github-commits" role="region" tabIndex={0}>{homepageCommitsText || '$ git log --oneline -n 5\nLoading recent commits...'}</pre>
         </article>
       </section>
 

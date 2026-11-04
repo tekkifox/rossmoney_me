@@ -5,6 +5,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea as TextAreaComponent } from '@/components/ui/textarea'
 import React from 'react'
 
+import { autocompleteForField } from '@/utilities/formAutocomplete'
+
 import { Error } from '../Error'
 import { Width } from '../Width'
 
@@ -30,6 +32,7 @@ export const Textarea: React.FC<
       <TextAreaComponent
         aria-describedby={errors[name] ? `${name}-error` : undefined}
         aria-invalid={Boolean(errors[name])}
+        autoComplete={autocompleteForField(name, 'textarea')}
         defaultValue={defaultValue}
         id={name}
         rows={rows}

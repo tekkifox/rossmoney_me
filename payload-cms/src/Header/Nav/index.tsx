@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import type { Header as HeaderType } from '@/payload-types'
 
@@ -15,14 +15,18 @@ class NavMenu {
     return !open
   }
 
-  static closeOnEscape(event: KeyboardEvent, close: () => void): void {
-    if (event.key === 'Escape') close()
+  static closeOnEscape(event: KeyboardEvent, close: () => void, restoreFocus: () => void): void {
+    if (event.key === 'Escape') {
+      close()
+      restoreFocus()
+    }
   }
 }
 
 export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
   const navItems = data?.navItems || []
   const [open, setOpen] = useState(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
   const pathname = usePathname()
   const [previousPathname, setPreviousPathname] = useState(pathname)
 
@@ -35,7 +39,12 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
 
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => NavMenu.closeOnEscape(e, () => setOpen(false))
+    const onKey = (e: KeyboardEvent) =>
+      NavMenu.closeOnEscape(
+        e,
+        () => setOpen(false),
+        () => toggleRef.current?.focus(),
+      )
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [open])
@@ -45,6 +54,7 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
       <button
         type="button"
         className="nav-toggle"
+        ref={toggleRef}
         aria-controls={NavMenu.id}
         aria-expanded={open}
         aria-label={open ? 'Close menu' : 'Open menu'}
