@@ -3,7 +3,7 @@ import type { Form as FormType } from '@payloadcms/plugin-form-builder/types'
 import type { Form as PayloadForm } from '@/payload-types'
 
 import { useRouter } from 'next/navigation'
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm, FormProvider, type FieldValues } from 'react-hook-form'
 import RichText from '@/components/RichText'
 import { Button } from '@/components/ui/button'
@@ -48,7 +48,24 @@ export const FormBlock: React.FC<
   const [isLoading, setIsLoading] = useState(false)
   const [hasSubmitted, setHasSubmitted] = useState<boolean>()
   const [error, setError] = useState<{ message: string; status?: string } | undefined>()
+  const confirmationRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  const errorMessage = error ? `${error.status ? `${error.status}: ` : ''}${error.message || ''}` : ''
+  const statusMessage =
+    isLoading && !hasSubmitted
+      ? 'Sending your message, please wait.'
+      : hasSubmitted && confirmationType === 'message'
+        ? 'Your message was sent successfully.'
+        : ''
+
+  // The submit button unmounts when the confirmation replaces the form, so move
+  // focus to the confirmation instead of letting it fall back to <body>.
+  useEffect(() => {
+    if (hasSubmitted && confirmationType === 'message') {
+      confirmationRef.current?.focus()
+    }
+  }, [hasSubmitted, confirmationType])
 
   const onSubmit = useCallback(
     (data: FieldValues) => {
@@ -126,13 +143,22 @@ export const FormBlock: React.FC<
       )}
       <div className="p-4 lg:p-6 border border-border rounded-[0.8rem]">
         <FormProvider {...formMethods}>
+          {/* One live region per message: polite progress/success, assertive error. */}
+          <output aria-atomic="true" aria-live="polite" className="sr-only">
+            {statusMessage}
+          </output>
+          <div aria-atomic="true" className="sr-only" role="alert">
+            {errorMessage}
+          </div>
           {!isLoading && hasSubmitted && confirmationType === 'message' && (
-            <RichText data={confirmationMessage} />
+            <div className="focus:outline-none" ref={confirmationRef} tabIndex={-1}>
+              <RichText data={confirmationMessage} />
+            </div>
           )}
           {isLoading && !hasSubmitted && <p>Loading, please wait...</p>}
-          {error && <div>{`${error.status ? `${error.status}: ` : ''}${error.message || ''}`}</div>}
+          {error && <div>{errorMessage}</div>}
           {!hasSubmitted && (
-            <form id={formID} onSubmit={handleSubmit(onSubmit)}>
+            <form aria-busy={isLoading} id={formID} onSubmit={handleSubmit(onSubmit)}>
               <div className="mb-4 last:mb-0">
                 {formFromProps &&
                   formFromProps.fields &&

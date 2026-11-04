@@ -1,3 +1,6 @@
+// Scrollable snapshot regions must be reachable and scrollable with the keyboard.
+// The <pre> is the element that scrolls, so it owns tabIndex and the region role.
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
 import Link from 'next/link'
 import {
@@ -112,6 +115,8 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
           <button className="btn btn-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
         </div>
 
+        <output aria-atomic="true" aria-live="polite" className="sr-only" id="architecture-status" />
+
         <div className="architecture-layout">
           <article className="architecture-diagram card">
             <div className="panel-header">
@@ -125,9 +130,9 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
             {archFailed ? (
               <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
             ) : (
-              <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+              <pre aria-label="Architecture diagram" className="diagram-view" id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
             )}
-            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre className="raw-json" id="architecture-raw">{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre></details></div>
+            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre aria-label="Raw architecture payload" className="raw-json" id="architecture-raw" role="region" tabIndex={0}>{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre></details></div>
           </article>
 
           <aside className="image-column card">
@@ -151,7 +156,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
 
       <section className="section container">
         <div className="section-heading"><p className="eyebrow">Recent commits</p><h2>Recent changes</h2></div>
-        <div className="card architecture-summary"><pre className="diagram-view" id="github-commits">{commitsText}</pre></div>
+        <div className="card architecture-summary"><pre aria-label="Recent commits" className="diagram-view" id="github-commits" role="region" tabIndex={0}>{commitsText}</pre></div>
       </section>
 
       <ContactPanel contact={sitePayload?.contact || readPageContact(page) || page.data || null} />

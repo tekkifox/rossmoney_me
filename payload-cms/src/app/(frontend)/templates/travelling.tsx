@@ -1,3 +1,6 @@
+// Scrollable snapshot regions must be reachable and scrollable with the keyboard.
+// The <pre> is the element that scrolls, so it owns tabIndex and the region role.
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
 import Link from 'next/link'
 import {
@@ -161,6 +164,8 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
         <button className="btn btn-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
       </div>
 
+      <output aria-atomic="true" aria-live="polite" className="sr-only" id="architecture-status" />
+
       <div className="architecture-layout">
         {/* Left column: topology and raw payload */}
         <article className="architecture-diagram card">
@@ -177,13 +182,13 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           {archFailed ? (
             <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
           ) : (
-            <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+            <pre aria-label="Architecture diagram" className="diagram-view" id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
           )}
 
           <div className="raw-json-wrap">
             <details>
               <summary>Raw snapshot</summary>
-              <pre className="raw-json" id="architecture-raw">{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
+              <pre aria-label="Raw architecture payload" className="raw-json" id="architecture-raw" role="region" tabIndex={0}>{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
             </details>
           </div>
         </article>
@@ -251,7 +256,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
             <p className="panel-kicker">GitHub</p>
           </div>
         </div>
-        <pre className="diagram-view" id="github-commits">{commitsText}</pre>
+        <pre aria-label="Recent commits" className="diagram-view" id="github-commits" role="region" tabIndex={0}>{commitsText}</pre>
       </div>
     </section>
 
