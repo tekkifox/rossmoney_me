@@ -86,12 +86,12 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
     const updatedEl = document.getElementById('architecture-updated')
     const serverRenderedSnapshot =
       Boolean(updatedEl?.textContent?.trim()) && updatedEl?.textContent?.trim() !== 'Loading'
-    let lastFetchAt = serverRenderedSnapshot ? Date.now() : 0
-    let lastStatus = ''
+    const lastFetchAtRef = { current: serverRenderedSnapshot ? Date.now() : 0 }
+    const lastStatusRef = { current: '' }
 
     function announceStatus(message: string) {
-      if (!statusEl || message === lastStatus) return
-      lastStatus = message
+      if (!statusEl || message === lastStatusRef.current) return
+      lastStatusRef.current = message
       statusEl.textContent = message
     }
 
@@ -118,7 +118,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
     async function fetchArchitecture() {
       if (inFlightRef.current) return
       inFlightRef.current = true
-      lastFetchAt = Date.now()
+      lastFetchAtRef.current = Date.now()
       setBusy(true)
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
@@ -253,7 +253,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
     const handler = () => {
       // A manual refresh should always be reported, even when the previous
       // automatic update announced the same text.
-      lastStatus = ''
+      lastStatusRef.current = ''
       void fetchArchitecture()
     }
     if (refreshBtn) refreshBtn.addEventListener('click', handler)
@@ -267,7 +267,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
     // Catch up when the tab becomes visible again, but not more often than the
     // poll interval (switching tabs is not a refresh request).
     const onVisibilityChange = () => {
-      if (!document.hidden && Date.now() - lastFetchAt >= REFRESH_INTERVAL_MS) {
+      if (!document.hidden && Date.now() - lastFetchAtRef.current >= REFRESH_INTERVAL_MS) {
         void fetchArchitecture()
       }
     }
