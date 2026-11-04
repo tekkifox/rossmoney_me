@@ -11,7 +11,7 @@ const OG_IMAGE_ALT = 'Ross Money — DevOps-focused developer portfolio'
 const getImageURL = (image?: Media | Config['db']['defaultIDType'] | null) => {
   const siteUrl = getSiteURL()
 
-  let url = siteUrl + '/og.png'
+  let url = siteUrl + '/og.jpg'
 
   if (image && typeof image === 'object' && 'url' in image) {
     const ogUrl = image.sizes?.og?.url
