@@ -49,6 +49,59 @@ BT /F1 10 Tf 72 595 Td (https://example.com/portfolio) Tj ET`
   return Buffer.from(out, 'latin1')
 }
 
+/** A two-column CV page: job entries on the left, skills labels on the right. */
+function sampleTwoColumnPdf(): Buffer {
+  const left = [
+    [700, 13.5, 'KEY ACHIEVEMENTS'],
+    [680, 10.5, 'Morphsites - Support Ticket Resolution'],
+    [668, 9.5, 'Resolved 20+ Jira tickets monthly, alternating between'],
+    [656, 9.5, 'support and new development; owned triage, prioritisation'],
+    [644, 9.5, 'and client communication through to resolution.'],
+    [560, 13.5, 'EXPERIENCE'],
+  ] as const
+  const right = [
+    [700, 13.5, 'SKILLS'],
+    [680, 10.5, 'Backend'],
+    [668, 9.5, 'PHP, Laravel, Statamic, API development'],
+    [656, 10.5, 'Frontend'],
+    [644, 9.5, 'JavaScript, Vue.js, HTML, CSS'],
+    [632, 10.5, 'Databases'],
+    [620, 9.5, 'MongoDB, MySQL'],
+    [608, 10.5, 'Tools and methods'],
+    [596, 9.5, 'Git, Jira, Make, Agile'],
+  ] as const
+
+  const text = (x: number, y: number, size: number, value: string) =>
+    `BT /F1 ${size} Tf ${x} ${y} Td (${value}) Tj ET`
+  const content = [
+    text(36, 740, 20, 'ROSS MONEY'),
+    ...left.map(([y, size, value]) => text(36, y, size, value)),
+    ...right.map(([y, size, value]) => text(320, y, size, value)),
+  ].join('\n')
+
+  const objects: string[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+  ]
+
+  let out = '%PDF-1.4\n'
+  const offsets: number[] = [0]
+  objects.forEach((body, index) => {
+    offsets.push(Buffer.byteLength(out, 'latin1'))
+    out += `${index + 1} 0 obj\n${body}\nendobj\n`
+  })
+  const xref = Buffer.byteLength(out, 'latin1')
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  for (let index = 1; index <= objects.length; index += 1) {
+    out += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`
+  }
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(out, 'latin1')
+}
+
 describe('CV conversion', () => {
   it('resolves the pdfjs worker to an existing file', () => {
     const workerPath = resolvePdfjsWorkerPath()
@@ -79,6 +132,29 @@ describe('CV conversion', () => {
     expect(result.html).toContain('<h3>SKILLS</h3>')
     expect(result.html).toContain('<ul><li>Led a team of five engineers</li>')
     expect(result.html).toContain('<a href="https://example.com/portfolio"')
+  })
+
+  it('keeps two-column PDF job entries together and promotes right-column labels', async () => {
+    const result = await convertCvFile({ buffer: sampleTwoColumnPdf(), filename: 'cv.pdf' })
+
+    // Left column is emitted in full before the right column, so the job title
+    // and its description stay adjacent and no right-column label is spliced
+    // into the left-hand sentence.
+    const descriptionEnd = result.html.indexOf('and client communication through to resolution.')
+    const skills = result.html.indexOf('<h3>SKILLS</h3>')
+    const frontend = result.html.indexOf('<h3>Frontend</h3>')
+
+    expect(result.html.indexOf('Morphsites - Support Ticket Resolution')).toBeLessThan(
+      result.html.indexOf('Resolved 20+ Jira tickets monthly'),
+    )
+    expect(result.html.indexOf('Resolved 20+ Jira tickets monthly')).toBeLessThan(descriptionEnd)
+    expect(descriptionEnd).toBeLessThan(skills)
+    expect(skills).toBeLessThan(frontend)
+    expect(result.html).not.toContain('prioritisation Frontend')
+    expect(result.html).not.toContain('resolution. Frontend')
+    expect(result.html).toContain('<h3>Backend</h3>')
+    expect(result.html).toContain('<h3>Databases</h3>')
+    expect(result.html).toContain('<h3>Tools and methods</h3>')
   })
 
   it('rejects an unsupported file type', async () => {

@@ -150,12 +150,32 @@ type PdfLine = {
   text: string
   size: number
   urls: string[]
+  column?: 'left' | 'right'
 }
 
 type PdfTextItem = {
   str: string
+  width?: number
   height: number
   transform: number[]
+}
+
+type PositionedItem = {
+  text: string
+  size: number
+  x: number
+  maxX: number
+  y: number
+}
+
+type ColumnBand = {
+  top: number
+  bottom: number
+}
+
+type ColumnLayout = {
+  gutter: number
+  bands: ColumnBand[]
 }
 
 type PdfAnnotation = {
@@ -190,59 +210,243 @@ function isSafeUrl(value: string | undefined): value is string {
   return typeof value === 'string' && /^(?:https?:|mailto:|tel:)/i.test(value.trim())
 }
 
-function groupLines(items: PdfTextItem[], annotations: PdfAnnotation[]): PdfLine[] {
-  const positioned = items
-    .filter((item) => item.str.trim() !== '')
-    .map((item) => ({
-      text: item.str,
-      size: item.height > 0 ? item.height : Math.hypot(item.transform[2] ?? 0, item.transform[3] ?? 0) || 10,
-      x: item.transform[4] ?? 0,
-      y: item.transform[5] ?? 0,
-    }))
-    .sort((a, b) => (Math.abs(b.y - a.y) > 1 ? b.y - a.y : a.x - b.x))
+/**
+ * Find a real two-column gutter, or return null to keep the single-stream
+ * reading order. A candidate only wins when there are plenty of non-trivial
+ * items on both sides, a clear empty gap, and the two sides overlap vertically
+ * enough to be columns rather than a heading plus a footer/date rail.
+ */
+function detectColumnLayout(items: PositionedItem[], pageWidth: number): ColumnLayout | null {
+  if (items.length < 8 || !Number.isFinite(pageWidth) || pageWidth <= 0) return null
 
-  const lines: PdfLine[] = []
-  let current: { y: number; size: number; parts: string[]; xs: number[] } | null = null
+  // A real right column has a consistent left edge. Find the strongest start-x
+  // cluster in the middle/right of the page; anything left of it is the left
+  // column. This avoids treating the widest possible split (which cuts through
+  // normal left-column lines) as the gutter.
+  const rightCandidates = items
+    .map((item) => item.x)
+    .filter((x) => x >= pageWidth * 0.35 && x <= pageWidth * 0.8)
+    .sort((a, b) => a - b)
 
-  const flush = () => {
-    if (!current) return
-    const text = current.parts.join(' ').replace(/\s+/g, ' ').trim()
-    if (text) {
-      const minX = Math.min(...current.xs)
-      const maxX = Math.max(...current.xs)
-      const urls = annotations
-        .filter((annotation) => {
-          const rect = annotation.rect
-          if (!rect || rect.length !== 4) return false
-          const centerY = current ? current.y : 0
-          const centerX = (minX + maxX) / 2
-          return (
-            centerX >= Math.min(rect[0], rect[2]) &&
-            centerX <= Math.max(rect[0], rect[2]) &&
-            centerY >= Math.min(rect[1], rect[3]) &&
-            centerY <= Math.max(rect[1], rect[3])
-          )
-        })
-        .map((annotation) => annotation.url ?? annotation.unsafeUrl)
-        .filter(isSafeUrl)
-      lines.push({ text, size: current.size, urls: [...new Set(urls)] })
+  const clusters: Array<{ start: number; values: number[] }> = []
+  for (const x of rightCandidates) {
+    const cluster = clusters.at(-1)
+    if (cluster && x - cluster.start <= 12) {
+      cluster.values.push(x)
+    } else {
+      clusters.push({ start: x, values: [x] })
     }
-    current = null
   }
 
+  const rightCluster = clusters
+    .map((cluster) => ({
+      start: cluster.values[Math.floor(cluster.values.length / 2)],
+      count: cluster.values.length,
+    }))
+    .filter((cluster) => cluster.count >= 4)
+    .sort((a, b) => b.count - a.count)[0]
+  if (!rightCluster) return null
+
+  const rightStart = rightCluster.start
+  const left = items.filter((item) => item.maxX <= rightStart - 4)
+  const right = items.filter((item) => item.x >= rightStart - 4)
+  if (left.length < 4 || right.length < 4) return null
+
+  const minimumWidth = 24
+  if (left.filter((item) => item.maxX - item.x >= minimumWidth).length < 3) return null
+  if (right.filter((item) => item.maxX - item.x >= minimumWidth).length < 3) return null
+
+  const leftCharacters = left.reduce((total, item) => total + item.text.trim().length, 0)
+  const rightCharacters = right.reduce((total, item) => total + item.text.trim().length, 0)
+  if (leftCharacters < 40 || rightCharacters < 40) return null
+
+  const leftEdge = Math.max(...left.map((item) => item.maxX))
+  const rightEdge = Math.min(...right.map((item) => item.x))
+  const gutterGap = rightEdge - leftEdge
+  if (gutterGap < 4) return null
+
+  // Only rows that have text on both sides count towards the column band. This
+  // keeps a one-line footer/interests row or the page header from stretching
+  // the band around the actual column region.
+  const pairedRows = [
+    ...new Set(
+      left
+        .filter((item) => right.some((other) => Math.abs(other.y - item.y) <= 12))
+        .map((item) => Math.round(item.y * 10) / 10),
+    ),
+  ].sort((a, b) => b - a)
+  if (pairedRows.length < 3) return null
+
+  const regions: number[][] = []
+  let region: number[] = []
+  for (const y of pairedRows) {
+    if (region.length > 0 && region[region.length - 1] - y > 40) {
+      regions.push(region)
+      region = []
+    }
+    region.push(y)
+  }
+  if (region.length > 0) regions.push(region)
+
+  const rightYs = right.map((item) => item.y).sort((a, b) => b - a)
+  const bands = regions
+    .filter((rows) => rows.length >= 3)
+    .map((rows) => {
+      const top = Math.max(...rows) + 6
+      let bottom = Math.min(...rows) - 6
+
+      // The right column can continue below the last row that had left-column
+      // text beside it. Follow it while the vertical gap stays small; a larger
+      // gap is a new section (or a footer) and must not join the band.
+      for (const y of rightYs) {
+        if (y >= bottom) continue
+        if (bottom - y > 25) break
+        bottom = y - 6
+      }
+
+      return { top, bottom }
+    })
+  if (bands.length === 0) return null
+
+  return {
+    gutter: (leftEdge + rightEdge) / 2,
+    bands,
+  }
+}
+
+function positionedItems(items: PdfTextItem[]): PositionedItem[] {
+  return items
+    .filter((item) => item.str.trim() !== '')
+    .map((item) => {
+      const size =
+        item.height > 0 ? item.height : Math.hypot(item.transform[2] ?? 0, item.transform[3] ?? 0) || 10
+      const x = item.transform[4] ?? 0
+      // `width` is in the same user-space units as `transform[4]`. Older text
+      // items may omit it; a character estimate still gives a usable box.
+      const width =
+        typeof item.width === 'number' && Number.isFinite(item.width) && item.width > 0
+          ? item.width
+          : item.str.length * size * 0.5
+      return { text: item.str, size, x, maxX: x + width, y: item.transform[5] ?? 0 }
+    })
+}
+
+function lineFromItems(
+  lineItems: PositionedItem[],
+  annotations: PdfAnnotation[],
+  column?: 'left' | 'right',
+): PdfLine | null {
+  const text = lineItems
+    .map((item) => item.text)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return null
+
+  const minX = Math.min(...lineItems.map((item) => item.x))
+  const maxX = Math.max(...lineItems.map((item) => item.maxX))
+  const centerX = (minX + maxX) / 2
+  const centerY = lineItems[0].y
+  const urls = annotations
+    .filter((annotation) => {
+      const rect = annotation.rect
+      if (!rect || rect.length !== 4) return false
+      return (
+        centerX >= Math.min(rect[0], rect[2]) &&
+        centerX <= Math.max(rect[0], rect[2]) &&
+        centerY >= Math.min(rect[1], rect[3]) &&
+        centerY <= Math.max(rect[1], rect[3])
+      )
+    })
+    .map((annotation) => annotation.url ?? annotation.unsafeUrl)
+    .filter(isSafeUrl)
+
+  return {
+    text,
+    size: Math.max(...lineItems.map((item) => item.size)),
+    urls: [...new Set(urls)],
+    ...(column ? { column } : {}),
+  }
+}
+
+function groupLines(
+  items: PdfTextItem[],
+  annotations: PdfAnnotation[],
+  pageWidth: number,
+): PdfLine[] {
+  const positioned = positionedItems(items).sort((a, b) =>
+    Math.abs(b.y - a.y) > 1 ? b.y - a.y : a.x - b.x,
+  )
+  const layout = detectColumnLayout(positioned, pageWidth)
+
+  const groups: PositionedItem[][] = []
+  let current: PositionedItem[] = []
   for (const item of positioned) {
-    if (!current || Math.abs(item.y - current.y) > Math.max(2, item.size * 0.5)) {
-      flush()
-      current = { y: item.y, size: item.size, parts: [item.text], xs: [item.x] }
+    if (current.length === 0 || Math.abs(item.y - current[0].y) > Math.max(2, item.size * 0.5)) {
+      if (current.length > 0) groups.push(current)
+      current = [item]
       continue
     }
-    current.parts.push(item.text)
-    current.xs.push(item.x)
-    current.size = Math.max(current.size, item.size)
+    current.push(item)
   }
-  flush()
+  if (current.length > 0) groups.push(current)
 
-  return lines
+  const lines: PdfLine[] = []
+  for (const group of groups) {
+    const y = group[0].y
+    const insideBand =
+      layout !== null && layout.bands.some((band) => y <= band.top && y >= band.bottom)
+    if (!insideBand) {
+      const line = lineFromItems(group, annotations)
+      if (line) lines.push(line)
+      continue
+    }
+
+    const left = group.filter((item) => item.maxX <= layout.gutter)
+    const right = group.filter((item) => item.x >= layout.gutter)
+
+    // An item spanning the gutter means this is a full-width line (a section
+    // label, table row, or similar), not two column fragments.
+    if (left.length + right.length < group.length) {
+      const line = lineFromItems(group, annotations)
+      if (line) lines.push(line)
+      continue
+    }
+
+    if (left.length > 0) {
+      const line = lineFromItems(left, annotations, 'left')
+      if (line) lines.push(line)
+    }
+    if (right.length > 0) {
+      const line = lineFromItems(right, annotations, 'right')
+      if (line) lines.push(line)
+    }
+  }
+
+  // Emit each two-column band left side first, then right side. A full-width
+  // line (or the band boundary) ends the band.
+  const ordered: PdfLine[] = []
+  let leftBand: PdfLine[] = []
+  let rightBand: PdfLine[] = []
+  const flushBand = () => {
+    ordered.push(...leftBand, ...rightBand)
+    leftBand = []
+    rightBand = []
+  }
+
+  for (const line of lines) {
+    if (line.column === 'left') {
+      leftBand.push(line)
+    } else if (line.column === 'right') {
+      rightBand.push(line)
+    } else {
+      flushBand()
+      ordered.push(line)
+    }
+  }
+  flushBand()
+
+  return ordered
 }
 
 function modalBodySize(items: PdfTextItem[]): number {
@@ -275,8 +479,20 @@ function linesToHtml(lines: PdfLine[], bodySize: number): string {
   }
 
   for (const line of lines) {
+    // The right-hand CV column uses 10.5pt bold subheadings against 9.5pt body
+    // text. Promote those short labels only in a detected right column, so a
+    // single-column PDF keeps the original heading threshold exactly.
+    const rightColumnLabel =
+      line.column === 'right' &&
+      line.size >= bodySize * 1.08 &&
+      line.text.length <= 40 &&
+      !/[;:,]$/.test(line.text)
     const heading =
-      line.size >= bodySize * 1.6 ? 2 : line.size >= bodySize * 1.15 && line.text.length <= 80 ? 3 : null
+      line.size >= bodySize * 1.6
+        ? 2
+        : (line.size >= bodySize * 1.15 && line.text.length <= 80) || rightColumnLabel
+          ? 3
+          : null
 
     if (heading && !BULLET.test(line.text) && !NUMBERED.test(line.text)) {
       flushList()
@@ -332,10 +548,11 @@ async function convertPdfToHtml(buffer: Buffer): Promise<string> {
     const pages: string[] = []
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
       const page = await document.getPage(pageNumber)
+      const viewport = page.getViewport({ scale: 1 })
       const content = await page.getTextContent()
       const annotations = (await page.getAnnotations()) as unknown as PdfAnnotation[]
       const items = content.items as unknown as PdfTextItem[]
-      const lines = groupLines(items, annotations)
+      const lines = groupLines(items, annotations, viewport.width)
       if (lines.length === 0) continue
       pages.push(linesToHtml(lines, modalBodySize(items)))
       page.cleanup()
