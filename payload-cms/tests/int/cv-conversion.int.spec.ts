@@ -58,6 +58,8 @@ function sampleTwoColumnPdf(): Buffer {
     [656, 9.5, 'support and new development; owned triage, prioritisation'],
     [644, 9.5, 'and client communication through to resolution.'],
     [560, 13.5, 'EXPERIENCE'],
+    [530, 12, 'Job One'],
+    [490, 12, 'Job Two'],
   ] as const
   const right = [
     [700, 13.5, 'SKILLS'],
@@ -128,9 +130,12 @@ describe('CV conversion', () => {
 
     expect(result.source).toBe('pdf')
     expect(result.note).toBe(CV_PDF_NOTE)
-    expect(result.html).toContain('<h2>ROSS MONEY</h2>')
-    expect(result.html).toContain('<h3>SKILLS</h3>')
-    expect(result.html).toContain('<ul><li>Led a team of five engineers</li>')
+    expect(result.html).toContain('<h2 class="docx-title">')
+    expect(result.html).toContain('>ROSS MONEY</strong>')
+    expect(result.html).toContain('<h3 class="docx-section-rule">')
+    expect(result.html).toContain('>SKILLS</strong>')
+    expect(result.html).toContain('<ul><li><span class="docx-font-size-10')
+    expect(result.html).toContain('>Led a team of five engineers</span></li>')
     expect(result.html).toContain('<a href="https://example.com/portfolio"')
   })
 
@@ -141,8 +146,8 @@ describe('CV conversion', () => {
     // and its description stay adjacent and no right-column label is spliced
     // into the left-hand sentence.
     const descriptionEnd = result.html.indexOf('and client communication through to resolution.')
-    const skills = result.html.indexOf('<h3>SKILLS</h3>')
-    const frontend = result.html.indexOf('<h3>Frontend</h3>')
+    const skills = result.html.indexOf('>SKILLS</strong>')
+    const frontend = result.html.indexOf('>Frontend</strong>')
 
     expect(result.html.indexOf('Morphsites - Support Ticket Resolution')).toBeLessThan(
       result.html.indexOf('Resolved 20+ Jira tickets monthly'),
@@ -152,9 +157,27 @@ describe('CV conversion', () => {
     expect(skills).toBeLessThan(frontend)
     expect(result.html).not.toContain('prioritisation Frontend')
     expect(result.html).not.toContain('resolution. Frontend')
-    expect(result.html).toContain('<h3>Backend</h3>')
-    expect(result.html).toContain('<h3>Databases</h3>')
-    expect(result.html).toContain('<h3>Tools and methods</h3>')
+    expect(result.html).toContain('>Backend</strong>')
+    expect(result.html).toContain('>Databases</strong>')
+    expect(result.html).toContain('>Tools and methods</strong>')
+  })
+
+  it('uses the same docx-* hooks as the DOCX path so both render styled', async () => {
+    const docx = await convertCvFile({ buffer: sampleDocx(), filename: 'cv.docx' })
+    const pdf = await convertCvFile({ buffer: sampleTwoColumnPdf(), filename: 'cv.pdf' })
+
+    for (const className of ['docx-title', 'docx-section-rule']) {
+      expect(docx.html).toContain(className)
+      expect(pdf.html).toContain(className)
+    }
+
+    expect(pdf.html).toMatch(/<h2 class="docx-title">/)
+    expect(pdf.html).toMatch(/<h3 class="docx-section-rule">/)
+    expect(pdf.html).toContain('<p class="docx-entry-rule"></p>')
+    expect(pdf.html).toMatch(/docx-font-size-/)
+    expect(pdf.html).toContain('docx-font-family-arial')
+    expect(pdf.html).toContain('docx-color-111111')
+    expect(pdf.html).toContain('docx-color-555555')
   })
 
   it('rejects an unsupported file type', async () => {
