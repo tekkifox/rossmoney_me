@@ -237,14 +237,20 @@ export const expectCspHeader = (
   expect(header, 'CSP must start from a deny-all default').toContain(
     "default-src 'none'",
   )
-  expect(header, 'CSP scripts must be nonce-based').toMatch(
-    /script-src 'nonce-[A-Za-z0-9+/_-]+={0,2}' 'strict-dynamic'/,
-  )
 
   if (admin) {
+    expect(header, 'CSP scripts must be nonce-based in the admin').toMatch(
+      /script-src 'nonce-[A-Za-z0-9+/_-]+={0,2}' 'strict-dynamic'/,
+    )
     expect(cspDirective(header, 'frame-src')).toContain("'self'")
     expect(cspDirective(header, 'frame-ancestors')).toBe("frame-ancestors 'none'")
   } else {
+    // Public documents come from the prerender/ISR cache and cannot carry the
+    // request's nonce, so they use the documented static script allowlist.
+    // (A dynamic preview document still receives the nonce policy.)
+    expect(header, 'CSP scripts must be nonce-based or the static allowlist').toMatch(
+      /script-src (?:'nonce-[A-Za-z0-9+/_-]+={0,2}' 'strict-dynamic'|'self' 'unsafe-inline')/,
+    )
     expect(cspDirective(header, 'frame-ancestors')).toBe(
       "frame-ancestors 'self'",
     )

@@ -57,6 +57,22 @@ describe('buildContentSecurityPolicy', () => {
     )
   })
 
+  it('uses the documented static allowlist for a prerendered public document', () => {
+    const value = policy({ preRendered: true })
+
+    expect(directive(value, 'script-src')).toBe(
+      "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com",
+    )
+    expect(value).not.toContain("'strict-dynamic'")
+    expect(value).not.toContain("'nonce-")
+  })
+
+  it('keeps the nonce policy in the admin even when marked prerendered', () => {
+    const value = policy({ preRendered: true, isAdmin: true })
+
+    expect(directive(value, 'script-src')).toMatch(/^script-src 'nonce-abc123' 'strict-dynamic'/)
+  })
+
   it('allows inline style attributes without allowing inline style elements on public pages', () => {
     const value = policy()
     expect(directive(value, 'style-src')).toBe("style-src 'self'")

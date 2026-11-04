@@ -269,6 +269,50 @@ critical advisories in production dependencies. The rules, the exact audit
 command, and the process for accepting a known-unfixable advisory are documented
 in [`DEPENDENCY-UPDATES.md`](./DEPENDENCY-UPDATES.md).
 
+## Page caching and revalidation
+
+Public HTML is cacheable. The `[slug]` route exports
+`revalidate = 300` (five minutes) instead of `force-dynamic`, and the homepage
+is the `pages` document with slug `home`, served by `next.config.ts` through a
+`/` → `/home` rewrite so it uses the same on-demand route. A production build
+sets `Cache-Control: s-maxage=…, stale-while-revalidate=…` on an ordinary page;
+it no longer sends `private, no-store`. The header reports the shortest window
+among the page and its nested data caches: 45 s for a page that embeds an
+ArchView snapshot, 60 s for a page that only reads a global, and never more than
+the route's 300 s. The build itself uses Payload's no-op database adapter, so
+pages are generated from the live database on first request rather than frozen
+at build time.
+
+Draft preview is split from that cache. `src/proxy.ts` looks for Next.js' draft
+cookie (`__prerender_bypass`); when it is present the request is rewritten
+(same URL, same query) to the dynamic renderer under `/next/draft/`, which does
+read `draftMode()` and renders the draft document. The preview response keeps
+`private, no-store`. Ordinary visitors never reach that route, and the public
+layout does not read request-time state. The admin bar learns that it should
+offer "Exit preview mode" from a readable companion cookie set by
+`/next/preview`.
+
+An editor sees a change immediately because these mutations invalidate the
+cached HTML as well as waiting for the window:
+
+- saving, unpublishing or deleting a page (`Pages` after-change/after-delete
+  hooks) revalidates `/home` plus `/` for the homepage, or the page's own path,
+  and the page sitemap;
+- changing an ArchView source revalidates every public page (the architecture
+  panel is rendered into the HTML) and the shared snapshot cache;
+- saving the header or footer settings revalidates the root layout, and through
+  it every public page.
+
+The revalidation keys live in
+`payload-cms/src/utilities/revalidatePublicPages.ts`; keep the literal
+`revalidate = 300` in the page route in step with
+`PUBLIC_PAGE_REVALIDATE_SECONDS` there.
+
+Cached public documents cannot carry a per-request CSP nonce (the cached HTML
+would not match the response header), so they use the documented static script
+allowlist. Dynamic previews, the admin and the API keep the nonce policy. See
+[`docs/security/csp.md`](./docs/security/csp.md#prerendering-and-nonces).
+
 ## Robots and SEO
 
 Robots are generated during the site build by next-sitemap (see `payload-cms/next-sitemap.config.cjs`). By default the generator blocks admin and API endpoints and allows public media. If you prefer a static file, copy `payload-cms/public/robots-template.txt` to `payload-cms/public/robots.txt` and update the Sitemap line with your production domain.

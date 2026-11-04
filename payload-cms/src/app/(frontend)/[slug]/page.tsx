@@ -1,34 +1,22 @@
 import type { Metadata } from 'next'
 
-import { PayloadRedirects } from '@/components/PayloadRedirects'
 import { getSafePayload } from '@/utilities/getSafePayload'
-import type { RequiredDataFromCollectionSlug } from 'payload'
-import { draftMode } from 'next/headers'
-import React, { cache } from 'react'
-import { homeStatic } from '@/endpoints/seed/home-static'
+import { generatePageMetadata, renderPage } from './render'
 
-import { generateMeta } from '@/utilities/generateMeta'
-import PageClient from './page.client'
-import { LivePreviewListener } from '@/components/LivePreviewListener'
-import HomeTemplate from '../templates/home'
-import ContactTemplate from '../templates/contact'
-import TravellingTemplate from '../templates/travelling'
-import NavigationTemplate from '../templates/navigation'
-import CVTemplate from '../templates/cv'
-import GameServersTemplate from '../templates/game-servers'
-import ServicesTemplate from '../templates/services'
-import MapTemplate from '../templates/map'
-import DefaultTemplate from '../templates/default'
-import { PageMeta } from '../templates/shared'
-import { PageRoot } from '@/components/PageRoot'
-import { StructuredData } from '@/components/StructuredData'
-import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
-import { resolvePageArchviewSource, isArchviewSourceFailure } from '@/utilities/archviewPageSource'
-import { resolvePageTemplate } from '@/utilities/pageTemplates'
-
-// This page intentionally uses dynamic data from the internal architecture API
-// Mark as force-dynamic so Next allows runtime fetches without static/dynamic runtime warnings
-export const dynamic = 'force-dynamic'
+/**
+ * Public pages are prerendered and revalidated on a timer; content changes
+ * invalidate them immediately from the Payload hooks
+ * (see `utilities/revalidatePublicPages.ts`). The draft-mode cookie never
+ * reaches this route: `proxy.ts` rewrites draft requests to the dynamic
+ * preview renderer under `next/draft/`, so this file must not read
+ * `draftMode()` or any other request-time API.
+ *
+ * Keep the literal in step with `PUBLIC_PAGE_REVALIDATE_SECONDS`; Next.js
+ * requires a statically analysable value here. A nested `unstable_cache` with a
+ * shorter window (the architecture snapshot at 45 s, a global at 60 s) lowers
+ * the effective `s-maxage` below this ceiling.
+ */
+export const revalidate = 300
 
 export async function generateStaticParams() {
   try {
@@ -65,106 +53,13 @@ type Args = {
 }
 
 export default async function Page({ params: paramsPromise }: Args) {
-  const { isEnabled: draft } = await draftMode()
   const { slug = 'home' } = await paramsPromise
-  // Decode to support slugs with special characters
-  const decodedSlug = decodeURIComponent(slug)
-  const url = '/' + decodedSlug
-  let page: RequiredDataFromCollectionSlug<'pages'> | null
 
-  page = await queryPageBySlug({
-    slug: decodedSlug,
-  })
-
-  // Remove this code once your website is seeded
-  if (!page && slug === 'home') {
-    page = homeStatic
-  }
-
-  if (!page) {
-    return <PayloadRedirects url={url} />
-  }
-
-  const resolvedSource = await resolvePageArchviewSource(page, null, {
-    payload: await getSafePayload(),
-  })
-  const resolvedOrigin =
-    resolvedSource && !isArchviewSourceFailure(resolvedSource) ? resolvedSource.origin : undefined
-  const resolvedProject =
-    resolvedSource && !isArchviewSourceFailure(resolvedSource) ? resolvedSource.project : undefined
-  const forceSource =
-    resolvedSource !== null &&
-    !isArchviewSourceFailure(resolvedSource) &&
-    (resolvedSource.kind === 'relation' || resolvedSource.kind === 'default')
-  const architectureFailed = resolvedSource !== null && isArchviewSourceFailure(resolvedSource)
-  const architectureApi = architectureFailed
-    ? ''
-    : browserArchitectureApi(resolvedOrigin, process.env, {
-        forceSource,
-      })
-  const architectureProject = browserArchitectureProject(resolvedProject)
-
-  // The page's own `template` field decides how it renders. Documents created
-  // before that field existed have no value, so `resolvePageTemplate` applies
-  // the old slug chain as a transitional fallback (see pageTemplates.ts) until
-  // the backfill or an editor sets one. An unknown value renders generically.
-  const template = resolvePageTemplate(page)
-
-  return (
-    <PageRoot architectureApi={architectureApi} architectureProject={architectureProject} architectureUnavailable={architectureFailed}>
-      <StructuredData />
-      <PageMeta page={page} architectureApi={architectureApi} />
-      <PageClient />
-      {/* Allows redirects for valid pages too */}
-      <PayloadRedirects disableNotFound url={url} />
-
-      {draft && <LivePreviewListener />}
-
-      {template === 'home' && <HomeTemplate page={page} />}
-      {template === 'contact' && <ContactTemplate page={page} />}
-      {template === 'travelling' && <TravellingTemplate page={page} />}
-      {template === 'navigation' && <NavigationTemplate page={page} />}
-      {template === 'cv' && <CVTemplate page={page} />}
-      {template === 'services' && <ServicesTemplate page={page} />}
-      {template === 'map' && <MapTemplate page={page} />}
-      {template === 'game-servers' && <GameServersTemplate page={page} />}
-      {template === 'default' && <DefaultTemplate page={page} />}
-    </PageRoot>
-  )
+  return renderPage({ slug, draft: false, track: true })
 }
 
 export async function generateMetadata({ params: paramsPromise }: Args): Promise<Metadata> {
   const { slug = 'home' } = await paramsPromise
-  // Decode to support slugs with special characters
-  const decodedSlug = decodeURIComponent(slug)
-  const page = await queryPageBySlug({
-    slug: decodedSlug,
-  })
 
-  return generateMeta({ doc: page })
+  return generatePageMetadata({ slug, draft: false })
 }
-
-const queryPageBySlug = cache(async ({ slug }: { slug: string }) => {
-  try {
-    const { isEnabled: draft } = await draftMode()
-
-    const payload = await getSafePayload()
-
-    const result = await payload.find({
-      collection: 'pages',
-      draft,
-      limit: 1,
-      pagination: false,
-      overrideAccess: draft,
-      where: {
-        slug: {
-          equals: slug,
-        },
-      },
-    })
-
-    return result.docs?.[0] || null
-  } catch {
-    return null
-  }
-})

@@ -209,7 +209,7 @@ const nextConfig: NextConfig = {
   output: process.env.VERCEL ? undefined : 'standalone',
   // Ackee's tracker and collection API are served first-party under `/a` so the
   // public CSP needs no new host source: `connect-src 'self'` covers the API
-  // and the tracker is a same-origin script carrying the request nonce.
+  // and the tracker is a same-origin script the public script allowlist admits.
   // `beforeFiles` makes the namespace win before the `[slug]` page route, while
   // `/a` is not an existing route, so nothing public is shadowed. The
   // destination is the Docker service name on the CMS's compose network.
@@ -219,6 +219,17 @@ const nextConfig: NextConfig = {
         {
           source: '/a/:path*',
           destination: 'http://ackee:3000/:path*',
+        },
+      ],
+      afterFiles: [
+        {
+          // The homepage document stores the slug `home`. Serving it through
+          // the dynamic `[slug]` route (instead of a literal `app/page.tsx`) is
+          // what lets it be generated on demand from the live database rather
+          // than frozen during the build, which uses Payload's no-op database
+          // adapter.
+          source: '/',
+          destination: '/home',
         },
       ],
     }

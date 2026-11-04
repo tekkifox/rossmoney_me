@@ -9,7 +9,6 @@ import { SpeedInsights } from '@vercel/speed-insights/next'
 import { GeistMono } from 'geist/font/mono'
 import React from 'react'
 
-import AckeeTracker from '@/components/AckeeTracker'
 import { AdminBar } from '@/components/AdminBar'
 import { ErrorReporter } from '@/components/ErrorReporter'
 // Footer removed per request: site uses a minimal branded footer in templates
@@ -17,16 +16,13 @@ import { Header } from '@/Header/Component'
 import { Providers } from '@/providers'
 import { InitTheme } from '@/providers/Theme/InitTheme'
 import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
-import { draftMode } from 'next/headers'
 
 import './globals.css'
 import '../../styles/tokens.css'
 import './local-styles.css'
 import { getServerSideURL } from '@/utilities/getURL'
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { isEnabled } = await draftMode()
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html className={GeistMono.variable} lang="en" suppressHydrationWarning>
       <head>
@@ -42,13 +38,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         <ErrorReporter />
-        <AckeeTracker />
         <Providers>
-          <AdminBar
-            adminBarProps={{
-              preview: isEnabled,
-            }}
-          />
+          <AdminBar />
 
           <Header />
           {children}

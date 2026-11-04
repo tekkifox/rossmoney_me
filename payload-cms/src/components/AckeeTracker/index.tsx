@@ -1,12 +1,9 @@
-import { draftMode, headers } from 'next/headers'
-
 import {
   ACKEE_DOMAIN_ID,
   ACKEE_OPTS,
   ackeeServerURL,
   shouldEnableAckeeTracker,
 } from '@/utilities/ackeeTracker'
-import { nonceFromCspHeader } from '@/utilities/contentSecurityPolicy'
 import { resolveServerURL } from '@/utilities/serverURL'
 
 export {
@@ -19,6 +16,10 @@ export {
 
 export type AckeeTrackerScriptProps = {
   enabled?: boolean
+  /**
+   * The served policy of a prerendered public document allows its own scripts,
+   * so no nonce is needed. Kept optional for a future dynamic surface.
+   */
   nonce?: string
   /** Site origin, from the server-URL helper; a trailing slash is accepted. */
   origin?: string
@@ -26,9 +27,7 @@ export type AckeeTrackerScriptProps = {
 
 /**
  * The script tag itself. Kept separate from the environment checks so it can
- * be rendered directly in a unit test. `nonce` is required: under
- * `strict-dynamic` a parser-inserted same-origin script is not trusted by
- * `'self'`, only by the nonce on the tag.
+ * be rendered directly in a unit test.
  */
 export function AckeeTrackerScript({
   enabled = true,
@@ -53,18 +52,30 @@ export function AckeeTrackerScript({
   )
 }
 
-/**
- * Server wrapper rendered by the public layout. Reads draft mode and the
- * request nonce, then renders nothing unless this is a production request.
- */
-export default async function AckeeTracker() {
-  const { isEnabled } = await draftMode()
+export type AckeeTrackerProps = {
+  /**
+   * Draft previews must not post into the production dashboard. The public page
+   * passes its own `draft` flag instead of this component reading `draftMode()`,
+   * because reading a request-time API here would force every public page
+   * dynamic and back to `private, no-store`.
+   */
+  draft?: boolean
+  origin?: string
+}
 
-  if (!shouldEnableAckeeTracker({ draft: isEnabled })) {
+/**
+ * Server wrapper rendered by the public page. The production/Vercel/draft gate
+ * is synchronous, so it works during a prerendered (ISR) render.
+ */
+export function AckeeTracker({
+  draft = false,
+  origin,
+}: AckeeTrackerProps = {}) {
+  if (!shouldEnableAckeeTracker({ draft })) {
     return null
   }
 
-  const nonce = nonceFromCspHeader((await headers()).get('content-security-policy'))
-
-  return <AckeeTrackerScript nonce={nonce} />
+  return <AckeeTrackerScript origin={origin} />
 }
+
+export default AckeeTracker
