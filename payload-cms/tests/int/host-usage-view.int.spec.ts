@@ -148,36 +148,102 @@ describe('host usage with populated relationships', () => {
   })
 })
 
-describe('host usage view with three hosts', () => {
-  it('renders a chart and a grouped table for every host', async () => {
+/** Mirrors the page's own source query so "first" means the same thing. */
+async function firstSourceInViewOrder(): Promise<Source> {
+  const result = await payload.find({
+    collection: 'archview-sources',
+    limit: 100,
+    overrideAccess: true,
+  })
+  const first = result.docs[0] as unknown as { id: string; name: string }
+  return { id: String(first.id), name: String(first.name) }
+}
+
+function currentTab(nav: HTMLElement): HTMLElement {
+  const tabs = within(nav)
+    .getAllByRole('link')
+    .filter((link) => link.getAttribute('aria-current') === 'page')
+  expect(tabs).toHaveLength(1)
+  return tabs[0]
+}
+
+describe('host usage tabs', () => {
+  it('renders only the host in the host query, with its chart and recent table', async () => {
+    const selected = sources[1]
+    const ui = await HostUsage({ searchParams: { range: '1h', host: selected.id } })
+    render(ui)
+
+    const chartHeading = screen.getByRole('heading', { level: 2, name: selected.name })
+    const section = chartHeading.closest('section')
+
+    expect(section).not.toBeNull()
+    expect(
+      within(section as HTMLElement).queryByText(/No samples in the selected range/),
+    ).toBeNull()
+
+    // Stacked small multiples: one chart panel per metric, each with its own
+    // ResponsiveContainer and Y-axis rather than one shared percent axis.
+    expect(section?.querySelectorAll('.recharts-responsive-container')).toHaveLength(4)
+    const panelTitles = Array.from(section?.querySelectorAll('h3') ?? []).map(
+      (heading) => heading.textContent,
+    )
+    expect(panelTitles).toEqual(['CPU %', 'Memory %', 'Load', 'Disk %'])
+
+    for (const other of sources.filter((source) => source.id !== selected.id)) {
+      expect(screen.queryByRole('heading', { level: 2, name: other.name })).toBeNull()
+    }
+
+    // One table for the selected host only: a header row plus its one sample.
+    const table = screen.getByRole('table')
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent),
+    ).toEqual(['Time (UTC)', 'CPU %', 'Memory %', 'Load', 'Disk %'])
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
+  })
+
+  it('selects the first source when no host is given', async () => {
+    const first = await firstSourceInViewOrder()
     const ui = await HostUsage({ searchParams: { range: '1h' } })
     render(ui)
 
+    const nav = screen.getByRole('navigation', { name: 'Hosts' })
+    expect(currentTab(nav).textContent).toBe(first.name)
+    expect(screen.getByRole('heading', { level: 2, name: first.name })).not.toBeNull()
+  })
+
+  it('falls back to the first source when the host is unknown', async () => {
+    const first = await firstSourceInViewOrder()
+    const ui = await HostUsage({
+      searchParams: { range: '1h', host: `unknown-${runId}` },
+    })
+    render(ui)
+
+    const nav = screen.getByRole('navigation', { name: 'Hosts' })
+    expect(currentTab(nav).textContent).toBe(first.name)
+    expect(screen.getByRole('heading', { level: 2, name: first.name })).not.toBeNull()
+  })
+
+  it('keeps the selected range on every tab link', async () => {
+    const ui = await HostUsage({ searchParams: { range: '7d', host: sources[2].id } })
+    render(ui)
+
+    const nav = screen.getByRole('navigation', { name: 'Hosts' })
     for (const source of sources) {
-      const chartHeading = screen.getByRole('heading', { level: 2, name: source.name })
-      const section = chartHeading.closest('section')
+      const href = within(nav).getByRole('link', { name: source.name }).getAttribute('href')
+      expect(href).not.toBeNull()
+      const params = new URLSearchParams((href as string).replace(/^\?/, ''))
+      expect(params.get('host')).toBe(source.id)
+      expect(params.get('range')).toBe('7d')
+    }
 
-      expect(section).not.toBeNull()
-      expect(within(section as HTMLElement).queryByText(/No samples in the selected range/)).toBeNull()
-
-      // Stacked small multiples: one chart panel per metric, each with its own
-      // ResponsiveContainer and Y-axis rather than one shared percent axis.
-      expect(section?.querySelectorAll('.recharts-responsive-container')).toHaveLength(4)
-      const panelTitles = Array.from(section?.querySelectorAll('h3') ?? []).map(
-        (heading) => heading.textContent,
-      )
-      expect(panelTitles).toEqual(['CPU %', 'Memory %', 'Load', 'Disk %'])
-
-      const tableHeading = screen.getByRole('heading', { level: 3, name: source.name })
-      const group = tableHeading.parentElement as HTMLElement
-      expect(within(group).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
-        'Time (UTC)',
-        'CPU %',
-        'Memory %',
-        'Load',
-        'Disk %',
-      ])
-      expect(within(group).getAllByRole('row')).toHaveLength(2)
+    // `aria-current` marks exactly the selected tab; the rest do not claim it.
+    expect(currentTab(nav).textContent).toBe(sources[2].name)
+    for (const other of sources.filter((source) => source.id !== sources[2].id)) {
+      expect(
+        within(nav).getByRole('link', { name: other.name }).getAttribute('aria-current'),
+      ).toBeNull()
     }
   })
 })
