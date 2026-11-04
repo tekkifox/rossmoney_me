@@ -3,23 +3,36 @@ import type { Metadata } from 'next'
 import type { Media, Page, Config } from '../payload-types'
 
 import { mergeOpenGraph } from './mergeOpenGraph'
+import {
+  buildOgImageUrl,
+  OG_IMAGE_ALT,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_WIDTH,
+  ogImageAlt,
+  SITE_NAME,
+  STATIC_OG_IMAGE_PATH,
+} from './ogImage'
 import { getSiteURL } from './siteURL'
 
-const SITE_NAME = 'Ross Money - Developer & DevOps Portfolio'
-const OG_IMAGE_ALT = 'Ross Money — DevOps-focused developer portfolio'
-
-const getImageURL = (image?: Media | Config['db']['defaultIDType'] | null) => {
-  const siteUrl = getSiteURL()
-
-  let url = siteUrl + '/og.jpg'
-
-  if (image && typeof image === 'object' && 'url' in image) {
-    const ogUrl = image.sizes?.og?.url
-
-    url = ogUrl ? siteUrl + ogUrl : siteUrl + image.url
+/**
+ * An editor-uploaded Open Graph image, if the page has one. Without an upload
+ * the caller decides between the generated card and the static fallback.
+ */
+const getUploadedImage = (
+  image?: Media | Config['db']['defaultIDType'] | null,
+): { url: string; alt: string } | null => {
+  if (!image || typeof image !== 'object' || !('url' in image)) {
+    return null
   }
 
-  return url
+  const siteUrl = getSiteURL()
+  const ogUrl = image.sizes?.og?.url
+  const alt = typeof image.alt === 'string' && image.alt.trim() ? image.alt.trim() : OG_IMAGE_ALT
+
+  return {
+    url: ogUrl ? siteUrl + ogUrl : siteUrl + image.url,
+    alt,
+  }
 }
 
 /**
@@ -44,8 +57,6 @@ export const generateMeta = async (args: {
 }): Promise<Metadata> => {
   const { doc } = args
 
-  const ogImage = getImageURL(doc?.meta?.image)
-
   // The CMS metadata tab wins; a page without it falls back to its own title
   // and lead so it still gets a descriptive title and description instead of
   // the bare site name.
@@ -56,7 +67,21 @@ export const generateMeta = async (args: {
   const path = pagePath(doc?.slug)
   const siteURL = getSiteURL()
   const canonical = path === '/' ? siteURL : `${siteURL}${path}`
-  const images = ogImage ? [{ url: ogImage, alt: OG_IMAGE_ALT }] : undefined
+
+  const uploadedImage = getUploadedImage(doc?.meta?.image)
+  const images: NonNullable<Metadata['openGraph']>['images'] = uploadedImage
+    ? [{ url: uploadedImage.url, alt: uploadedImage.alt }]
+    : pageTitle && description
+      ? [
+          {
+            url: buildOgImageUrl(siteURL, { title: pageTitle, description }),
+            alt: ogImageAlt(pageTitle),
+            width: OG_IMAGE_WIDTH,
+            height: OG_IMAGE_HEIGHT,
+            type: 'image/png',
+          },
+        ]
+      : [{ url: `${siteURL}${STATIC_OG_IMAGE_PATH}`, alt: OG_IMAGE_ALT }]
 
   return {
     alternates: {

@@ -128,14 +128,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Public, deterministic image generated from the request query. A long
-        // CDN/browser lifetime is the cheapest guard for /api/og; the proxy
-        // rate limit only has to cover cache misses.
+        // Public, deterministic image generated from the request query. The
+        // query is part of the cache key, so a page edit produces a new URL and
+        // the old card can stay immutable for a year. Keep this value in step
+        // with `OG_IMAGE_CACHE_CONTROL` in `src/utilities/ogImage.ts`.
         source: '/api/og',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+            value: 'public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=604800, immutable',
           },
         ],
       },

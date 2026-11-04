@@ -39,7 +39,7 @@ import { getRobotsTag } from '@/utilities/siteURL'
  * endpoints: the login handler (Payload's account lockout alone lets one source
  * keep the only admin locked out) and the Open Graph image renderer (the
  * query-string values are rewritten to bounded, control-character-free input
- * before Payload's generator sees them). The per-IP budgets live in MongoDB so
+ * before the card route renders them). The per-IP budgets live in MongoDB so
  * every instance shares one counter; if the database is slow or unreachable the
  * limiter falls back to its in-memory budget instead of failing the request.
  *
@@ -122,7 +122,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // `/api/og` is public and renders a PNG in Node. Cap the interpolated strings
-  // and bound the render rate before the generated Payload route runs.
+  // and bound the render rate before the card route runs.
   if (pathname === '/api/og' && request.method === 'GET') {
     const address = clientAddress(headers)
     const perAddress = await ogIpRateLimiter.take(address)

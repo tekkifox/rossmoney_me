@@ -80,6 +80,12 @@ const EXCEPTIONS = [
     match: /^\.docx p\.docx-entry-rule \{ border-bottom: 1px solid rgba\(17, 17, 17, 0\.2\)/,
     reason: 'DOCX entry rule; border asserted verbatim by the DOCX integration test.',
   },
+  {
+    file: 'src/utilities/ogTheme.ts',
+    match: /^\s{2}[a-zA-Z]+: '(?:#[0-9a-fA-F]{6}|rgba\([^']*\))',$/,
+    reason:
+      'Satori/next-og has no stylesheet cascade, so the OG card mirrors tokens as literals; tests/int/og-theme.int.spec.ts asserts them against tokens.css.',
+  },
 ]
 
 async function collectFiles(directory) {
@@ -173,7 +179,7 @@ async function main() {
     process.exit(1)
   }
 
-  const suffix = exceptionCount > 0 ? ` (${exceptionCount} documented DOCX exception${exceptionCount === 1 ? '' : 's'})` : ''
+  const suffix = exceptionCount > 0 ? ` (${exceptionCount} documented exception${exceptionCount === 1 ? '' : 's'})` : ''
   console.log(`token-guard: no raw colour literals outside src/styles/tokens.css${suffix}.`)
 }
 
