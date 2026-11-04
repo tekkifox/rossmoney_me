@@ -52,8 +52,8 @@ export const FormBlock: React.FC<
 
   const onSubmit = useCallback(
     (data: FieldValues) => {
-      let loadingTimerID: ReturnType<typeof setTimeout>
       const submitForm = async () => {
+        let loadingTimerID: ReturnType<typeof setTimeout> | undefined
         setError(undefined)
 
         try {

@@ -1,5 +1,5 @@
 "use client"
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { buildFacts, buildHighlights, renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
@@ -40,6 +40,8 @@ interface ArchitecturePayload {
 const REFRESH_INTERVAL_MS = 10000
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
+  const inFlightRef = useRef(false)
+
   useEffect(() => {
     const pageRoot = document.getElementById('page-root') as HTMLElement | null
     // When the page's requested source could not be honoured, never fetch the
@@ -64,10 +66,9 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
     const pageProject = pageRoot?.dataset?.architectureProject?.trim()
     const projectLabel = pageProject || project
 
-    let inFlight = false
     async function fetchArchitecture() {
-      if (inFlight) return
-      inFlight = true
+      if (inFlightRef.current) return
+      inFlightRef.current = true
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
         const res = await fetch(url, { cache: 'no-store' })
@@ -95,7 +96,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         if (descEl) descEl.textContent = reason
         if (updatedEl) updatedEl.textContent = 'Failed'
       } finally {
-        inFlight = false
+        inFlightRef.current = false
       }
     }
 
