@@ -80,7 +80,6 @@ describe('pages sitemap', () => {
               reference: { relationTo: 'pages', value: contact.docs[0]?.id },
             },
           },
-          { link: { type: 'custom', label: 'Posts', url: '/posts' } },
           {
             link: {
               type: 'custom',

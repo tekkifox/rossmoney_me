@@ -263,6 +263,22 @@ site is capped at 1140px with 12px inline padding at every width.
 | `--shadow-metric` | `0 6px 12px rgba(16, 24, 40, 0.04)` | Metric cards, image cards |
 | Tailwind `shadow-sm` | Tailwind default | Utility cards in templates |
 
+## Reflow (WCAG 1.4.10)
+
+Two rules keep a 320px viewport free of horizontal scrolling:
+
+- The mobile nav takes over at **992px**, because the horizontal nav needs
+  about 942px to fit on one row (see [Top navigation](#top-navigation)).
+- Long unbreakable strings — email addresses, host names — may break
+  (`overflow-wrap: anywhere`) in the contact panel, the contact/navigation link
+  cards and the hero heading. The contact panel's two columns also stack at
+  ≤720px.
+
+They only take effect when the available width is smaller than the content, so
+the desktop composition is unchanged. Verify by comparing
+`document.documentElement.scrollWidth` with `window.innerWidth` at 320, 360,
+375, 414, 721, 768, 820, 900, 929, 992, 1024 and 1280 px.
+
 ## Component recipes
 
 ### Card / panel
@@ -314,10 +330,14 @@ font-variant-numeric: tabular-nums;
 - `.topnav a` / `.cmslink`: `padding: 8px 12px`, `border-radius: 8px`,
   `color: var(--muted)`, transparent background; hover background
   `var(--border)`, text `var(--text)`.
-- ≤720px: `.nav-toggle` becomes an inline 44×44 control with an 8px radius,
+- ≤992px: `.nav-toggle` becomes an inline 44×44 control with an 8px radius,
   `--border`, `--card-bg` and `--text`; `.topnav` is hidden until
   `[data-open="true"]`, then stacks vertically with 4px gaps and 44px minimum
   row heights.
+- The collapse point is 992px, not 720px: the horizontal nav (brand 138px +
+  links 780px + padding) needs about 942px, so between 721px and 929px the
+  desktop nav used to overflow and force a horizontal scrollbar. 993px and
+  wider fit on one row.
 
 ### Brand lockup
 

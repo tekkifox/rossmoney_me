@@ -37,10 +37,14 @@ a:hover{color:var(--primary-hover)}
 
 .hero{display:flex;gap:var(--primitive-space-5);align-items:stretch;flex-wrap:wrap}
 .hero{display:flex;gap:var(--primitive-space-45);align-items:stretch;flex-wrap:wrap;padding-top:var(--primitive-space-2);padding-bottom:var(--primitive-space-2)}
-.hero-copy{flex:1 1 520px;padding:var(--primitive-space-3) var(--primitive-space-15);display:flex;flex-direction:column;justify-content:center}
+.hero-copy{flex:1 1 520px;min-width:0;padding:var(--primitive-space-3) var(--primitive-space-15);display:flex;flex-direction:column;justify-content:center}
 .hero-panel{flex:0 0 320px;min-width:240px;padding:var(--primitive-space-3)}
 .eyebrow{font-size:var(--primitive-font-size-75);color:var(--primary);text-transform:uppercase;letter-spacing:var(--primitive-tracking-012);margin-bottom:var(--primitive-space-2)}
 h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);line-height:var(--primitive-line-height-105)}
+/* Reflow (WCAG 1.4.10): a single long word in a heading (a host name such as
+   "VortexServers.co.uk") could otherwise set the page's minimum width. It only
+   breaks when it cannot fit, so desktop composition is unchanged. */
+.hero-copy h1{overflow-wrap:anywhere}
 .hero-copy h1, .hero-copy .lead { text-align: left }
 .hero-copy .lead { max-width: 48rem }
 .lead{color:var(--muted);margin:0 0 var(--primitive-space-4)}
@@ -97,8 +101,21 @@ h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);
 .map-page .hero .lead{margin-bottom:0}
 .map-page > .my-16{margin-block:var(--primitive-space-8)}
 .services-section{margin-top:0;padding-top:var(--primitive-space-10);padding-bottom:var(--primitive-space-10)}
+/* Reflow (WCAG 1.4.10). The contact panel is a flex row. On the mobile layout
+   the two columns no longer fit side by side, so the panel stacks; above 720px
+   it keeps its existing two-column composition. Addresses are allowed to break
+   so a single link can never set the page's minimum width. */
 .contact-card{display:flex;gap:var(--primitive-space-4);align-items:flex-start}
-.contact-links a{display:block;margin-bottom:var(--primitive-space-2)}
+/* The address column keeps its natural width; only the text column flexes.
+   Shrinking it instead would break addresses mid-word on wide screens. */
+.contact-links{flex:0 0 auto}
+.contact-links a{display:block;margin-bottom:var(--primitive-space-2);overflow-wrap:anywhere}
+
+/* Link cards in the contact and navigation templates are anchors inside a
+   Tailwind grid. Their minimum width must not be set by an unbreakable address
+   ("dev@rossmoney.me"): let the card shrink and the text wrap. No markup change
+   is needed, and on wide screens nothing wraps. */
+.grid > a{min-width:0;overflow-wrap:anywhere}
 
 /* Experience timeline on homepage */
 .timeline{display:flex;flex-direction:column;gap:var(--primitive-space-3);margin-top:var(--primitive-space-2)}
@@ -129,8 +146,16 @@ h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);
   .brand-mark{width:40px;height:40px}
   .page-shell{padding:var(--primitive-space-4) var(--primitive-space-3)}
   .btn{width:100%}
+  /* Reflow: stack the contact panel's two columns instead of squeezing them. */
+  .contact-card{flex-wrap:wrap}
+}
 
-  /* Topbar and menu tweaks for small screens */
+/* The horizontal nav (brand 138px + links 780px + padding) needs ~942px, so the
+   toggle owns every width up to 992px — the breakpoint the rest of the layout
+   already uses. Between 721px and 929px the desktop nav used to overflow the
+   page and force a horizontal scrollbar. 993px and wider fit on one row. */
+@media (max-width: 992px){
+  /* Topbar and menu tweaks for tablet and small screens */
   .topbar { padding:var(--primitive-space-3) var(--primitive-space-2); flex-wrap:wrap; gap:var(--primitive-space-2); align-items:center }
   .topnav-wrap { display:contents }
   .nav-toggle { display:inline-flex; align-items:center; justify-content:center; width:var(--primitive-space-11); height:var(--primitive-space-11); border-radius:var(--primitive-radius-8); border:1px solid var(--border); background:var(--card-bg); color:var(--text); font-size:var(--primitive-font-size-125); cursor:pointer }
