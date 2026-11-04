@@ -43,9 +43,15 @@ test('public page loads the first-party Ackee tracker with no CSP violation', as
   await expect(tracker).toHaveAttribute('data-ackee-server', /\/a$/)
   await expect(tracker).toHaveAttribute('data-ackee-opts', ACKEE_OPTS)
 
+  // Public documents come from the ISR cache, so the policy allows same-origin
+  // scripts instead of carrying a per-request nonce. The fixture's teardown
+  // still fails the test on any securitypolicyviolation, which covers the
+  // tracker load itself.
   const nonce = await tracker.evaluate((element) => (element as HTMLScriptElement).nonce)
-  expect(nonce, 'tracker script must carry the request nonce').toBeTruthy()
-  expect(csp, 'the tracker nonce must match the request policy').toContain(`'nonce-${nonce}'`)
+  expect(nonce, 'a cached public document has no request nonce').toBeFalsy()
+  expect(csp, 'the static policy must allow the first-party tracker').toContain(
+    "script-src 'self'",
+  )
 
   // The fixture's teardown fails the test on any securitypolicyviolation, so
   // this also covers the tracker load being blocked by script-src.

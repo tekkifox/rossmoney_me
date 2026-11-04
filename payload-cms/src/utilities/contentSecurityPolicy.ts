@@ -14,6 +14,11 @@ import { normaliseOrigin } from './adminOrigin'
  * request and the response. The admin panel is a Next.js app too, so its
  * framework scripts receive the same nonce. Payload's inline `style` attributes
  * cannot be nonced, which is why `style-src` keeps `'unsafe-inline'`.
+ *
+ * Prerendered public documents are the exception: their HTML comes from the
+ * cache, so a per-request nonce cannot match it. They use the documented static
+ * script allowlist instead (see `preRendered` below and
+ * `docs/security/csp.md`).
  */
 
 /** Vercel Blob public store host used by the storage adapter on Vercel. */
@@ -126,6 +131,14 @@ export const archviewOrigins = (
 
 export type ContentSecurityPolicyOptions = {
   nonce: string
+  /**
+   * The document is served from the prerender/ISR cache, so it cannot carry a
+   * per-request nonce: the nonce baked into the cached HTML would not match the
+   * response header. Public documents therefore fall back to the static
+   * allowlist documented in `docs/security/csp.md`. Ignored for the admin, which
+   * is always rendered per request.
+   */
+  preRendered?: boolean
   /** Adds `upgrade-insecure-requests`; only meaningful on HTTPS responses. */
   isHttps?: boolean
   /** Extra `connect-src` origins, e.g. an ArchView instance. */
@@ -145,6 +158,7 @@ export type ContentSecurityPolicyOptions = {
  */
 export function buildContentSecurityPolicy({
   nonce,
+  preRendered = false,
   isHttps = false,
   connectOrigins = [],
   isAdmin = false,
@@ -194,13 +208,18 @@ export function buildContentSecurityPolicy({
     : ''
   const toolbarFrame = vercelToolbar ? ` ${VERCEL_TOOLBAR_ORIGIN}` : ''
 
+  // Public pages are prerendered (see `utilities/publicPageCache.ts`), so their
+  // HTML cannot carry a fresh nonce. They keep the static allowlist instead:
+  // `'self'` for Next.js chunks and `'unsafe-inline'` for the inline RSC/theme
+  // bootstrap. The admin stays nonce-based because it renders per request.
+  const useStaticScripts = preRendered && !isAdmin
+  const scriptDirective = useStaticScripts
+    ? `script-src 'self' 'unsafe-inline'${publicScriptSources}${adminSources}${toolbarScript}`
+    : `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'${publicScriptSources}${adminSources}${toolbarScript}`
+
   const directives = [
     "default-src 'none'",
-    // `strict-dynamic` lets the nonced Next.js bootstrap load its chunks and
-    // lets the analytics packages insert their same-origin script tags. `'self'`
-    // remains for browsers that do not implement strict-dynamic, and the
-    // jsDelivr host is the CSP2 fallback for Payload's Monaco loader.
-    `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'${publicScriptSources}${adminSources}${toolbarScript}`,
+    scriptDirective,
     // Public pages use inline `style` *attributes* (React `style` props) but no
     // inline `<style>` elements, so they can allow attributes without allowing
     // inline stylesheet text. Payload's admin also injects `<style>` elements,

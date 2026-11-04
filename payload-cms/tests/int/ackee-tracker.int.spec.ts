@@ -7,20 +7,8 @@ import AckeeTracker, {
   ACKEE_OPTS,
   AckeeTrackerScript,
   shouldEnableAckeeTracker,
+  type AckeeTrackerProps,
 } from '@/components/AckeeTracker'
-
-const requestState = vi.hoisted(() => ({
-  draft: false,
-  csp: "default-src 'none'; script-src 'nonce-abc123' 'strict-dynamic' 'self'",
-}))
-
-vi.mock('next/headers', () => ({
-  draftMode: async () => ({ isEnabled: requestState.draft }),
-  headers: async () =>
-    new Headers(
-      requestState.csp ? { 'content-security-policy': requestState.csp } : {},
-    ),
-}))
 
 afterEach(() => {
   cleanup()
@@ -30,7 +18,6 @@ afterEach(() => {
     element.remove()
   }
   vi.unstubAllEnvs()
-  requestState.draft = false
 })
 
 beforeEach(() => {
@@ -72,26 +59,24 @@ describe('shouldEnableAckeeTracker', () => {
 })
 
 describe('AckeeTracker', () => {
-  it('renders nothing outside production', async () => {
+  it('renders nothing outside production', () => {
     vi.stubEnv('NODE_ENV', 'development')
 
-    const { container } = render(await AckeeTracker())
+    const { container } = render(React.createElement(AckeeTracker))
 
     expect(container.innerHTML).toBe('')
     expect(document.querySelector(trackerSelector)).toBeNull()
   })
 
-  it('renders nothing in draft mode', async () => {
-    requestState.draft = true
-
-    const { container } = render(await AckeeTracker())
+  it('renders nothing for a draft render', () => {
+    const { container } = render(React.createElement<AckeeTrackerProps>(AckeeTracker, { draft: true }))
 
     expect(container.innerHTML).toBe('')
     expect(document.querySelector(trackerSelector)).toBeNull()
   })
 
-  it('renders the nonced tracker for a production request', async () => {
-    render(await AckeeTracker())
+  it('renders the tracker for a prerendered public page without a nonce', () => {
+    render(React.createElement(AckeeTracker))
 
     const script = document.querySelector<HTMLScriptElement>(trackerSelector)
 
@@ -100,7 +85,9 @@ describe('AckeeTracker', () => {
     expect(script?.getAttribute('data-ackee-server')).toBe('https://www.example.com/a')
     expect(script?.getAttribute('data-ackee-domain-id')).toBe(ACKEE_DOMAIN_ID)
     expect(script?.getAttribute('data-ackee-opts')).toBe(ACKEE_OPTS)
-    expect(script?.getAttribute('nonce')).toBe('abc123')
+    // Public documents are served from the ISR cache, so their policy allows
+    // same-origin scripts and there is no per-request nonce to carry.
+    expect(script?.getAttribute('nonce')).toBeNull()
   })
 })
 
@@ -109,7 +96,6 @@ describe('AckeeTrackerScript', () => {
     const { container } = render(
       React.createElement(AckeeTrackerScript, {
         enabled: false,
-        nonce: 'abc123',
         origin: 'https://www.example.com',
       }),
     )
@@ -119,10 +105,9 @@ describe('AckeeTrackerScript', () => {
     expect(document.querySelector(trackerSelector)).toBeNull()
   })
 
-  it('renders the first-party tracker with the request nonce', () => {
+  it('renders the first-party tracker', () => {
     render(
       React.createElement(AckeeTrackerScript, {
-        nonce: 'abc123',
         // A distinct origin keeps React's script-resource cache from treating
         // this as the same element the wrapper test already inserted.
         origin: 'https://component.example.com/',
@@ -136,6 +121,5 @@ describe('AckeeTrackerScript', () => {
     expect(script?.getAttribute('data-ackee-server')).toBe('https://component.example.com/a')
     expect(script?.getAttribute('data-ackee-domain-id')).toBe(ACKEE_DOMAIN_ID)
     expect(script?.getAttribute('data-ackee-opts')).toBe(ACKEE_OPTS)
-    expect(script?.getAttribute('nonce')).toBe('abc123')
   })
 })
