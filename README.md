@@ -101,6 +101,10 @@ The CMS API exposes:
 
 Open `/admin/` to manage the home page, projects, experience entries, and contact block.
 
+Each project has an optional **URL** field. Set it to an absolute `http://` or
+`https://` address to make the whole **Selected work** card on the homepage link
+there (opening in a new tab); leave it empty and the card renders without a link.
+
 ### Bot settings
 
 The `bot-settings` global (Operations → Bot settings) configures the notification

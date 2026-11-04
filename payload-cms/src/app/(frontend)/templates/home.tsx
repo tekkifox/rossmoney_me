@@ -9,6 +9,7 @@ import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
+import { ProjectCards } from '@/components/ProjectCards'
 
 import {
   PageDoc,
@@ -166,15 +167,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
           <h2 id="work-section-title">Real roles and projects from my CV.</h2>
         </div>
 
-        <div className="cards-grid" id="cms-projects">
-          {projects.slice(0, 6).map((project, i) => (
-            <article key={i} className="feature-card card">
-              <p className="card-kicker">{project.role}</p>
-              <h3>{project.title}</h3>
-              <p>{project.summary}</p>
-            </article>
-          ))}
-        </div>
+        <ProjectCards projects={projects} />
       </section>
       <ArchitectureClient
         project="rossmoney_me"

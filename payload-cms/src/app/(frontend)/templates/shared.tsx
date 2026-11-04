@@ -12,6 +12,7 @@ export type ProjectDoc = {
   title?: string
   role?: string
   summary?: string
+  url?: string
 }
 
 export type ExperienceDoc = {
@@ -83,6 +84,7 @@ export function readProjects(value: unknown): ProjectDoc[] {
       title: readString(record.title),
       role: readString(record.role),
       summary: readString(record.summary),
+      url: readString(record.url),
     }
   })
 }
