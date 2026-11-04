@@ -19,7 +19,7 @@ export default function CVViewer({ cvFile }: Props) {
   const errorMessage = error && error.url === cvUrl ? error.message : null
 
   useEffect(() => {
-    let cancelled = false
+    const renderState = { cancelled: false }
 
     async function renderDoc() {
       try {
@@ -104,14 +104,14 @@ export default function CVViewer({ cvFile }: Props) {
       } catch (err) {
         console.warn('CV render failed', err)
         const rawMessage = typeof err === 'object' && err !== null && 'message' in err ? err.message : undefined
-        if (!cancelled && cvUrl) {
+        if (!renderState.cancelled && cvUrl) {
           setError({ message: String(rawMessage ?? String(err)), url: cvUrl })
         }
       }
     }
 
     void renderDoc()
-    return () => { cancelled = true }
+    return () => { renderState.cancelled = true }
   }, [cvUrl])
 
   return (
