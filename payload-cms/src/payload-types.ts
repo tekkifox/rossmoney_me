@@ -778,6 +778,10 @@ export interface Project {
   title: string;
   role?: string | null;
   summary?: string | null;
+  /**
+   * Optional. Absolute http:// or https:// address the "Selected work" card links to, such as a live project or case study. Leave empty to show the card without a link.
+   */
+  url?: string | null;
   tags?:
     | {
         tag?: string | null;
@@ -1348,6 +1352,7 @@ export interface ProjectsSelect<T extends boolean = true> {
   title?: T;
   role?: T;
   summary?: T;
+  url?: T;
   tags?:
     | T
     | {
