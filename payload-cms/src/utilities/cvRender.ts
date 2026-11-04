@@ -272,13 +272,13 @@ async function convertPdfToHtml(buffer: Buffer): Promise<string> {
   // optional @napi-rs/canvas dependency is only used to rasterise pages; text
   // extraction does not need it, which is all the CV page does.
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const document = await pdfjs.getDocument({
+  const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     useSystemFonts: false,
-    isEvalSupported: false,
     disableFontFace: true,
     verbosity: 0,
-  }).promise
+  })
+  const document = await loadingTask.promise
 
   try {
     const pages: string[] = []
@@ -295,7 +295,7 @@ async function convertPdfToHtml(buffer: Buffer): Promise<string> {
 
     return pages.join('\n<hr />\n')
   } finally {
-    await document.destroy()
+    await loadingTask.destroy()
   }
 }
 
