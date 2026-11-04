@@ -11,7 +11,12 @@ a:hover{color:var(--primary-hover)}
    ordered between the header (order 0) and the page content (order 2), so the
    header does not move and the link gets its own row under it. */
 .skip-link{position:absolute;left:var(--primitive-space-3);top:var(--primitive-space-3);transform:translateY(-200%);order:-1;padding:var(--primitive-space-2) var(--primitive-space-3);border:1px solid var(--border-control);border-radius:var(--primitive-radius-8);background:var(--card-bg);color:var(--text);font-weight:var(--primitive-font-weight-600)}
-.skip-link:focus,.skip-link:focus-visible{position:static;display:block;width:max-content;transform:none;order:1;margin:var(--primitive-space-3)}
+.skip-link:focus,.skip-link:focus-visible{position:static;display:block;width:max-content;transform:none;order:1;margin:var(--primitive-space-3);margin-left:max(var(--primitive-space-3),calc((100% - var(--container-max)) / 2 + var(--primitive-space-3)))}
+/* ≤720px the topbar adds its own 8px horizontal inset, so the logo sits at
+   12+8; match it. */
+@media (max-width: 720px){
+  .skip-link:focus,.skip-link:focus-visible{margin-left:calc(max(var(--primitive-space-3),calc((100% - var(--container-max)) / 2 + var(--primitive-space-3))) + var(--primitive-space-2))}
+}
 header{order:0}
 #page-root,main{order:2}
 
