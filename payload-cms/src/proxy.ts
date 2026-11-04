@@ -12,9 +12,10 @@ import {
   ogGlobalRateLimiter,
   ogIpRateLimiter,
 } from '@/utilities/rateLimit'
+import { getRobotsTag } from '@/utilities/siteURL'
 
 /**
- * Two jobs, both domain-specific:
+ * Four jobs, all domain-specific:
  *
  * 1. Keep the admin usable on every domain this app is served from.
  *
@@ -42,15 +43,28 @@ import {
  * every instance shares one counter; if the database is slow or unreachable the
  * limiter falls back to its in-memory budget instead of failing the request.
  *
+ * 4. Keep non-canonical deployments out of search results.
+ *
+ * The same code runs on `www`, on Vercel preview/alias hosts and on `dev`, so a
+ * host that is not the public origin answers with `X-Robots-Tag: noindex`. That
+ * is a header, not a build flag, so a stale alias cannot advertise itself as
+ * indexable even when its environment is production-shaped. The canonical host
+ * comes from `utilities/siteURL.ts`, the same helper the metadata and sitemap
+ * use.
+ *
  * @see ../utilities/adminOrigin.ts
  * @see ../utilities/contentSecurityPolicy.ts
  * @see ../utilities/rateLimit.ts
  * @see ../utilities/ogSanitize.ts
+ * @see ../utilities/siteURL.ts
  */
 export async function proxy(request: NextRequest) {
   const headers = new Headers(request.headers)
   const pathname = request.nextUrl.pathname
   let forwarded = false
+
+  // The host the browser asked for, after any proxy in front of the app.
+  const robotsTag = getRobotsTag(headers.get('x-forwarded-host') ?? headers.get('host'))
 
   // Only Payload's own surfaces: the admin UI, admin server functions and the
   // REST/GraphQL API. The public site never needs the session cookie.
@@ -103,7 +117,7 @@ export async function proxy(request: NextRequest) {
   if (pathname === '/api/users/login' && request.method === 'POST') {
     const limited = await loginRateLimiter.take(clientAddress(headers))
     if (!limited.allowed) {
-      return tooManyRequests(limited.retryAfter, csp)
+      return applyRobotsHeader(tooManyRequests(limited.retryAfter, csp), robotsTag)
     }
   }
 
@@ -116,7 +130,7 @@ export async function proxy(request: NextRequest) {
 
     if (!perAddress.allowed || !perProcess.allowed) {
       const retryAfter = Math.max(perAddress.retryAfter, perProcess.retryAfter)
-      return tooManyRequests(retryAfter, csp)
+      return applyRobotsHeader(tooManyRequests(retryAfter, csp), robotsTag)
     }
 
     const ogUrl = request.nextUrl.clone()
@@ -133,7 +147,7 @@ export async function proxy(request: NextRequest) {
       if (csp) {
         response.headers.set('Content-Security-Policy', csp)
       }
-      return response
+      return applyRobotsHeader(response, robotsTag)
     }
   }
 
@@ -143,6 +157,19 @@ export async function proxy(request: NextRequest) {
 
   if (csp) {
     response.headers.set('Content-Security-Policy', csp)
+  }
+
+  return applyRobotsHeader(response, robotsTag)
+}
+
+/**
+ * A deployment served from any host other than the public origin is a preview,
+ * alias or dev mirror. Tell crawlers not to index it; canonical URLs still point
+ * at the public origin from every deployment.
+ */
+function applyRobotsHeader(response: NextResponse, robotsTag: string | null): NextResponse {
+  if (robotsTag) {
+    response.headers.set('X-Robots-Tag', robotsTag)
   }
 
   return response

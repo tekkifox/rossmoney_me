@@ -21,6 +21,7 @@ import MapTemplate from '../templates/map'
 import DefaultTemplate from '../templates/default'
 import { PageMeta } from '../templates/shared'
 import { PageRoot } from '@/components/PageRoot'
+import { StructuredData } from '@/components/StructuredData'
 import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
 import { resolvePageArchviewSource, isArchviewSourceFailure } from '@/utilities/archviewPageSource'
 import { resolvePageTemplate } from '@/utilities/pageTemplates'
@@ -111,6 +112,7 @@ export default async function Page({ params: paramsPromise }: Args) {
 
   return (
     <PageRoot architectureApi={architectureApi} architectureProject={architectureProject} architectureUnavailable={architectureFailed}>
+      <StructuredData />
       <PageMeta page={page} architectureApi={architectureApi} />
       <PageClient />
       {/* Allows redirects for valid pages too */}

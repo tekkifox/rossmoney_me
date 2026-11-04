@@ -43,8 +43,8 @@ describe('pages sitemap', () => {
     expect(site.projects).toBeDefined()
   })
 
-  it('filters only the excluded paths, even when they arrive from the header', async () => {
-    const paths = [...EXCLUDED_PATHS, '/work', '/commits', '/experience', '/architecture']
+  it('filters excluded and retired paths even when they arrive from the header', async () => {
+    const paths = [...EXCLUDED_PATHS, '/travelling', '/contact']
     const sitemap = buildPagesSitemap(paths, SITE_URL, DATE_FALLBACK)
     const xml = await (await getServerSideSitemap(sitemap)).text()
 
@@ -52,7 +52,7 @@ describe('pages sitemap', () => {
       expect(xml).not.toContain(`${path}<`)
     }
 
-    for (const path of ['/work', '/commits', '/experience', '/architecture']) {
+    for (const path of ['/travelling', '/contact']) {
       expect(xml).toContain(`${path}<`)
     }
   })
@@ -97,14 +97,7 @@ describe('pages sitemap', () => {
     })
 
     const paths = await resolveHeaderSitemapPaths(payload)
-    expect(paths).toEqual([
-      '/work',
-      '/travelling',
-      '/contact',
-      '/architecture',
-      '/commits',
-      '/experience',
-    ])
+    expect(paths).toEqual(['/', '/travelling', '/contact'])
 
     const sitemap = buildPagesSitemap(paths, SITE_URL, DATE_FALLBACK)
     expect(sitemap.map((entry) => entry.loc)).toEqual(
