@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button'
 import type { DefaultTypedEditorState } from '@payloadcms/richtext-lexical'
 
 import { fields } from './fields'
+import { TurnstileChallenge, type TurnstileStatus } from './Turnstile'
 import { getClientSideURL } from '@/utilities/getURL'
-import { getRecaptchaToken } from '@/utilities/getRecaptchaToken'
+import { TURNSTILE_CLIENT_MESSAGES } from '@/utilities/turnstile'
 
 const honeypotFieldName = 'website'
 
@@ -48,6 +49,9 @@ export const FormBlock: React.FC<
   const [isLoading, setIsLoading] = useState(false)
   const [hasSubmitted, setHasSubmitted] = useState<boolean>()
   const [error, setError] = useState<{ message: string; status?: string } | undefined>()
+  const [turnstileToken, setTurnstileToken] = useState<string>()
+  const [turnstileStatus, setTurnstileStatus] = useState<TurnstileStatus>({ state: 'loading' })
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0)
   const confirmationRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -73,11 +77,25 @@ export const FormBlock: React.FC<
         let loadingTimerID: ReturnType<typeof setTimeout> | undefined
         setError(undefined)
 
+        if (turnstileStatus.state === 'unavailable') {
+          setError({ message: turnstileStatus.message })
+          return
+        }
+        if (turnstileStatus.state === 'loading') {
+          setError({ message: TURNSTILE_CLIENT_MESSAGES.loading })
+          return
+        }
+        if (turnstileStatus.state === 'ready' && !turnstileToken) {
+          setError({ message: TURNSTILE_CLIENT_MESSAGES.missingToken })
+          return
+        }
+
         try {
-          const recaptchaToken = await getRecaptchaToken()
           const dataToSend = [
             ...Object.entries(data).map(([name, value]) => ({ field: name, value })),
-            { field: 'recaptcha-token', value: recaptchaToken },
+            ...(turnstileToken
+              ? [{ field: 'turnstile-token', value: turnstileToken }]
+              : []),
           ]
 
           // delay loading indicator by 1s
@@ -102,6 +120,7 @@ export const FormBlock: React.FC<
 
           if (req.status >= 400) {
             setIsLoading(false)
+            setTurnstileResetKey((key) => key + 1)
 
             setError({
               message: res.errors?.[0]?.message || 'Internal Server Error',
@@ -125,6 +144,7 @@ export const FormBlock: React.FC<
           console.warn(err)
           if (loadingTimerID) clearTimeout(loadingTimerID)
           setIsLoading(false)
+          setTurnstileResetKey((key) => key + 1)
           setError({
             message: err instanceof Error ? err.message : 'Something went wrong.',
           })
@@ -133,7 +153,7 @@ export const FormBlock: React.FC<
 
       void submitForm()
     },
-    [router, formID, redirect, confirmationType],
+    [router, formID, redirect, confirmationType, turnstileStatus, turnstileToken],
   )
 
   return (
@@ -193,6 +213,13 @@ export const FormBlock: React.FC<
                   type="text"
                 />
               </div>
+
+              <TurnstileChallenge
+                action="contact_form"
+                onState={setTurnstileStatus}
+                onToken={setTurnstileToken}
+                resetKey={turnstileResetKey}
+              />
 
               <Button form={formID} type="submit" variant="default">
                 {submitButtonLabel}

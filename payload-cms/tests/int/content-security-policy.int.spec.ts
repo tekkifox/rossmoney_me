@@ -61,7 +61,7 @@ describe('buildContentSecurityPolicy', () => {
     const value = policy({ preRendered: true })
 
     expect(directive(value, 'script-src')).toBe(
-      "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com",
+      "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
     )
     expect(value).not.toContain("'strict-dynamic'")
     expect(value).not.toContain("'nonce-")
@@ -137,17 +137,19 @@ describe('buildContentSecurityPolicy', () => {
     expect(connect.split(/\s+/)).not.toContain('https:')
   })
 
-  it('allows reCAPTCHA on public pages without allowing arbitrary Google frames', () => {
+  it('allows Turnstile script and frame sources on public pages only', () => {
     const value = policy()
-    expect(directive(value, 'script-src')).toContain('https://www.google.com')
-    expect(directive(value, 'connect-src')).toContain('https://www.google.com')
-    expect(directive(value, 'frame-src')).toBe('frame-src https://www.google.com')
+    expect(directive(value, 'script-src')).toContain('https://challenges.cloudflare.com')
+    expect(directive(value, 'frame-src')).toBe('frame-src https://challenges.cloudflare.com')
+    // The token is exchanged inside the widget frame, so the parent document
+    // never needs a connect-src entry for Cloudflare.
+    expect(directive(value, 'connect-src')).not.toContain('challenges.cloudflare.com')
   })
 
-  it('does not allow reCAPTCHA frames or scripts in the admin policy', () => {
+  it('does not allow Turnstile frames or scripts in the admin policy', () => {
     const value = policy({ isAdmin: true })
     expect(directive(value, 'frame-src')).toBe("frame-src 'self'")
-    expect(directive(value, 'script-src')).not.toContain('www.google.com')
+    expect(directive(value, 'script-src')).not.toContain('challenges.cloudflare.com')
   })
 
   it('keeps the Vercel Toolbar out of the normal policy', () => {
@@ -161,7 +163,7 @@ describe('buildContentSecurityPolicy', () => {
   it('allows the documented Vercel Toolbar sources on preview deployments', () => {
     const value = policy({ vercelToolbar: true })
     expect(directive(value, 'frame-src')).toBe(
-      'frame-src https://www.google.com https://vercel.live',
+      'frame-src https://challenges.cloudflare.com https://vercel.live',
     )
     expect(directive(value, 'style-src')).toBe(
       "style-src 'self' https://vercel.live 'unsafe-inline'",
@@ -184,7 +186,7 @@ describe('buildContentSecurityPolicy', () => {
 
   it('allows only same-origin framing for Live Preview and never in the admin', () => {
     const publicValue = policy()
-    expect(directive(publicValue, 'frame-src')).toBe('frame-src https://www.google.com')
+    expect(directive(publicValue, 'frame-src')).toBe('frame-src https://challenges.cloudflare.com')
     expect(directive(publicValue, 'frame-ancestors')).toBe("frame-ancestors 'self'")
 
     const adminValue = policy({ isAdmin: true })
