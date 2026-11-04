@@ -102,7 +102,7 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
   }
 
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <PageMeta page={page} />
       <section className="hero container">
         <div className="hero-copy">

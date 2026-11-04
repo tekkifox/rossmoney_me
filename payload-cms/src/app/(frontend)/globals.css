@@ -127,24 +127,24 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-error: var(--error);
+  --color-error-text: var(--error-text);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
   body {
     @apply bg-background text-foreground min-h-[100vh] flex flex-col;
   }
 }
 
-html {
-  opacity: 0;
-}
-
-html[data-theme='dark'],
-html[data-theme='light'] {
-  opacity: initial;
+/* 2 px at 3:1 on every public surface (WCAG 1.4.11 / 2.4.7). The colour is
+   --primary (5.54 on --bg, 5.84 on white), so it also has to stay distinct on
+   the hover surface. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* DevOps inspired background graphics */

@@ -47,7 +47,7 @@ const EXCEPTIONS = [
   },
   {
     file: 'src/app/(frontend)/local-styles.css',
-    match: /^\.docx \.docx-font-size-14 \{ font-size: 14pt; color: #2386f5 \}/,
+    match: /^\.docx \.docx-font-size-14 \{ font-size: 14pt; color: #0b5ed7 \}/,
     reason: 'DOCX accent colour; font-size asserted verbatim by the DOCX integration test.',
   },
   {
@@ -67,7 +67,7 @@ const EXCEPTIONS = [
   },
   {
     file: 'src/app/(frontend)/local-styles.css',
-    match: /^\.docx \.docx-color-2386f5 \{ color: #2386f5 \}/,
+    match: /^\.docx \.docx-color-2386f5 \{ color: #0b5ed7 \}/,
     reason: 'DOCX colour class; asserted verbatim by the DOCX integration test.',
   },
   {

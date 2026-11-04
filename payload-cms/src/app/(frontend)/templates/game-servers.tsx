@@ -72,7 +72,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
   const heroMetrics = readMetrics(projectPayload.metrics || [])
 
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <PageMeta page={page} />
       {/* Reuse travelling-like layout but for Vortex project */}
       <section className="hero container">

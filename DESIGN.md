@@ -5,7 +5,9 @@ proposal. Every value here was copied from the existing CSS; the token layer
 exists so future work extends the current look instead of drifting from it.
 
 - **Zero visual change is the contract.** Tokens are a refactor of the values,
-  not a retune.
+  not a retune. The one exception is the WCAG AA contrast floor in
+  [Accessibility contrast floors](#accessibility-contrast-floors): those token
+  values were darkened (hue preserved) until they reached AA.
 - **`payload-cms/src/styles/tokens.css` is the single source of truth** for
   colour, type, spacing, radii and shadows.
 - **The public site is deliberately light in both OS themes.** The dark token
@@ -47,14 +49,20 @@ remap blocks were moved verbatim into `tokens.css`. Payload's admin styling
 | `--bg` | `#f8f9fa` | Page background (primitive `--primitive-gray-50`) |
 | `--card-bg` | `#ffffff` | Card, panel and secondary-button surface (`--primitive-white`) |
 | `--text` | `#212529` | Body and heading text (`--primitive-gray-800`) |
-| `--muted` | `#6c757d` | Secondary text, nav links, captions, borders-adjacent copy (`--primitive-gray-500`) |
-| `--primary` | `#0d6efd` | Links, primary actions, eyebrow/status accents (`--primitive-blue-500`) |
-| `--primary-hover` | `#0b5ed7` | Primary hover (`--primitive-blue-600`) |
-| `--border` | `#e9ecef` | Borders, nav hover surface, input/accent surface (`--primitive-gray-200`) |
+| `--muted` | `#5f6b76` | Secondary text, nav links, captions, borders-adjacent copy (`--primitive-gray-500`) |
+| `--primary` | `#0b5ed7` | Links, primary actions, eyebrow/status accents (`--primitive-blue-500`) |
+| `--primary-hover` | `#0a58ca` | Primary hover (`--primitive-blue-600`) |
+| `--border` | `#e9ecef` | Decorative borders, nav hover surface, accent surface (`--primitive-gray-200`) |
+| `--border-control` | `#858d94` | Control boundaries: inputs and secondary buttons (`--primitive-gray-450`) |
 
 `--muted` intentionally shadows the Tailwind `--muted` token, so `bg-muted` and
-`text-muted` resolve to the mid grey `#6c757d`, not to a light surface. This is
+`text-muted` resolve to the mid grey `#5f6b76`, not to a light surface. This is
 existing behaviour, not a new decision.
+
+`--border` remains the decorative border used by cards, timeline items and nav
+hover fills. Only the boundaries that identify a control (input, secondary
+button) use the darker `--border-control`, because those need 3:1 under WCAG
+1.4.11. Cards and dividers are not control boundaries.
 
 ### Tailwind / shadcn bridge (after the light remap)
 
@@ -66,17 +74,17 @@ existing behaviour, not a new decision.
 | `--card-foreground` | `#212529` | `#212529` | Card text |
 | `--popover` | `#ffffff` | `#ffffff` | Popover surface |
 | `--popover-foreground` | `#212529` | `#212529` | Popover text |
-| `--primary` | `#0d6efd` | `#0d6efd` | Primary action colour |
+| `--primary` | `#0b5ed7` | `#0b5ed7` | Primary action colour |
 | `--primary-foreground` | `#ffffff` | `#ffffff` | Text on primary |
 | `--secondary` | `#eef2f6` | `#eef2f6` | Secondary surface |
 | `--secondary-foreground` | `#212529` | `#212529` | Text on secondary |
-| `--muted` | `#6c757d` | `#6c757d` | Muted surface/text (overridden by local palette) |
-| `--muted-foreground` | `#6c757d` | `#6c757d` | Muted text |
+| `--muted` | `#5f6b76` | `#5f6b76` | Muted surface/text (overridden by local palette) |
+| `--muted-foreground` | `#5f6b76` | `#5f6b76` | Muted text |
 | `--accent` | `#e9ecef` | `#e9ecef` | Hover/selected surface |
 | `--accent-foreground` | `#212529` | `#212529` | Text on accent |
 | `--border` | `#e9ecef` | `#e9ecef` | Borders |
-| `--input` | `#e9ecef` | `#e9ecef` | Input borders |
-| `--ring` | `#0d6efd` | `#0d6efd` | Focus ring |
+| `--input` | `#858d94` | `#858d94` | Input and control borders |
+| `--ring` | `#0b5ed7` | `#0b5ed7` | Focus ring |
 
 The source blocks in `tokens.css` still carry the original shadcn values
 (`oklch(...)`) for `--background`, `--foreground`, `--card`, `--primary`,
@@ -123,14 +131,19 @@ identity.
 | `--tint-primary-12` | `rgba(13, 110, 253, 0.12)` | CV download control hover |
 | `--diagram-bg` | `#f1f3f5` | Architecture diagram surface |
 | `--diagram-text` | `#0b1220` | Architecture diagram text |
-| `--brand-mark-gradient` | `linear-gradient(135deg, #0d6efd, #6ea8fe)` | Brand mark background |
+| `--brand-mark-gradient` | `linear-gradient(135deg, #0b5ed7, #6ea8fe)` | Brand mark background |
 | `--surface-glow` | blue/green radial glows + indigo linear wash | Fixed page background glaze |
 | `--background-grid` | SVG data URI | Fixed 200px grid pattern |
 | `--docx-text` | `#555555` | DOCX body fallback |
 | `--docx-heading` | `#111111` | DOCX heading fallback |
-| `--docx-accent` | `#2386f5` | DOCX company/accent fallback |
+| `--docx-accent` | `var(--primary)` (`#0b5ed7`) | DOCX company/accent fallback |
 | `--docx-rule` | `rgba(17, 17, 17, 0.2)` | DOCX experience separator |
 | `--docx-section-rule` | `#111111` | DOCX section rule |
+| `--error-text` | `#b91c1c` | Form and field error text (`text-error-text`) |
+
+The DOCX literal rules in `local-styles.css` keep the literal form the DOCX
+integration test asserts, but their blue is now `#0b5ed7` (5.84:1 on white)
+instead of `#2386f5` (3.62:1).
 
 The background glaze expands to:
 
@@ -145,6 +158,36 @@ The grid SVG embeds `rgba(148, 163, 184, 0.15)` for strokes,
 the green point. SVG data URIs cannot interpolate CSS custom properties, so the
 whole URI is the token `--primitive-grid-pattern`; the colours are documented
 here rather than split into separate variables.
+
+## Accessibility contrast floors
+
+The palette was re-measured against the surface each role actually paints on.
+Text meets WCAG 1.4.3 AA (4.5:1) and control boundaries and the focus indicator
+meet 1.4.11 AA (3:1). Ratios use WCAG relative luminance; translucent tints are
+composited over their real backdrop before measuring.
+
+| Pair | Before | After | Ratio after |
+| --- | --- | --- | --- |
+| `--muted` on `--bg` | 4.45 | 5.17 | 5.17 |
+| `--muted` on `--card-bg` | 4.69 | 5.45 | 5.45 |
+| `--primary` on `--bg` | 4.27 | 5.54 | 5.54 |
+| `--primary` on `--card-bg` | 4.50 | 5.84 | 5.84 |
+| Status pill text on the 8% blue tint | 4.04 | 5.24 | 5.24 |
+| CV download chip text on the 6% blue tint | 4.14 | 5.37 | 5.37 |
+| DOCX accent on white | 3.62 | 5.84 | 5.84 |
+| `--error-text` on white | 3.81 | 6.47 | 6.47 |
+| Input/secondary-control border on white | 1.19 | 3.37 | 3.37 |
+| Same border on `--bg` | 1.12 | 3.20 | 3.20 |
+| Focus ring on `--bg` | 2.01 | 5.54 | 5.54 |
+| Focus ring on white | 2.01 | 5.84 | 5.84 |
+
+The focus indicator is now a 2 px solid `--ring` with a 2 px offset
+(`:focus-visible` in `globals.css`); the old 1 px 50%-alpha outline was
+`#83b4fc`-ish and measured 2.01:1.
+
+The translucent status-pill and CV-chip tints keep their original
+`rgba(13, 110, 253, …)` base. They are decorative fills; the darker `--primary`
+text on top is what reaches AA.
 
 ## Type
 
@@ -303,7 +346,7 @@ Base `.btn`: inline-flex, centred, `padding: 10px 16px`, `border-radius: 8px`,
 | Variant | Recipe |
 | --- | --- |
 | Primary `.btn-primary` | `background: var(--primary)`; `color: var(--on-primary)`; hover `background: var(--primary-hover)` |
-| Secondary `.btn-secondary` | `background: var(--button-secondary-bg)` (`#fff`); `border: 1px solid var(--border)`; `color: var(--text)` |
+| Secondary `.btn-secondary` | `background: var(--button-secondary-bg)` (`#fff`); `border: 1px solid var(--border-control)`; `color: var(--text)` |
 | Quiet | There is no `.btn-quiet` class. Quiet actions are `.topnav a` / `.topnav .cmslink` (transparent background, `--muted` text, hover `--border` background) or shadcn `Button` `ghost`/`link` variants. |
 
 On ≤720px every `.btn` becomes full width.
@@ -343,7 +386,7 @@ font-variant-numeric: tabular-nums;
 
 - `.brand-lockup`: flex, `gap: 12px`.
 - `.brand-mark`: 48×48 (40×40 ≤720px), `border-radius: 10px`,
-  `background: var(--brand-mark-gradient)` (`#0d6efd` → `#6ea8fe`), white text,
+  `background: var(--brand-mark-gradient)` (`#0b5ed7` → `#6ea8fe`), white text,
   `font-weight: 700`, Georgia serif.
 - `.brand-subtitle`: `margin: 0`, `color: var(--muted)`, `font-size: 0.9rem`.
 - The “Ross Money” wordmark itself is inline `font-weight: 600` and
@@ -372,14 +415,15 @@ muted label above it.
 The public form is the Payload form builder rendered through shadcn primitives:
 
 - Input/textarea/select: `h-9` (36px), `rounded-md` (10px), transparent
-  background, border `--input` (`#e9ecef`), `text-base` then `md:text-sm`,
-  focus ring `--ring` at 10% opacity, invalid border/ring `--destructive`.
+  background, border `--input` (`#858d94`), `text-base` then `md:text-sm`,
+  `:focus-visible` outline 2px solid `--ring` offset 2px, invalid
+  border/ring `--destructive`.
 - Labels: `text-sm`, medium weight; required marker uses `.required`.
 - Form shell: `padding: 16px` (`lg: 24px`), `border: 1px solid --border`,
   `border-radius: 0.8rem`.
 - Form blocks are spaced with `margin-bottom: 24px`; submit button uses the
   shadcn default variant (`bg-primary`, `text-primary-foreground`).
-- Errors: `text-red-500 text-sm` (Tailwind default red — see known gaps).
+- Errors: `text-error-text text-sm` (`--error-text`, `#b91c1c`).
 
 ### Prose / typography
 
@@ -448,11 +492,17 @@ contract. `scripts/check-tokens.mjs` skips them with named exceptions:
 
 - `.docx { color: #555; ... }`
 - `.docx-font-size-13-5 { ... color: #111 }`
-- `.docx-font-size-14 { ... color: #2386f5 }`
+- `.docx-font-size-14 { ... color: #0b5ed7 }`
 - `.docx-font-size-22 { ... color: #111 }`
 - `.docx-color-555555`, `.docx-color-111111`, `.docx-color-2386f5`
 - `.docx p.docx-section-rule { border-bottom: 1.5pt solid #111; ... }`
 - `.docx p.docx-entry-rule { border-bottom: 1px solid rgba(17, 17, 17, 0.2); ... }`
+
+The DOCX accent value changed from `#2386f5` to `#0b5ed7` (the `--primary`
+value) to reach AA on white. The class name still mirrors the DOCX source colour
+(`docx-color-2386f5`) because it is a matcher, not paint; only the fallback paint
+value changed. The DOCX test's literal and computed-colour assertions were
+updated deliberately.
 
 The DOCX *source* colour matchers in
 `src/components/CVViewer/cvDocxStyles.ts` (`555555`, `111111`, `2386f5`) are
@@ -467,7 +517,6 @@ from `tokens.css`:
 
 - Footer: `bg-black dark:bg-card text-white`.
 - Code block: `bg-black`, `text-white/25`.
-- Form error: `text-red-500`.
 - Template utilities: `rounded-3xl` (24px), `rounded-2xl` (16px),
   `rounded-[0.8rem]`, `text-[11px]`, tracking values such as `tracking-[0.24em]`.
 - Tailwind's spacing/type/radius defaults used by utilities.
@@ -498,7 +547,7 @@ stay where they are:
   local palette. This is preserved from the old cascade. Fixing it would be a
   product decision about dark headers.
 - **`--muted` overload:** it is both the local mid-grey text colour and the
-  Tailwind `--muted` surface token. `bg-muted` is therefore `#6c757d`, not a
+  Tailwind `--muted` surface token. `bg-muted` is therefore `#5f6b76`, not a
   light surface. This is existing behaviour and is documented rather than
   “fixed”.
 - **`--radius` source value:** the shadcn light block still says `0.625rem`, but
