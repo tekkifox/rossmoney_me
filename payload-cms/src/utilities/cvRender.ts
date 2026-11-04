@@ -1,7 +1,54 @@
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+
 import sanitizeHtml from 'sanitize-html'
 
 import { convertCVDocxToHtml, normalizeCVDocxForRendering } from '@/components/CVViewer/cvDocxStyles'
 import { CV_PDF_NOTE, cvSourceFromFilename, type CvSource } from '@/utilities/cvFile'
+
+// pdfjs falls back to a "fake worker" in Node and imports this module
+// dynamically, so the standalone tracer cannot discover it from the bundle.
+// `next.config.ts` traces `pdfjs-dist/legacy/build/*.mjs` into the output; this
+// resolves the traced package pointer explicitly.
+//
+// This deliberately does not use `createRequire(...).resolve(...)`: Turbopack
+// folds a static specifier into a bundled module id (a number, which pdfjs
+// rejects as `workerSrc`) and refuses dynamic specifiers at runtime.
+const PDFJS_WORKER_RELATIVE = path.join(
+  'node_modules',
+  'pdfjs-dist',
+  'legacy',
+  'build',
+  'pdf.worker.mjs',
+)
+
+const PDFJS_WORKER_PNPM_RELATIVE = path.join(
+  'node_modules',
+  '.pnpm',
+  'node_modules',
+  'pdfjs-dist',
+  'legacy',
+  'build',
+  'pdf.worker.mjs',
+)
+
+/**
+ * Absolute path to the pdfjs worker in the installed package. Exported so the
+ * regression test can assert the path exists without running a conversion.
+ */
+export function resolvePdfjsWorkerPath(): string {
+  const roots = [process.cwd(), path.resolve(process.cwd(), '..')]
+  for (const root of roots) {
+    for (const relative of [PDFJS_WORKER_RELATIVE, PDFJS_WORKER_PNPM_RELATIVE]) {
+      const candidate = path.join(root, relative)
+      if (existsSync(candidate)) return candidate
+    }
+  }
+
+  throw new Error(
+    `Cannot find the pdfjs worker; expected it at ${path.join(process.cwd(), PDFJS_WORKER_RELATIVE)}`,
+  )
+}
 
 export type CvConversion = {
   html: string
@@ -272,6 +319,7 @@ async function convertPdfToHtml(buffer: Buffer): Promise<string> {
   // optional @napi-rs/canvas dependency is only used to rasterise pages; text
   // extraction does not need it, which is all the CV page does.
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  pdfjs.GlobalWorkerOptions.workerSrc = resolvePdfjsWorkerPath()
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
     useSystemFonts: false,

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -8,6 +8,7 @@ import { CV_PDF_NOTE } from '@/utilities/cvFile'
 import {
   convertCvFile,
   normalizeCvHeadingLevels,
+  resolvePdfjsWorkerPath,
   sanitizeCvHtml,
 } from '@/utilities/cvRender'
 
@@ -49,6 +50,12 @@ BT /F1 10 Tf 72 595 Td (https://example.com/portfolio) Tj ET`
 }
 
 describe('CV conversion', () => {
+  it('resolves the pdfjs worker to an existing file', () => {
+    const workerPath = resolvePdfjsWorkerPath()
+    expect(workerPath.endsWith('/pdfjs-dist/legacy/build/pdf.worker.mjs')).toBe(true)
+    expect(existsSync(workerPath)).toBe(true)
+  })
+
   it('renders a DOCX into real headings, lists, tables and links', async () => {
     const result = await convertCvFile({ buffer: sampleDocx(), filename: 'cv.docx' })
 
