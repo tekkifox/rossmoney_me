@@ -19,4 +19,9 @@ export const contact: RequiredDataFromCollectionSlug<'pages'> = {
     ],
   },
   layout: [],
+  meta: {
+    title: 'Contact',
+    description:
+      'Get in touch with Ross Money about platform, DevOps and development work — by email, GitHub or LinkedIn.',
+  },
 }

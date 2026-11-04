@@ -329,6 +329,38 @@ export default buildConfig({
         }
       }
 
+      // The contact page used to rely on the generic site title and had no
+      // description. New databases get both from the seed; an older database is
+      // filled in here only while both metadata fields are still empty, so an
+      // editor's own wording is never replaced.
+      const existingContact = existingPages.docs.find(
+        (page) => page.slug === contactPageData.slug,
+      )
+      if (
+        existingContact &&
+        !existingContact.meta?.title?.trim() &&
+        !existingContact.meta?.description?.trim()
+      ) {
+        try {
+          await pClient.update({
+            collection: 'pages',
+            id: existingContact.id,
+            data: {
+              meta: {
+                ...existingContact.meta,
+                title: contactPageData.meta?.title,
+                description: contactPageData.meta?.description,
+              },
+            },
+            context: seedContext,
+          })
+          payload.logger.info('Backfilled contact page metadata')
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to backfill contact page metadata: ${message}`)
+        }
+      }
+
       const existingContactForm = await pClient.find({
         collection: 'forms',
         where: { title: { equals: contactFormData.title } },
