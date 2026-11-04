@@ -45,10 +45,13 @@ export function TurnstileChallenge({
   const containerRef = useRef<HTMLDivElement>(null)
   const apiRef = useRef<TurnstileApi | undefined>(undefined)
   const widgetIdRef = useRef<string | undefined>(undefined)
+  const configCancelledRef = useRef(false)
+  const widgetCancelledRef = useRef(false)
   const [siteKey, setSiteKey] = useState<string>()
 
   useEffect(() => {
-    let cancelled = false
+    const cancelledRef = configCancelledRef
+    cancelledRef.current = false
 
     const readConfig = async () => {
       try {
@@ -56,7 +59,7 @@ export function TurnstileChallenge({
         if (!response.ok) throw new Error('Turnstile configuration is unavailable.')
 
         const config = (await response.json()) as TurnstileConfigResponse
-        if (cancelled) return
+        if (cancelledRef.current) return
 
         if (!config.siteKey) {
           onState(
@@ -69,7 +72,7 @@ export function TurnstileChallenge({
 
         setSiteKey(config.siteKey)
       } catch {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           onState({ state: 'unavailable', message: TURNSTILE_CLIENT_MESSAGES.unavailable })
         }
       }
@@ -78,25 +81,25 @@ export function TurnstileChallenge({
     void readConfig()
 
     return () => {
-      cancelled = true
+      cancelledRef.current = true
     }
   }, [onState])
 
   useEffect(() => {
     if (!siteKey) return
 
-    let cancelled = false
-    let widgetId: string | undefined
+    const cancelledRef2 = widgetCancelledRef
+    cancelledRef2.current = false
     onState({ state: 'loading' })
     onToken(undefined)
 
     const renderWidget = async () => {
       try {
         const api = await loadTurnstile()
-        if (cancelled || !containerRef.current) return
+        if (cancelledRef2.current || !containerRef.current) return
 
         apiRef.current = api
-        widgetId = api.render(containerRef.current, {
+        widgetIdRef.current = api.render(containerRef.current, {
           action,
           callback: (token) => onToken(token),
           'error-callback': () => onToken(undefined),
@@ -105,10 +108,9 @@ export function TurnstileChallenge({
           sitekey: siteKey,
           theme: 'light',
         })
-        widgetIdRef.current = widgetId
         onState({ state: 'ready' })
       } catch {
-        if (!cancelled) {
+        if (!cancelledRef2.current) {
           onState({ state: 'unavailable', message: TURNSTILE_CLIENT_MESSAGES.unavailable })
         }
       }
@@ -117,9 +119,9 @@ export function TurnstileChallenge({
     void renderWidget()
 
     return () => {
-      cancelled = true
+      cancelledRef2.current = true
       onToken(undefined)
-      if (apiRef.current && widgetId) apiRef.current.remove(widgetId)
+      if (apiRef.current && widgetIdRef.current) apiRef.current.remove(widgetIdRef.current)
       widgetIdRef.current = undefined
     }
   }, [action, onState, onToken, resetKey, siteKey])
