@@ -1,3 +1,6 @@
+// The pricing table scrolls horizontally on narrow screens, so its container is
+// a named, keyboard-focusable region.
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
 
 import {
@@ -267,7 +270,12 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
 
       <Section className="services-section" eyebrow={pricingTable.eyebrow} title={pricingTable.title || ''} lead={pricingTable.lead}>
         <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
-          <div className="overflow-x-auto">
+          <div
+            aria-label={pricingTable.caption || 'Services pricing table'}
+            className="overflow-x-auto"
+            role="region"
+            tabIndex={0}
+          >
             <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
               <caption className="sr-only">{pricingTable.caption}</caption>
               <thead className="bg-primary text-primary-foreground">

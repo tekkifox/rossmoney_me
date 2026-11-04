@@ -66,9 +66,24 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
     const pageProject = pageRoot?.dataset?.architectureProject?.trim()
     const projectLabel = pageProject || project
 
+    const statusEl = document.getElementById('architecture-status')
+    const sectionEl = document.getElementById('architecture')
+    let lastStatus = ''
+
+    function announceStatus(message: string) {
+      if (!statusEl || message === lastStatus) return
+      lastStatus = message
+      statusEl.textContent = message
+    }
+
+    function setBusy(busy: boolean) {
+      sectionEl?.setAttribute('aria-busy', busy ? 'true' : 'false')
+    }
+
     async function fetchArchitecture() {
       if (inFlightRef.current) return
       inFlightRef.current = true
+      setBusy(true)
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
         const res = await fetch(url, { cache: 'no-store' })
@@ -89,14 +104,17 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         const ct = res.headers.get('content-type') || ''
         const payload = ct.includes('application/json') ? await res.json() : { raw: await res.text() }
         updateDom(payload)
+        announceStatus('Architecture snapshot updated.')
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'Architecture request failed'
         const descEl = document.getElementById('architecture-description')
         const updatedEl = document.getElementById('architecture-updated')
         if (descEl) descEl.textContent = reason
         if (updatedEl) updatedEl.textContent = 'Failed'
+        announceStatus(`Architecture snapshot could not be refreshed: ${reason}`)
       } finally {
         inFlightRef.current = false
+        setBusy(false)
       }
     }
 
@@ -255,7 +273,12 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
 
     // Attach refresh and perform an initial fetch
     const refreshBtn = document.getElementById('refresh-architecture')
-    const handler = () => { void fetchArchitecture() }
+    const handler = () => {
+      // A manual refresh should always be reported, even when the previous
+      // automatic update announced the same text.
+      lastStatus = ''
+      void fetchArchitecture()
+    }
     if (refreshBtn) refreshBtn.addEventListener('click', handler)
 
     // Poll every REFRESH_INTERVAL_MS, skipping ticks while the tab is hidden

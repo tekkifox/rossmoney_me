@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import React from 'react'
 
+import { autocompleteForField } from '@/utilities/formAutocomplete'
+
 import { Error } from '../Error'
 import { Width } from '../Width'
 
@@ -28,6 +30,7 @@ export const Email: React.FC<
       <Input
         aria-describedby={errors[name] ? `${name}-error` : undefined}
         aria-invalid={Boolean(errors[name])}
+        autoComplete={autocompleteForField(name, 'email')}
         defaultValue={defaultValue}
         id={name}
         type="email"
