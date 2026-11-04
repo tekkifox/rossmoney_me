@@ -9,6 +9,7 @@ export default function CVTemplate({ page }: { page: PageDoc }) {
         <div className="section-heading">
           <h1 className="sr-only">Ross Money — Curriculum Vitae</h1>
           <p className="eyebrow">Curriculum Vitae</p>
+          {page.lead ? <p className="lead">{page.lead}</p> : null}
         </div>
         <CVViewer cvFile={page.cvFile} />
       </section>

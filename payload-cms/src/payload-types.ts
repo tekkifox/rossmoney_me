@@ -284,7 +284,7 @@ export interface Page {
     description?: string | null;
   };
   /**
-   * Upload a .docx CV file here
+   * Upload a .docx or .pdf CV here. The HTML preview is generated once at upload and served by /cv; the original file stays as the download.
    */
   cvFile?: (string | null) | Media;
   /**
@@ -316,6 +316,11 @@ export interface Page {
 export interface Media {
   id: string;
   alt?: string | null;
+  /**
+   * Generated once when a .docx or .pdf is uploaded. The /cv page renders this HTML; the original file stays as the download.
+   */
+  cvHtml?: string | null;
+  cvRenderNote?: string | null;
   caption?: {
     root: {
       type: string;
@@ -1388,6 +1393,8 @@ export interface ExperienceSelect<T extends boolean = true> {
  */
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
+  cvHtml?: T;
+  cvRenderNote?: T;
   caption?: T;
   folder?: T;
   updatedAt?: T;
