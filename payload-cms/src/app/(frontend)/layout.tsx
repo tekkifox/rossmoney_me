@@ -2,9 +2,11 @@ import type { Metadata } from 'next'
 
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import { cn } from '@/utilities/ui'
+// Only the mono face is used by the public site: Tailwind's preflight resolves
+// `<pre>`/`<code>` (including the `.raw-json` dumps) through `--font-mono`.
+// Body, headings and buttons use the Inter token stack, so GeistSans was
+// preloading ~70 KB per page for text that never rendered in it.
 import { GeistMono } from 'geist/font/mono'
-import { GeistSans } from 'geist/font/sans'
 import React from 'react'
 
 import AckeeTracker from '@/components/AckeeTracker'
@@ -26,7 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const { isEnabled } = await draftMode()
 
   return (
-    <html className={cn(GeistSans.variable, GeistMono.variable)} lang="en" suppressHydrationWarning>
+    <html className={GeistMono.variable} lang="en" suppressHydrationWarning>
       <head>
         <InitTheme />
         <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />

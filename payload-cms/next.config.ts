@@ -80,14 +80,38 @@ const nextConfig: NextConfig = {
       },
       {
         // Payload's REST/GraphQL responses are cookie-capable. `public` shared
-        // cache directives are the wrong default; the named exception is the
-        // OG image renderer below, which is deliberately cacheable so social
-        // crawlers do not burn CPU on every view.
+        // cache directives are the wrong default; the named exceptions below
+        // are deliberately cacheable.
         source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
             value: 'private, no-store',
+          },
+        ],
+      },
+      {
+        // Uploaded media is public, immutable in practice and served from the
+        // same route as the CV. Uploads are not content-hashed, so a browser
+        // gets a week and a shared cache may revalidate in the background; a
+        // replaced file becomes visible within that window.
+        source: '/api/media/file/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=604800, stale-while-revalidate=86400',
+          },
+        ],
+      },
+      {
+        // Next.js already serves content-hashed build output with a year and
+        // `immutable`. State it here as well so the contract survives whichever
+        // front end (openresty, Vercel, a CDN) terminates the request.
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },
