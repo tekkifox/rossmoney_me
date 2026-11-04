@@ -18,6 +18,7 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
+import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
@@ -54,6 +55,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
   const archTitle = archFailed ? 'Architecture source unavailable' : titleFromPayload(archPayload)
   const archDesc = archFailed ? archFailureMessage : descriptionFromPayload(archPayload)
   const archDiagram = archFailed ? '' : renderDiagram(archPayload)
+  const archMetrics = architectureMetricsFromPayload(archFailed ? null : archPayload)
 
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
   try {
@@ -138,20 +140,23 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
           <aside className="image-column card">
             <div className="panel-header image-panel-header"><div><p className="panel-kicker">Host stats</p></div></div>
             <div className="metrics-cards" id="architecture-metrics">
-              <article className="metric-card"><div className="metric-card-label">CPU (avg)</div><div id="architecture-metric-cpu" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Memory</div><div id="architecture-metric-memory" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Load</div><div id="architecture-metric-load" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Disk</div><div id="architecture-metric-disk" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Swap</div><div id="architecture-metric-swap" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Network</div><div id="architecture-metric-network" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Hosts</div><div id="architecture-metric-hosts" className="metric-card-value">0</div></article>
-              <article className="metric-card"><div className="metric-card-label">Processes</div><div id="architecture-metric-processes" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">OS</div><div id="architecture-metric-os" className="metric-card-value">N/A</div></article>
+              <article className="metric-card"><div className="metric-card-label">CPU (avg)</div><div id="architecture-metric-cpu" className="metric-card-value">{archMetrics.cpu}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Memory</div><div id="architecture-metric-memory" className="metric-card-value">{archMetrics.memory}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Load</div><div id="architecture-metric-load" className="metric-card-value">{archMetrics.load}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Disk</div><div id="architecture-metric-disk" className="metric-card-value">{archMetrics.disk}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Swap</div><div id="architecture-metric-swap" className="metric-card-value">{archMetrics.swap}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Network</div><div id="architecture-metric-network" className="metric-card-value">{archMetrics.network}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Hosts</div><div id="architecture-metric-hosts" className="metric-card-value">{archMetrics.hosts}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Processes</div><div id="architecture-metric-processes" className="metric-card-value">{archMetrics.processes}</div></article>
+              <article className="metric-card"><div className="metric-card-label">OS</div><div id="architecture-metric-os" className="metric-card-value">{archMetrics.os}</div></article>
             </div>
           </aside>
         </div>
 
-        <ArchitectureClient project="vortexservers_co_uk" />
+        <ArchitectureClient
+          project="vortexservers_co_uk"
+          initialMetrics={archFailed ? null : archMetrics}
+        />
       </section>
 
       <section className="section container">

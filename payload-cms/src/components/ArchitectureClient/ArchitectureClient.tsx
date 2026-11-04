@@ -3,9 +3,18 @@ import React, { useEffect, useRef } from 'react'
 import { buildFacts, buildHighlights, renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
+import {
+  architectureMetricsFromPayload,
+  type ArchitectureMetricValues,
+} from '@/utilities/architectureMetrics'
 
 interface Props {
   project?: string
+  /**
+   * Metrics already rendered by the server. Applying them on mount keeps the
+   * cards correct without asking the proxy for the same snapshot again.
+   */
+  initialMetrics?: ArchitectureMetricValues | null
 }
 
 interface ArchitectureMetrics {
@@ -43,7 +52,7 @@ interface ArchitecturePayload {
 // generator against the upstream (and matches the proxy cache TTL).
 const REFRESH_INTERVAL_MS = 45000
 
-export const ArchitectureClient: React.FC<Props> = ({ project }) => {
+export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics }) => {
   const inFlightRef = useRef(false)
 
   useEffect(() => {
@@ -88,6 +97,22 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
 
     function setBusy(busy: boolean) {
       sectionEl?.setAttribute('aria-busy', busy ? 'true' : 'false')
+    }
+
+    function applyMetrics(values: ArchitectureMetricValues) {
+      const setText = (id: string, text: string) => {
+        const el = document.getElementById(id)
+        if (el) el.textContent = text
+      }
+      setText('architecture-metric-cpu', values.cpu)
+      setText('architecture-metric-memory', values.memory)
+      setText('architecture-metric-load', values.load)
+      setText('architecture-metric-disk', values.disk)
+      setText('architecture-metric-swap', values.swap)
+      setText('architecture-metric-network', values.network)
+      setText('architecture-metric-hosts', values.hosts)
+      setText('architecture-metric-processes', values.processes)
+      setText('architecture-metric-os', values.os)
     }
 
     async function fetchArchitecture() {
@@ -206,80 +231,21 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
         }
 
         // Always prefer telemetry from API. Do not compute from payload locally.
-        const telemetry = (arch && arch.telemetry && arch.telemetry.metrics) ? arch.telemetry.metrics : null
-        const cpuEl = document.getElementById('architecture-metric-cpu')
-        const memEl = document.getElementById('architecture-metric-memory')
-        const loadEl = document.getElementById('architecture-metric-load')
-        if (cpuEl) cpuEl.textContent = telemetry && telemetry.cpuAvg !== null && telemetry.cpuAvg !== undefined ? `${Number(telemetry.cpuAvg)}%` : 'N/A'
-          if (memEl) {
-            if (telemetry && telemetry.memoryUsedBytes !== null && telemetry.memoryTotalBytes !== null) {
-              const usedGB = (Number(telemetry.memoryUsedBytes) / (1024 * 1024 * 1024)).toFixed(2)
-              const totalGB = (Number(telemetry.memoryTotalBytes) / (1024 * 1024 * 1024)).toFixed(2)
-              const pct = telemetry.memoryPercent !== null && telemetry.memoryPercent !== undefined ? ` (${telemetry.memoryPercent}%)` : ''
-              memEl.textContent = `${usedGB} GB / ${totalGB} GB${pct}`
-            } else {
-              memEl.textContent = 'N/A'
-            }
-          }
-        if (loadEl) loadEl.textContent = telemetry && (telemetry.loadSample || telemetry.loadAvg) ? String(telemetry.loadSample || telemetry.loadAvg) : 'N/A'
-
-        // Populate additional metric placeholders: disk, hosts count, top OS
-        const diskEl = document.getElementById('architecture-metric-disk')
-        const hostsCountEl = document.getElementById('architecture-metric-hosts')
-        const osEl = document.getElementById('architecture-metric-os')
         try {
-          // Only use telemetry from API for these cards
-          const metricsFull = telemetry
-            if (diskEl) {
-              if (metricsFull && metricsFull.diskUsedBytes !== null && metricsFull.diskTotalBytes !== null) {
-                const usedGB = (Number(metricsFull.diskUsedBytes) / (1024 * 1024 * 1024)).toFixed(2)
-                const totalGB = (Number(metricsFull.diskTotalBytes) / (1024 * 1024 * 1024)).toFixed(2)
-                const pct = metricsFull.diskPercent !== null && metricsFull.diskPercent !== undefined ? ` (${metricsFull.diskPercent}%)` : ''
-                diskEl.textContent = `${usedGB} GB / ${totalGB} GB${pct}`
-              } else {
-                diskEl.textContent = 'N/A'
-              }
-            }
-          if (hostsCountEl) hostsCountEl.textContent = metricsFull && metricsFull.hostCount ? String(metricsFull.hostCount) : '0'
-          if (osEl) osEl.textContent = metricsFull && metricsFull.topOS ? String(metricsFull.topOS) : 'N/A'
-          const netEl = document.getElementById('architecture-metric-network')
-          const swapEl = document.getElementById('architecture-metric-swap')
-          if (netEl) {
-            if (metricsFull && ((metricsFull.networkRxMB !== null && metricsFull.networkRxMB !== undefined) || (metricsFull.networkTxMB !== null && metricsFull.networkTxMB !== undefined))) {
-              const rx = (metricsFull.networkRxMB !== null && metricsFull.networkRxMB !== undefined) ? `${Number(metricsFull.networkRxMB).toFixed(1)} MB rx` : ''
-              const tx = (metricsFull.networkTxMB !== null && metricsFull.networkTxMB !== undefined) ? `${Number(metricsFull.networkTxMB).toFixed(1)} MB tx` : ''
-              netEl.textContent = [rx, tx].filter(Boolean).join(' / ') || 'N/A'
-            } else {
-              netEl.textContent = 'N/A'
-            }
-          }
-           if (swapEl) {
-             if (metricsFull && metricsFull.swapTotalBytes !== null && metricsFull.swapFreeBytes !== null) {
-               const total = Number(metricsFull.swapTotalBytes)
-               const free = Number(metricsFull.swapFreeBytes)
-               const used = total - free
-               const usedGB = (used / (1024 * 1024 * 1024)).toFixed(2)
-               const totalGB = (total / (1024 * 1024 * 1024)).toFixed(2)
-               const pct = metricsFull.swapPercent !== null && metricsFull.swapPercent !== undefined ? ` (${Number(metricsFull.swapPercent)}%)` : ''
-               swapEl.textContent = `${usedGB} GB / ${totalGB} GB${pct}`
-             } else {
-               swapEl.textContent = 'N/A'
-             }
-           }
-          const processEl = document.getElementById('architecture-metric-processes')
-          if (processEl) {
-            if (metricsFull && (metricsFull.processCount !== null && metricsFull.processCount !== undefined)) {
-              processEl.textContent = String(metricsFull.processCount)
-            } else {
-              processEl.textContent = 'N/A'
-            }
-          }
+          applyMetrics(architectureMetricsFromPayload(arch))
         } catch (e) {
-          console.warn('Failed to populate additional metrics', e)
+          console.warn('Failed to populate architecture metrics', e)
         }
       } catch (e) {
         console.warn('ArchitectureClient updateDom failed', e)
       }
+    }
+
+    // The server already wrote these values into the card markup. Re-applying
+    // them from the snapshot prop keeps the cards correct through hydration
+    // without fetching the same snapshot again.
+    if (initialMetrics) {
+      applyMetrics(initialMetrics)
     }
 
     // Attach refresh and perform an initial fetch
@@ -318,7 +284,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
       document.removeEventListener('visibilitychange', onVisibilityChange)
       if (refreshBtn) refreshBtn.removeEventListener('click', handler)
     }
-  }, [project])
+  }, [project, initialMetrics])
 
   return null
 }
