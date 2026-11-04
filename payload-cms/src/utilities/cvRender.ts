@@ -149,6 +149,7 @@ export function normalizeCvHeadingLevels(html: string): string {
 type PdfLine = {
   text: string
   size: number
+  y: number
   urls: string[]
   column?: 'left' | 'right'
 }
@@ -364,6 +365,7 @@ function lineFromItems(
   return {
     text,
     size: Math.max(...lineItems.map((item) => item.size)),
+    y: centerY,
     urls: [...new Set(urls)],
     ...(column ? { column } : {}),
   }
@@ -468,9 +470,50 @@ function modalBodySize(items: PdfTextItem[]): number {
   return body
 }
 
+// The DOCX path only emits classes for sizes in this list (see
+// `cvDocxStyleMap`). Map the PDF's measured font size onto the nearest one so
+// the stored HTML uses the same stylesheet hooks, without adding new sizes.
+const PDF_SIZE_TOKENS = [9, 9.5, 10, 10.5, 11, 11.5, 13.5, 14, 22] as const
+
+function pdfSizeClass(size: number): string | null {
+  if (!Number.isFinite(size) || size <= 0) return null
+  if (size >= 20) return 'docx-font-size-22'
+
+  let closest = PDF_SIZE_TOKENS[0] as number
+  for (const token of PDF_SIZE_TOKENS) {
+    if (Math.abs(token - size) < Math.abs(closest - size)) closest = token
+  }
+  if (Math.abs(closest - size) > 1) return null
+  return `docx-font-size-${String(closest).replace('.', '-')}`
+}
+
+function cvSpan(
+  innerHtml: string,
+  size: number,
+  color: '111111' | '555555',
+  strong = false,
+): string {
+  const classes = [
+    pdfSizeClass(size),
+    'docx-font-family-arial',
+    `docx-color-${color}`,
+  ].filter((value): value is string => value !== null)
+  const content = strong ? `<strong>${innerHtml}</strong>` : innerHtml
+  return `<span class="${classes.join(' ')}">${content}</span>`
+}
+
+/** Uppercase labels are the CV's section headings (e.g. "KEY ACHIEVEMENTS"). */
+function isUppercaseLabel(text: string): boolean {
+  const letters = text.replace(/[^A-Za-z]/g, '')
+  return letters.length >= 3 && letters === letters.toUpperCase()
+}
+
 function linesToHtml(lines: PdfLine[], bodySize: number): string {
   const html: string[] = []
   let list: { tag: 'ul' | 'ol'; items: string[] } | null = null
+  let currentSection = ''
+  let lastEntryY: number | null = null
+  let hasEntry = false
 
   const flushList = () => {
     if (!list) return
@@ -479,6 +522,8 @@ function linesToHtml(lines: PdfLine[], bodySize: number): string {
   }
 
   for (const line of lines) {
+    const text = linkifyLine(line.text, line.urls)
+
     // The right-hand CV column uses 10.5pt bold subheadings against 9.5pt body
     // text. Promote those short labels only in a detected right column, so a
     // single-column PDF keeps the original heading threshold exactly.
@@ -487,43 +532,81 @@ function linesToHtml(lines: PdfLine[], bodySize: number): string {
       line.size >= bodySize * 1.08 &&
       line.text.length <= 40 &&
       !/[;:,]$/.test(line.text)
-    const heading =
-      line.size >= bodySize * 1.6
-        ? 2
-        : (line.size >= bodySize * 1.15 && line.text.length <= 80) || rightColumnLabel
-          ? 3
-          : null
+    const uppercaseLabel = isUppercaseLabel(line.text) && line.text.length <= 80
+    const subtitle = line.size >= bodySize * 1.35 && line.text.length <= 80
+    const title = line.size >= bodySize * 1.6
 
-    if (heading && !BULLET.test(line.text) && !NUMBERED.test(line.text)) {
+    if (title) {
       flushList()
-      html.push(`<h${heading}>${linkifyLine(line.text, line.urls)}</h${heading}>`)
+      html.push(`<h2 class="docx-title">${cvSpan(text, 22, '111111', true)}</h2>`)
+      currentSection = ''
+      hasEntry = false
+      continue
+    }
+
+    if ((uppercaseLabel || rightColumnLabel) && !BULLET.test(line.text)) {
+      flushList()
+      html.push(`<h3 class="docx-section-rule">${cvSpan(text, line.size, '111111', true)}</h3>`)
+      if (uppercaseLabel) {
+        currentSection = line.text.trim().toUpperCase()
+        hasEntry = false
+        lastEntryY = null
+      }
+      continue
+    }
+
+    if (subtitle && !BULLET.test(line.text)) {
+      flushList()
+      html.push(`<h3>${cvSpan(text, line.size, '111111', true)}</h3>`)
       continue
     }
 
     const bullet = BULLET.exec(line.text)
     if (bullet) {
-      const text = linkifyLine(line.text.slice(bullet[0].length), line.urls)
+      const bulletText = linkifyLine(line.text.slice(bullet[0].length), line.urls)
       if (!list || list.tag !== 'ul') {
         flushList()
         list = { tag: 'ul', items: [] }
       }
-      list.items.push(text)
+      list.items.push(cvSpan(bulletText, line.size, '555555'))
       continue
     }
 
     const numbered = NUMBERED.exec(line.text)
     if (numbered) {
-      const text = linkifyLine(line.text.slice(numbered[0].length), line.urls)
+      const numberedText = linkifyLine(line.text.slice(numbered[0].length), line.urls)
       if (!list || list.tag !== 'ol') {
         flushList()
         list = { tag: 'ol', items: [] }
       }
-      list.items.push(text)
+      list.items.push(cvSpan(numberedText, line.size, '555555'))
       continue
     }
 
     flushList()
-    html.push(`<p>${linkifyLine(line.text, line.urls)}</p>`)
+
+    // Larger, short, non-uppercase lines are the CV's job/entry titles. Mirror
+    // the DOCX paragraphs with a bold span, and put the experience separator
+    // between entries (never inside a title/company pair).
+    const entryLike = line.size >= bodySize * 1.08 && line.text.length <= 80
+    if (entryLike) {
+      if (
+        currentSection === 'EXPERIENCE' &&
+        hasEntry &&
+        lastEntryY !== null &&
+        lastEntryY - line.y > 24
+      ) {
+        html.push('<p class="docx-entry-rule"></p>')
+      }
+      html.push(`<p>${cvSpan(text, line.size, '111111', true)}</p>`)
+      if (currentSection === 'EXPERIENCE') {
+        hasEntry = true
+        lastEntryY = line.y
+      }
+      continue
+    }
+
+    html.push(`<p>${cvSpan(text, line.size, '555555')}</p>`)
   }
 
   flushList()

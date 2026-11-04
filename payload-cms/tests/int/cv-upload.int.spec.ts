@@ -99,9 +99,11 @@ describe('CV upload rendering', () => {
     })
     createdMediaIds.push(doc.id)
 
-    expect(doc.cvHtml).toContain('<h2>ROSS MONEY</h2>')
-    expect(doc.cvHtml).toContain('<h3>EXPERIENCE</h3>')
-    expect(doc.cvHtml).toContain('<ul><li>Built reliable systems</li>')
+    expect(doc.cvHtml).toContain('<h2 class="docx-title">')
+    expect(doc.cvHtml).toContain('>ROSS MONEY</strong>')
+    expect(doc.cvHtml).toContain('<h3 class="docx-section-rule">')
+    expect(doc.cvHtml).toContain('>EXPERIENCE</strong>')
+    expect(doc.cvHtml).toContain('>Built reliable systems</span></li>')
     expect(doc.cvRenderNote).toBe(CV_PDF_NOTE)
   })
 
