@@ -17,8 +17,14 @@ const nextConfig: NextConfig = {
     async headers() {
     return [
       {
-        // Apply these headers to all routes in your application
-        source: '/:path*',
+        // Apply these headers to all routes except the Ackee ingestion proxy.
+        // `/a/*` is a rewrite to the Ackee container, not a document this app
+        // renders: giving its JS/API responses the site's document security
+        // headers (and the proxy's CSP) would be misleading, and the `/api/*`
+        // cache rule below must not turn collection POSTs into no-store
+        // admin-style responses. The negative lookahead keeps the rewrite
+        // namespace out of the blanket rule.
+        source: '/:path((?!a(?:/|$)).*)',
         headers: [
           {
             // Mirrors the public CSP (`frame-ancestors 'self'`). Payload's Live
@@ -177,6 +183,22 @@ const nextConfig: NextConfig = {
   // `output: 'standalone'` are combined (vercel/next.js#96646), which fails the
   // deploy in onBuildComplete. Keep standalone for the Docker/Portainer images.
   output: process.env.VERCEL ? undefined : 'standalone',
+  // Ackee's tracker and collection API are served first-party under `/a` so the
+  // public CSP needs no new host source: `connect-src 'self'` covers the API
+  // and the tracker is a same-origin script carrying the request nonce.
+  // `beforeFiles` makes the namespace win before the `[slug]` page route, while
+  // `/a` is not an existing route, so nothing public is shadowed. The
+  // destination is the Docker service name on the CMS's compose network.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: '/a/:path*',
+          destination: 'http://ackee:3000/:path*',
+        },
+      ],
+    }
+  },
   redirects,
   turbopack: {
     // Turbopack must see the workspace root: pnpm links this package's

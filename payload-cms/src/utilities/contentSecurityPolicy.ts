@@ -89,6 +89,21 @@ const VERCEL_TOOLBAR_FONT_ORIGINS = [
  */
 export const createNonce = (): string => globalThis.crypto.randomUUID().replace(/-/g, '')
 
+/**
+ * Read the nonce back out of the request's CSP header.
+ *
+ * Components that emit their own `<script>` (the analytics tracker, for
+ * example) need the same nonce Next.js put on the forwarded request. Parsing
+ * the header keeps the single source of truth in `proxy.ts`; there is no
+ * separate `x-nonce` header to drift out of sync.
+ */
+export const nonceFromCspHeader = (
+  header: string | null | undefined,
+): string | undefined => {
+  const match = header?.match(/'nonce-([A-Za-z0-9+/_-]+={0,2})'/)
+  return match?.[1]
+}
+
 /** Origins from the environment that the browser may call for ArchView data. */
 export const archviewOrigins = (
   env: Record<string, string | undefined> = process.env,
