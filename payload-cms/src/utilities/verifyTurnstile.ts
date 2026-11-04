@@ -5,6 +5,9 @@ export const TURNSTILE_ACTION = 'contact_form'
 
 const DEFAULT_TIMEOUT_MS = 5_000
 
+/** Cloudflare caps the siteverify `response` field at 2048 characters. */
+const MAX_TOKEN_LENGTH = 2_048
+
 export const TURNSTILE_MESSAGES = {
   missingToken: 'Please complete the verification challenge before submitting.',
   rejected: 'Verification failed. Please complete the challenge and try again.',
@@ -20,6 +23,7 @@ type Env = Record<string, string | undefined>
 
 type SiteverifyResponse = {
   action?: string
+  hostname?: string
   success?: boolean
   'error-codes'?: string[]
 }
@@ -28,6 +32,44 @@ export type VerifyTurnstileOptions = {
   env?: Env
   fetchImpl?: typeof fetch
   timeoutMs?: number
+}
+
+/**
+ * Hostnames a solved challenge may come from. `TURNSTILE_HOSTNAMES` wins when
+ * it contains at least one entry; otherwise the hostname of
+ * `NEXT_PUBLIC_SERVER_URL` is used, with the matching `www.`/bare variant added
+ * so both spellings of the public site pass. Local hosts are never derived.
+ */
+export const turnstileHostnames = (env: Env = process.env): string[] => {
+  const configured = (env.TURNSTILE_HOSTNAMES ?? '')
+    .split(',')
+    .map((hostname) => hostname.trim().toLowerCase())
+    .filter((hostname) => hostname.length > 0)
+
+  if (configured.length > 0) return [...new Set(configured)]
+
+  const configuredURL = env.NEXT_PUBLIC_SERVER_URL?.trim()
+  if (!configuredURL) return []
+
+  let hostname: string
+  try {
+    const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(configuredURL)
+      ? configuredURL
+      : `https://${configuredURL}`
+    hostname = new URL(withScheme).hostname.toLowerCase()
+  } catch {
+    return []
+  }
+
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+    return []
+  }
+
+  if (hostname.startsWith('www.')) {
+    return [hostname, hostname.slice(4)]
+  }
+
+  return [hostname, `www.${hostname}`]
 }
 
 /**
@@ -40,12 +82,21 @@ export const isTurnstileRequired = (env: Env = process.env): boolean =>
   env.NODE_ENV === 'production' && env.VERCEL_ENV !== 'preview'
 
 let warnedAboutMissingSecret = false
+let warnedAboutMissingHostnames = false
 
 const warnAboutMissingSecret = () => {
   if (warnedAboutMissingSecret) return
   warnedAboutMissingSecret = true
   console.warn(
     '[turnstile] TURNSTILE_SECRET_KEY is not set; skipping contact-form verification outside production.',
+  )
+}
+
+const warnAboutMissingHostnames = () => {
+  if (warnedAboutMissingHostnames) return
+  warnedAboutMissingHostnames = true
+  console.warn(
+    '[turnstile] no hostname allowlist configured; skipping the hostname check outside production.',
   )
 }
 
@@ -82,6 +133,22 @@ export const verifyTurnstileToken = async (
 
   const responseToken = token?.trim()
   if (!responseToken) return { ok: false, message: TURNSTILE_MESSAGES.missingToken }
+  if (responseToken.length > MAX_TOKEN_LENGTH) {
+    console.warn(`[turnstile] token is longer than ${MAX_TOKEN_LENGTH} characters.`)
+    return { ok: false, message: TURNSTILE_MESSAGES.rejected }
+  }
+
+  const allowedHostnames = turnstileHostnames(env)
+  if (allowedHostnames.length === 0) {
+    if (isTurnstileRequired(env)) {
+      console.error(
+        '[turnstile] no hostname allowlist could be derived in production; refusing the submission instead of skipping the check.',
+      )
+      return { ok: false, message: TURNSTILE_MESSAGES.misconfigured }
+    }
+
+    warnAboutMissingHostnames()
+  }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -110,6 +177,16 @@ export const verifyTurnstileToken = async (
     if (result.action && result.action !== TURNSTILE_ACTION) {
       console.warn(`[turnstile] token action "${result.action}" does not match "${TURNSTILE_ACTION}".`)
       return { ok: false, message: TURNSTILE_MESSAGES.rejected }
+    }
+
+    if (allowedHostnames.length > 0) {
+      const hostname = result.hostname?.trim().toLowerCase()
+      if (!hostname || !allowedHostnames.includes(hostname)) {
+        console.warn(
+          `[turnstile] token hostname "${hostname ?? '(missing)'}" is not in the allowlist [${allowedHostnames.join(', ')}].`,
+        )
+        return { ok: false, message: TURNSTILE_MESSAGES.rejected }
+      }
     }
 
     return { ok: true, skipped: false }
