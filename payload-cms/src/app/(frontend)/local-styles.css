@@ -2,15 +2,18 @@
 
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;font-family:var(--primitive-font-sans);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:var(--primitive-font-sans);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
 a{color:var(--primary);text-decoration:none}
 a:hover{color:var(--primary-hover)}
 
-/* Bypass block (WCAG 2.4.1). Visually hidden until it takes focus; focused it
-   returns to normal flow so it pushes the header down instead of covering the
-   logo and nav. */
-.skip-link{position:absolute;left:var(--primitive-space-3);top:var(--primitive-space-3);transform:translateY(-200%);padding:var(--primitive-space-2) var(--primitive-space-3);border:1px solid var(--border-control);border-radius:var(--primitive-radius-8);background:var(--card-bg);color:var(--text);font-weight:var(--primitive-font-weight-600)}
-.skip-link:focus,.skip-link:focus-visible{position:static;display:block;width:max-content;transform:none;margin:var(--primitive-space-3)}
+/* Bypass block (WCAG 2.4.1). It stays first in the DOM (so Tab reaches it
+   first) and off-screen until focused. On focus it becomes a normal flex item
+   ordered between the header (order 0) and the page content (order 2), so the
+   header does not move and the link gets its own row under it. */
+.skip-link{position:absolute;left:var(--primitive-space-3);top:var(--primitive-space-3);transform:translateY(-200%);order:-1;padding:var(--primitive-space-2) var(--primitive-space-3);border:1px solid var(--border-control);border-radius:var(--primitive-radius-8);background:var(--card-bg);color:var(--text);font-weight:var(--primitive-font-weight-600)}
+.skip-link:focus,.skip-link:focus-visible{position:static;display:block;width:max-content;transform:none;order:1;margin:var(--primitive-space-3)}
+header{order:0}
+#page-root,main{order:2}
 
 /* Anchor-rendered buttons: the unlayered a{} colour above would otherwise win
    over the button's text utility, leaving the 404 "Go home" label blue on blue.
