@@ -190,25 +190,21 @@ h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(-
 
 pre{white-space:pre-wrap;word-break:break-word}
 
-/* CV table stacking and download link styles */
-.cv-table-stack { display:flex; flex-direction:column; gap:var(--primitive-space-2) }
-.cv-block { padding:var(--primitive-space-2); border:1px solid var(--border); border-radius:var(--primitive-radius-8); background:var(--card-bg) }
-.cv-left { font-weight:var(--primitive-font-weight-600); margin-bottom:var(--primitive-space-15) }
-.cv-right { color:var(--muted) }
-.cv-download { display:inline-block; margin-top:var(--primitive-space-2); color:var(--primary) }
-
-/* Top-right download control inside the CV viewer */
-.cv-viewer-wrapper { position: relative }
-.cv-download-top { position: absolute; top: var(--primitive-space-2); right: var(--primitive-space-2); background: var(--tint-primary-06); color: var(--primary); padding: var(--primitive-space-15) var(--primitive-space-25); border-radius: var(--primitive-radius-8); font-weight:var(--primitive-font-weight-600); text-decoration:none }
-.cv-download-top:hover { background: var(--tint-primary-12) }
-@media (max-width: 720px) {
-  .cv-download-top { position: static; display: inline-block; margin-bottom: var(--primitive-space-2) }
-}
+/* CV page: the document is server-rendered, so the download is a normal
+   prominent control and the stored HTML flows in the page. */
+.cv-viewer { display:flex; flex-direction:column; gap: var(--primitive-space-3) }
+.cv-download-bar { display:flex; flex-wrap:wrap; align-items:center; gap: var(--primitive-space-2) }
+.cv-download-top { display:inline-flex; align-items:center; justify-content:center; min-height:44px; padding: var(--primitive-space-2) var(--primitive-space-4); border-radius: var(--primitive-radius-8); background: var(--primary); color: var(--on-primary); font-weight:var(--primitive-font-weight-600); text-decoration:none }
+.cv-download-top:hover { background: var(--primary-hover); color: var(--on-primary) }
+.cv-download-top:focus-visible { outline: 2px solid var(--text); outline-offset: 2px }
+.cv-render-note { margin:0; color:var(--text); font-size:var(--primitive-font-size-90); max-width:80ch }
+.cv-document { padding: var(--primitive-space-4) }
+.cv-empty { padding: var(--primitive-space-4) }
 
 /* CV (docx) presentation tweaks: restore bullet points and section padding.
    These rules are asserted verbatim by tests/int/cv-docx-styles.int.spec.ts;
    the literal colours are documented exceptions in DESIGN.md. */
-.docx { color: #555; font-family: var(--primitive-font-docx); line-height: var(--primitive-line-height-14) }
+.docx { color: #555; font-family: var(--primitive-font-docx); line-height: var(--primitive-line-height-14); overflow-wrap:anywhere }
 .docx .docx-font-size-9 { font-size: 9pt }
 .docx .docx-font-size-9-5 { font-size: 9.5pt }
 .docx .docx-font-size-10 { font-size: 10pt }
@@ -228,14 +224,25 @@ pre{white-space:pre-wrap;word-break:break-word}
 .docx a { color: inherit; text-decoration: underline }
 .docx p { margin: 0 0 0.75rem }
 .docx p.docx-section-rule { border-bottom: 1.5pt solid #111; padding-bottom: 2px }
+.docx h3.docx-section-rule { border-bottom: 1.5pt solid var(--docx-section-rule); padding-bottom: 2px }
 /* Experience separators: empty source paragraphs with a thin bottom border.
    Kept by Mammoth (ignoreEmptyParagraphs: false), so hide every other empty
    paragraph to avoid restoring stray blank gaps. */
 .docx p.docx-entry-rule { border-bottom: 1px solid rgba(17, 17, 17, 0.2); margin: 0 0 0.65rem }
 .docx p:empty:not(.docx-entry-rule) { display: none }
-.docx h1, .docx h2, .docx h3, .docx h4 { margin-top: 0.5rem; margin-bottom: 0.4rem }
+.docx h2, .docx h3, .docx h4 { color: var(--docx-heading); line-height:1.25; margin-top: 0.75rem; margin-bottom: 0.4rem }
+.docx h2 { font-size: 1.5rem }
+.docx h3 { font-size: 1.15rem }
 .docx ul, .docx ol { margin: 0 0 0.75rem 1.25rem; padding-left: 1rem; list-style-position: outside }
 .docx ul { list-style-type: disc }
 .docx ol { list-style-type: decimal }
 .docx li { margin-bottom: 0.25rem; line-height: var(--primitive-line-height-14) }
 .docx .section { padding: 0.6rem 0 }
+
+/* Preserved Word tables stay real tables: a border, a header row and wrapping
+   cells instead of being flattened into divs. */
+.docx table { width:100%; max-width:100%; border-collapse:collapse; margin:0 0 0.75rem }
+.docx th, .docx td { border:1px solid var(--border); padding:0.35rem 0.5rem; text-align:left; vertical-align:top; overflow-wrap:anywhere }
+.docx th { background: var(--primitive-gray-100); font-weight: var(--primitive-font-weight-600) }
+.docx caption { text-align:left; font-weight:var(--primitive-font-weight-600); margin-bottom:0.25rem }
+.docx hr { border:0; border-top:1px solid var(--border); margin:1rem 0 }

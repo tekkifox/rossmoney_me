@@ -185,6 +185,10 @@ const nextConfig: NextConfig = {
     return webpackConfig
   },
   reactStrictMode: true,
+  // CV conversion runs in the Node runtime at upload time. pdfjs-dist ships a
+  // worker and optional canvas bindings that should stay outside the server
+  // bundle; text extraction only needs the plain Node entry point.
+  serverExternalPackages: ['pdfjs-dist'],
   // `withPayload` adds `X-Powered-By: Next.js, Payload` unless this is `false`.
   // The explicit false also stops Next.js emitting its own header.
   poweredByHeader: false,
@@ -241,12 +245,12 @@ const nextConfig: NextConfig = {
     // dependencies to `../node_modules/.pnpm`, and Turbopack refuses to resolve
     // files outside its root.
     root: path.resolve(dirname, '..'),
-    // Mammoth's browser zip reader imports `jszip`, and Turbopack otherwise
-    // resolves jszip's Node entry point. That pulls in `readable-stream` and
-    // Next's `util` polyfill, which feature-detects generators with
-    // `Function(...)` at module load and trips a nonce-only CSP. JSZip only
-    // needs a stream implementation for `generateNodeStream`, which the CV
-    // viewer never calls, so a browser shim is sufficient.
+    // Mammoth's zip reader imports `jszip`, and Turbopack otherwise resolves
+    // jszip's Node entry point. That pulls in `readable-stream` and Next's
+    // `util` polyfill, which feature-detects generators with `Function(...)`
+    // at module load and trips a nonce-only CSP. JSZip only needs a stream
+    // implementation for `generateNodeStream`, which the CV converter never
+    // calls (it only reads the archive), so a small shim is sufficient.
     resolveAlias: {
       'readable-stream': './src/shims/readable-stream.ts',
     },

@@ -226,9 +226,12 @@ describe('CV DOCX styles', () => {
       const link = Array.from(rendered.querySelectorAll('a')).find(
         (element) => element.textContent === 'Genuine link',
       )
-      const sectionParagraph = sectionHeading?.closest('p')
+      const sectionParagraph = sectionHeading?.closest('h3')
+      const titleParagraph = titleRun?.closest('h2')
 
       expect(rendered.querySelectorAll('u')).toHaveLength(1)
+      expect(titleParagraph).toBeDefined()
+      expect(titleParagraph?.textContent).toContain('CV Title')
       expect(plainRun).toBeDefined()
       expect(plainRun?.closest('u')).toBeNull()
       expect(plainRun?.classList.contains('docx-font-size-9-5')).toBe(true)
@@ -242,6 +245,7 @@ describe('CV DOCX styles', () => {
       expect(sectionHeading?.querySelector('strong')?.textContent).toBe('PROFESSIONAL SUMMARY')
       expect(sectionHeading?.classList.contains('docx-color-111111')).toBe(true)
       expect(sectionParagraph?.classList.contains('docx-section-rule')).toBe(true)
+      expect(sectionParagraph?.tagName).toBe('H3')
 
       expect(companyRun?.querySelector('strong')?.textContent).toBe('Suttons Seeds (Gap Personnel)')
       expect(companyRun?.classList.contains('docx-color-2386f5')).toBe(true)
@@ -268,7 +272,7 @@ describe('CV DOCX styles', () => {
 
     try {
       const entryRules = Array.from(rendered.querySelectorAll('p.docx-entry-rule'))
-      const sectionRules = Array.from(rendered.querySelectorAll('p.docx-section-rule'))
+      const sectionRules = Array.from(rendered.querySelectorAll('.docx-section-rule'))
       const emptyNonRuleParagraphs = Array.from(rendered.querySelectorAll('p')).filter(
         (paragraph) =>
           !paragraph.textContent?.trim() && !paragraph.classList.contains('docx-entry-rule'),
