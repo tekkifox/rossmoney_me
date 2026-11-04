@@ -33,15 +33,18 @@
   --primitive-gray-100: #f1f3f5;
   --primitive-gray-150: #eef2f6;
   --primitive-gray-200: #e9ecef;
-  --primitive-gray-500: #6c757d;
+  /* Control boundaries (inputs, secondary buttons) need 3:1 on white and on
+     --bg for WCAG 1.4.11; the decorative --border does not. */
+  --primitive-gray-450: #858d94;
+  --primitive-gray-500: #5f6b76;
   --primitive-gray-550: #555555;
   --primitive-gray-800: #212529;
   --primitive-gray-850: #0b1220;
   --primitive-gray-900: #111111;
   --primitive-blue-300: #6ea8fe;
-  --primitive-blue-450: #2386f5;
-  --primitive-blue-500: #0d6efd;
-  --primitive-blue-600: #0b5ed7;
+  --primitive-blue-500: #0b5ed7;
+  --primitive-blue-600: #0a58ca;
+  --primitive-red-700: #b91c1c;
   --primitive-slate-400: #94a3b8;
 
   /* Translucent colour primitives --------------------------------------- */
@@ -232,6 +235,7 @@
   --primary: var(--primitive-blue-500);
   --primary-hover: var(--primitive-blue-600);
   --border: var(--primitive-gray-200);
+  --border-control: var(--primitive-gray-450);
   --radius: var(--primitive-radius-12);
   --container-max: 1140px;
   --gutter: 16px;
@@ -253,7 +257,7 @@
   --muted-foreground: var(--primitive-gray-500);
   --accent: var(--primitive-gray-200);
   --accent-foreground: var(--text);
-  --input: var(--primitive-gray-200);
+  --input: var(--border-control);
   --ring: var(--primary);
 }
 
@@ -276,9 +280,10 @@
   --diagram-text: var(--primitive-gray-850);
   --docx-text: var(--primitive-gray-550);
   --docx-heading: var(--primitive-gray-900);
-  --docx-accent: var(--primitive-blue-450);
+  --docx-accent: var(--primary);
   --docx-rule: var(--primitive-docx-rule);
   --docx-section-rule: var(--primitive-gray-900);
+  --error-text: var(--primitive-red-700);
   --surface-glow: var(--primitive-glow-blue), var(--primitive-glow-green),
     var(--primitive-glow-indigo);
   --background-grid: var(--primitive-grid-pattern);

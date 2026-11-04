@@ -209,7 +209,7 @@ export default function ServicesTemplate({ page }: { page: PageDoc }) {
   const range = rateBounds(services)
 
   return (
-    <main className="services-page">
+    <main id="main-content" tabIndex={-1} className="services-page">
       <PageMeta page={page} />
 
       <section className="hero container">

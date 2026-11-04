@@ -4,15 +4,22 @@ export default function NavigationTemplate({ page }: { page: PageDoc }) {
   const pageData = isRecord(page.data) ? page.data : {}
   const links = readLinks(pageData.links)
   return (
-    <Section eyebrow={page.eyebrow || 'Navigation'} title={page.title || 'Site navigation links.'} lead={page.lead || 'Structured links used by the CMS-driven header and footer.'}>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {links.map((link) => (
-          <a key={`${link.label}-${link.href}`} className="rounded-3xl border border-border bg-card p-6 hover:bg-secondary" href={link.href}>
-            {link.label}
-          </a>
-        ))}
-      </div>
-      <RenderLayout page={page} />
-    </Section>
+    <main id="main-content" tabIndex={-1}>
+      <Section
+        eyebrow={page.eyebrow || 'Navigation'}
+        title={page.title || 'Site navigation links.'}
+        lead={page.lead || 'Structured links used by the CMS-driven header and footer.'}
+        headingLevel="h1"
+      >
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {links.map((link) => (
+            <a key={`${link.label}-${link.href}`} className="rounded-3xl border border-border bg-card p-6 hover:bg-secondary" href={link.href}>
+              {link.label}
+            </a>
+          ))}
+        </div>
+        <RenderLayout page={page} />
+      </Section>
+    </main>
   )
 }

@@ -19,7 +19,7 @@ const DIAGRAM_ALT =
 
 export default function MapTemplate({ page }: { page: PageDoc }) {
   return (
-    <main className="map-page">
+    <main id="main-content" tabIndex={-1} className="map-page">
       <PageMeta page={page} />
 
       <section className="hero container">
