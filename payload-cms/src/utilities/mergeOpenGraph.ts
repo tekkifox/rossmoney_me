@@ -1,17 +1,24 @@
 import type { Metadata } from 'next'
+
+import {
+  DEFAULT_OG_DESCRIPTION,
+  OG_IMAGE_ALT,
+  SITE_NAME,
+  STATIC_OG_IMAGE_PATH,
+} from './ogImage'
 import { getSiteURL } from './siteURL'
 
 const defaultOpenGraph: Metadata['openGraph'] = {
   type: 'website',
-  description: 'Ross Money — DevOps-focused developer. Portfolio showcasing projects, infrastructure, and tooling.',
+  description: DEFAULT_OG_DESCRIPTION,
   images: [
     {
-      url: `${getSiteURL()}/og.jpg`,
-      alt: 'Ross Money — DevOps-focused developer portfolio',
+      url: `${getSiteURL()}${STATIC_OG_IMAGE_PATH}`,
+      alt: OG_IMAGE_ALT,
     },
   ],
-  siteName: 'Ross Money - Developer & DevOps Portfolio',
-  title: 'Ross Money - Developer & DevOps Portfolio',
+  siteName: SITE_NAME,
+  title: SITE_NAME,
 }
 
 export const mergeOpenGraph = (og?: Metadata['openGraph']): Metadata['openGraph'] => {

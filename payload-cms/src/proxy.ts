@@ -13,9 +13,13 @@ import {
   ogIpRateLimiter,
 } from '@/utilities/rateLimit'
 import { getRobotsTag } from '@/utilities/siteURL'
+import {
+  DRAFT_MODE_COOKIE,
+  planPublicRequest,
+} from '@/utilities/publicPageCache'
 
 /**
- * Four jobs, all domain-specific:
+ * Five jobs, all domain-specific:
  *
  * 1. Keep the admin usable on every domain this app is served from.
  *
@@ -39,7 +43,7 @@ import { getRobotsTag } from '@/utilities/siteURL'
  * endpoints: the login handler (Payload's account lockout alone lets one source
  * keep the only admin locked out) and the Open Graph image renderer (the
  * query-string values are rewritten to bounded, control-character-free input
- * before Payload's generator sees them). The per-IP budgets live in MongoDB so
+ * before the card route renders them). The per-IP budgets live in MongoDB so
  * every instance shares one counter; if the database is slow or unreachable the
  * limiter falls back to its in-memory budget instead of failing the request.
  *
@@ -52,6 +56,15 @@ import { getRobotsTag } from '@/utilities/siteURL'
  * comes from `utilities/siteURL.ts`, the same helper the metadata and sitemap
  * use.
  *
+ * 5. Split draft preview from the cacheable public route.
+ *
+ * The public pages are prerendered with a revalidation window, so they cannot
+ * read `draftMode()` themselves. A request carrying Next.js' draft cookie is
+ * rewritten (same URL, same query) to the dynamic renderer under
+ * `app/(frontend)/next/draft/`; everything else reaches the cached route. See
+ * `utilities/publicPageCache.ts`.
+ *
+ * @see ../utilities/publicPageCache.ts
  * @see ../utilities/adminOrigin.ts
  * @see ../utilities/contentSecurityPolicy.ts
  * @see ../utilities/rateLimit.ts
@@ -84,6 +97,15 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Public pages are prerendered with a revalidation window. The draft-mode
+  // cookie is the one thing that must not reach that cached route: when it is
+  // present the request is rewritten to a dynamic renderer instead, so editors
+  // still see draft content and normal visitors keep the cacheable response.
+  const plan = planPublicRequest({
+    pathname,
+    draftMode: request.cookies.has(DRAFT_MODE_COOKIE),
+  })
+
   let csp: string | null = null
 
   // `next dev` uses eval and a WebSocket for HMR, so a production policy would
@@ -104,11 +126,19 @@ export async function proxy(request: NextRequest) {
       nonce,
       isHttps: protocol === 'https',
       isAdmin: pathname.startsWith('/admin'),
+      // A cached public document cannot carry this request's nonce; the static
+      // allowlist is the documented fallback. Preview and admin responses are
+      // rendered now, so they keep the nonce.
+      preRendered: plan.mode === 'public',
     })
 
-    // Next.js reads this request header to nonce its own script tags.
-    headers.set('content-security-policy', csp)
-    forwarded = true
+    if (plan.mode !== 'public') {
+      // Next.js reads this request header to nonce its own script tags. A
+      // prerendered document must not receive it: the cached HTML has no nonce,
+      // and the response is served with the static allowlist above.
+      headers.set('content-security-policy', csp)
+      forwarded = true
+    }
   }
 
   // Payload's lockout is per account, so it can be used to deny the single admin
@@ -122,7 +152,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // `/api/og` is public and renders a PNG in Node. Cap the interpolated strings
-  // and bound the render rate before the generated Payload route runs.
+  // and bound the render rate before the card route runs.
   if (pathname === '/api/og' && request.method === 'GET') {
     const address = clientAddress(headers)
     const perAddress = await ogIpRateLimiter.take(address)
@@ -151,15 +181,28 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const response = forwarded
-    ? NextResponse.next({ request: { headers } })
-    : NextResponse.next()
+  const forwardedRequest = forwarded ? { request: { headers } } : undefined
+
+  const response =
+    plan.mode === 'preview'
+      ? NextResponse.rewrite(previewURL(request, plan.destination), forwardedRequest)
+      : NextResponse.next(forwardedRequest)
 
   if (csp) {
     response.headers.set('Content-Security-Policy', csp)
   }
 
   return applyRobotsHeader(response, robotsTag)
+}
+
+/**
+ * Keep the browser URL (and its query string) while rendering the draft
+ * document from the preview route.
+ */
+function previewURL(request: NextRequest, destination: string): URL {
+  const url = request.nextUrl.clone()
+  url.pathname = destination
+  return url
 }
 
 /**

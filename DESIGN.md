@@ -509,6 +509,28 @@ The DOCX *source* colour matchers in
 input matchers, not paint values; the paint values above are the fallback CSS.
 That file has no `#` prefix, so the guard does not treat it as a CSS literal.
 
+### Dynamic Open Graph card
+
+`src/app/api/og/route.tsx` renders a 1200×630 PNG through `next/og`. It is the
+runtime counterpart of the static `public/og.jpg`: same blue wash, grid, brand
+mark, domain pill, white panel, type scale and button row. The page title and
+description are sanitised and length-capped before Satori sees them; missing
+values fall back to the site defaults.
+
+Satori has no stylesheet cascade, so it cannot read `tokens.css` custom
+properties. `src/utilities/ogTheme.ts` mirrors the rendered token values as
+literals, and `tests/int/og-theme.int.spec.ts` reads `tokens.css` and asserts
+they still match. That mirror is the only named non-DOCX exception in
+`scripts/check-tokens.mjs`; retune the tokens and update the mirror (or the test
+fails). The three `hero*` stops are sampled from `public/og.jpg` because the
+card artwork's blue wash predates the token set and has no token of its own.
+
+`generateMeta` points `og:image` at `/api/og?title=…&description=…` when a page
+has both, keeps an editor-uploaded `meta.image` when present, and otherwise uses
+the static `/og.jpg`. The query is the cache key, so the route (and the matching
+`next.config.ts` header) keep the image for a year with
+`stale-while-revalidate` and `immutable`.
+
 ### Tailwind palette/utility gaps
 
 These are pre-existing utility classes, not raw literals, so the guard does not
@@ -563,6 +585,8 @@ stay where they are:
 | `payload-cms/src/app/(frontend)/layout.tsx` | CSS import order (globals → tokens → local-styles) |
 | `payload-cms/tailwind.config.mjs` | Typography plugin overrides |
 | `payload-cms/scripts/check-tokens.mjs` | Raw-colour guard and its named exceptions |
+| `payload-cms/src/utilities/ogTheme.ts` | OG-card mirror of the rendered token values (asserted against `tokens.css`) |
+| `payload-cms/src/app/api/og/route.tsx` | Dynamic 1200×630 Open Graph card |
 | `payload-cms/src/app/(payload)/custom.scss` | Payload admin styling (empty, untouched) |
 | `AGENTS.md` | Operational rules for agents |
 | root `styles.css` | Removed; no longer authoritative |

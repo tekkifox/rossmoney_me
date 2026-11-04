@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import './index.scss'
 
 import { getClientSideURL } from '@/utilities/getURL'
+import { PREVIEW_MODE_COOKIE } from '@/utilities/publicPageCache'
 
 const baseClass = 'admin-bar'
 
@@ -27,12 +28,29 @@ const collectionLabels = {
 
 const Title: React.FC = () => <span>Dashboard</span>
 
+/**
+ * Draft mode's own cookie is httpOnly, so this client component cannot read it.
+ * `/next/preview` sets a non-httpOnly companion cookie instead; that is only a
+ * UI hint for the "Exit preview mode" button — the server-side draft cookie
+ * remains the thing that decides what renders.
+ */
+const hasPreviewCookie = (cookie: string): boolean =>
+  cookie
+    .split(';')
+    .map((part) => part.trim())
+    .includes(`${PREVIEW_MODE_COOKIE}=1`)
+
 export const AdminBar: React.FC<{
   adminBarProps?: PayloadAdminBarProps
 }> = (props) => {
   const { adminBarProps } = props || {}
   const segments = useSelectedLayoutSegments()
   const [show, setShow] = useState(false)
+  // The readable companion cookie is set before the first paint of the preview
+  // document, so a lazy initialiser is enough; no effect is needed.
+  const [preview] = useState(() =>
+    typeof document === 'undefined' ? false : hasPreviewCookie(document.cookie),
+  )
   const collection = (
     collectionLabels[segments?.[1] as keyof typeof collectionLabels] ? segments[1] : 'pages'
   ) as keyof typeof collectionLabels
@@ -52,6 +70,7 @@ export const AdminBar: React.FC<{
       <div className="container">
         <PayloadAdminBar
           {...adminBarProps}
+          preview={preview}
           className="py-2 text-white"
           classNames={{
             controls: 'font-medium text-white',

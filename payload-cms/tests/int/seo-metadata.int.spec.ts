@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { buildStructuredData } from '@/components/StructuredData'
 import { buildPagesSitemap } from '@/app/(frontend)/(sitemaps)/pages-sitemap.xml/route'
+import type { Media } from '@/payload-types'
 import { generateMeta } from '@/utilities/generateMeta'
+import {
+  buildOgImageUrl,
+  OG_IMAGE_HEIGHT,
+  OG_IMAGE_WIDTH,
+  ogImageAlt,
+} from '@/utilities/ogImage'
 import {
   DEFAULT_SITE_URL,
   getRobotsTag,
@@ -13,6 +20,14 @@ import {
 } from '@/utilities/siteURL'
 
 const SITE_NAME = 'Ross Money - Developer & DevOps Portfolio'
+
+const generatedCard = (siteURL: string, title: string, description: string) => ({
+  url: buildOgImageUrl(siteURL, { title, description }),
+  alt: ogImageAlt(title),
+  width: OG_IMAGE_WIDTH,
+  height: OG_IMAGE_HEIGHT,
+  type: 'image/png',
+})
 
 describe('site origin', () => {
   it('prefers SERVER_URL, then NEXT_PUBLIC_SERVER_URL', () => {
@@ -95,7 +110,11 @@ describe('generateMeta', () => {
     expect(meta.alternates?.canonical).toBe(`${siteURL}/contact`)
     expect(meta.openGraph?.url).toBe(`${siteURL}/contact`)
     expect(meta.openGraph?.images).toEqual([
-      { url: `${siteURL}/og.jpg`, alt: expect.any(String) },
+      generatedCard(
+        siteURL,
+        'Contact',
+        'Get in touch about platform and DevOps work.',
+      ),
     ])
   })
 
@@ -106,6 +125,36 @@ describe('generateMeta', () => {
 
     expect(meta.title).toBe(`About me | ${SITE_NAME}`)
     expect(meta.description).toBe('A short introduction.')
+    expect(meta.openGraph?.images).toEqual([
+      generatedCard(siteURL, 'About me', 'A short introduction.'),
+    ])
+  })
+
+  it('keeps an uploaded Open Graph image ahead of the generated card', async () => {
+    const meta = await generateMeta({
+      doc: {
+        slug: 'about',
+        title: 'About me',
+        lead: 'A short introduction.',
+        meta: {
+          image: { url: '/media/about-og.jpg' } as unknown as Media,
+        },
+      },
+    })
+
+    expect(meta.openGraph?.images).toEqual([
+      { url: `${siteURL}/media/about-og.jpg`, alt: expect.any(String) },
+    ])
+  })
+
+  it('uses the static card when a page has no description', async () => {
+    const meta = await generateMeta({
+      doc: { slug: 'about', title: 'About me' },
+    })
+
+    expect(meta.openGraph?.images).toEqual([
+      { url: `${siteURL}/og.jpg`, alt: expect.any(String) },
+    ])
   })
 
   it('serves the home document at the site root', async () => {

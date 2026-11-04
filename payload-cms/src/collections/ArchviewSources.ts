@@ -14,6 +14,7 @@ import {
   decryptArchviewSecret,
   encryptArchviewSecret,
 } from '../utilities/archviewSourceSecret'
+import { revalidateAllPublicPages } from '../utilities/revalidatePublicPages'
 
 /**
  * Keeps at most one default row. The bulk write bypasses document hooks so it
@@ -180,12 +181,14 @@ const isHttpsUrl = (value: unknown): string | true => {
 const revalidateArchitectureAfterChange: CollectionAfterChangeHook = ({ context }) => {
   if (!context.disableRevalidate) {
     revalidateArchitectureCache()
+    revalidateAllPublicPages()
   }
 }
 
 const revalidateArchitectureAfterDelete: CollectionAfterDeleteHook = ({ context }) => {
   if (!context.disableRevalidate) {
     revalidateArchitectureCache()
+    revalidateAllPublicPages()
   }
 }
 

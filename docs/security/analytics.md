@@ -6,8 +6,7 @@ same Docker network as the CMS. The CMS reaches the app directly at
 
 ## Ingestion path
 
-The public site proxies Ackee first-party, so the nonce-based CSP needs no new
-source:
+The public site proxies Ackee first-party, so the CSP needs no new source:
 
 ```text
 browser
@@ -22,23 +21,26 @@ headers and from the `/api/*` cache rule; `payload-cms/src/proxy.ts` skips it
 too, so proxied responses keep Ackee's own headers rather than the CMS CSP.
 
 The tracker posts to the collection API at `<site-origin>/a/api`, which
-`connect-src 'self'` already covers. The script is same-origin and carries the
-request nonce, so `script-src` stays `'nonce-…' 'strict-dynamic' 'self'`.
+`connect-src 'self'` already covers. The script is same-origin, so the static
+script allowlist on cached public documents (`script-src 'self' 'unsafe-inline'`)
+permits it. No nonce is needed there: a prerendered document cannot carry a
+per-request nonce. Dynamic surfaces keep the nonce policy.
 
 ## Tracker
 
 `payload-cms/src/components/AckeeTracker/index.tsx` is rendered from the public
-layout:
+page renderer (not the layout, which must stay free of request-time state):
 
 - domain id: `3191a3db-fc9b-4663-ac13-e862015111f3`
 - server: `<site origin>/a` from `resolveServerURL()`, not a hard-coded host
 - options: `{"ignoreOwnVisits":false}`, so ordinary visitors receive no
   `ackee_ignore` cookie
 
-The component renders only when `NODE_ENV=production`, draft mode is off, and
-the process is not on Vercel. Local development, Live Preview/the CMS and Vercel
-previews therefore never post into production statistics. The request nonce is
-read back from the CSP header (`nonceFromCspHeader`) and put on the script tag.
+The component renders only when `NODE_ENV=production`, draft rendering is off,
+and the process is not on Vercel. Local development, Live Preview/the CMS and
+Vercel previews therefore never post into production statistics. The page
+passes its `draft`/`track` flags, so the component itself reads no request-time
+API and the public route can stay cacheable.
 
 ## Dashboard
 

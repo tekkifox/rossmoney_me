@@ -128,14 +128,15 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Public, deterministic image generated from the request query. A long
-        // CDN/browser lifetime is the cheapest guard for /api/og; the proxy
-        // rate limit only has to cover cache misses.
+        // Public, deterministic image generated from the request query. The
+        // query is part of the cache key, so a page edit produces a new URL and
+        // the old card can stay immutable for a year. Keep this value in step
+        // with `OG_IMAGE_CACHE_CONTROL` in `src/utilities/ogImage.ts`.
         source: '/api/og',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+            value: 'public, max-age=31536000, s-maxage=31536000, stale-while-revalidate=604800, immutable',
           },
         ],
       },
@@ -209,7 +210,7 @@ const nextConfig: NextConfig = {
   output: process.env.VERCEL ? undefined : 'standalone',
   // Ackee's tracker and collection API are served first-party under `/a` so the
   // public CSP needs no new host source: `connect-src 'self'` covers the API
-  // and the tracker is a same-origin script carrying the request nonce.
+  // and the tracker is a same-origin script the public script allowlist admits.
   // `beforeFiles` makes the namespace win before the `[slug]` page route, while
   // `/a` is not an existing route, so nothing public is shadowed. The
   // destination is the Docker service name on the CMS's compose network.
@@ -219,6 +220,17 @@ const nextConfig: NextConfig = {
         {
           source: '/a/:path*',
           destination: 'http://ackee:3000/:path*',
+        },
+      ],
+      afterFiles: [
+        {
+          // The homepage document stores the slug `home`. Serving it through
+          // the dynamic `[slug]` route (instead of a literal `app/page.tsx`) is
+          // what lets it be generated on demand from the live database rather
+          // than frozen during the build, which uses Payload's no-op database
+          // adapter.
+          source: '/',
+          destination: '/home',
         },
       ],
     }

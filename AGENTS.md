@@ -62,6 +62,10 @@ for why that needs the small `src/proxy.ts` origin normalisation.
 | `payload-cms/src/app/(frontend)/globals.css` | Tailwind entry, `@theme` mapping, base and background layers |
 | `payload-cms/src/app/(frontend)/local-styles.css` | Public component rules; reads tokens |
 | `payload-cms/src/app/(frontend)/layout.tsx` | CSS import order: globals → tokens → local-styles |
+| `payload-cms/src/app/api/og/route.tsx` | Dynamic 1200×630 Open Graph card |
+| `payload-cms/src/utilities/ogImage.ts` | OG defaults, cache lifetime and URL builder |
+| `payload-cms/src/utilities/ogTheme.ts` | OG card's mirror of the rendered token values |
+| `payload-cms/public/og-fonts/` | Geist font assets for the OG card |
 | `payload-cms/tailwind.config.mjs` | Tailwind typography plugin overrides |
 | `payload-cms/scripts/check-tokens.mjs` | Raw-colour guard and named exceptions |
 | `payload-cms/src/app/(payload)/custom.scss` | Payload admin styling (leave alone) |
