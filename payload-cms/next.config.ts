@@ -86,6 +86,18 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Architecture snapshots are public, redacted and identical for every
+        // visitor. Let a shared cache absorb the 45-second client poll; the
+        // route's own in-process cache still answers the next miss.
+        source: '/api/architecture',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=30, stale-while-revalidate=120',
+          },
+        ],
+      },
+      {
         // Public, deterministic image generated from the request query. A long
         // CDN/browser lifetime is the cheapest guard for /api/og; the proxy
         // rate limit only has to cover cache misses.
