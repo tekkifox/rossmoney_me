@@ -2,9 +2,28 @@
 
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;font-family:var(--primitive-font-sans);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+body{margin:0;font-family:var(--primitive-font-sans);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
 a{color:var(--primary);text-decoration:none}
 a:hover{color:var(--primary-hover)}
+
+/* Bypass block (WCAG 2.4.1). It stays first in the DOM (so Tab reaches it
+   first) and off-screen until focused. On focus it becomes a normal flex item
+   ordered between the header (order 0) and the page content (order 2), so the
+   header does not move and the link gets its own row under it. */
+.skip-link{position:absolute;left:var(--primitive-space-3);top:var(--primitive-space-3);transform:translateY(-200%);order:-1;padding:var(--primitive-space-2) var(--primitive-space-3);border:1px solid var(--border-control);border-radius:var(--primitive-radius-8);background:var(--card-bg);color:var(--text);font-weight:var(--primitive-font-weight-600)}
+.skip-link:focus,.skip-link:focus-visible{position:static;display:block;width:max-content;transform:none;order:1;margin:var(--primitive-space-2) var(--primitive-space-3);margin-left:max(var(--primitive-space-3),calc((100% - var(--container-max)) / 2 + var(--primitive-space-3)))}
+/* ≤720px the topbar adds its own 8px horizontal inset, so the logo sits at
+   12+8; match it. */
+@media (max-width: 720px){
+  .skip-link:focus,.skip-link:focus-visible{margin-left:calc(max(var(--primitive-space-3),calc((100% - var(--container-max)) / 2 + var(--primitive-space-3))) + var(--primitive-space-2))}
+}
+header{order:0}
+#page-root,main{order:2}
+
+/* Anchor-rendered buttons: the unlayered a{} colour above would otherwise win
+   over the button's text utility, leaving the 404 "Go home" label blue on blue.
+   Uses the same token the utility consumes, so legible buttons do not change. */
+a[data-slot='button'].text-primary-foreground{color:var(--primary-foreground)}
 
 .page-shell{width:100%;padding:var(--primitive-space-4) var(--primitive-space-3) var(--primitive-space-8)}
 .container{max-width:var(--container-max);margin:0 auto;padding:0 var(--primitive-space-3)}
@@ -40,7 +59,7 @@ a:hover{color:var(--primary-hover)}
 .hero-copy{flex:1 1 520px;min-width:0;padding:var(--primitive-space-3) var(--primitive-space-15);display:flex;flex-direction:column;justify-content:center}
 .hero-panel{flex:0 0 320px;min-width:240px;padding:var(--primitive-space-3)}
 .eyebrow{font-size:var(--primitive-font-size-75);color:var(--primary);text-transform:uppercase;letter-spacing:var(--primitive-tracking-012);margin-bottom:var(--primitive-space-2)}
-h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);line-height:var(--primitive-line-height-105)}
+h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);line-height:var(--primitive-line-height-105)}
 /* Reflow (WCAG 1.4.10): a single long word in a heading (a host name such as
    "VortexServers.co.uk") could otherwise set the page's minimum width. It only
    breaks when it cannot fit, so desktop composition is unchanged. */
@@ -53,7 +72,7 @@ h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);
 .btn{display:inline-flex;align-items:center;justify-content:center;padding:var(--primitive-space-25) var(--primitive-space-4);border-radius:var(--primitive-radius-8);border:1px solid transparent;font-weight:var(--primitive-font-weight-600);cursor:pointer}
 .btn-primary{background:var(--primary);color:var(--on-primary)}
 .btn-primary:hover{background:var(--primary-hover);color:var(--on-primary)}
-.btn-secondary{background:var(--button-secondary-bg);border:1px solid var(--border);color:var(--text)}
+.btn-secondary{background:var(--button-secondary-bg);border:1px solid var(--border-control);color:var(--text)}
 
 .hero-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--primitive-space-3);margin-top:var(--primitive-space-45);align-items:stretch}
 
@@ -140,7 +159,7 @@ h1{font-size:var(--primitive-font-size-240);margin:0 0 var(--primitive-space-3);
 
 @media (max-width: 720px){
   .cards-grid{grid-template-columns:1fr}
-  h1{font-size:var(--primitive-font-size-180)}
+  h1:not(.section-title){font-size:var(--primitive-font-size-180)}
   .hero-metrics{grid-template-columns:1fr}
   .image-grid{grid-template-columns:1fr}
   .brand-mark{width:40px;height:40px}
@@ -197,7 +216,7 @@ pre{white-space:pre-wrap;word-break:break-word}
 .docx .docx-font-size-11 { font-size: 11pt }
 .docx .docx-font-size-11-5 { font-size: 11.5pt }
 .docx .docx-font-size-13-5 { font-size: 13.5pt; color: #111 }
-.docx .docx-font-size-14 { font-size: 14pt; color: #2386f5 }
+.docx .docx-font-size-14 { font-size: 14pt; color: #0b5ed7 }
 .docx .docx-font-size-22 { font-size: 22pt; color: #111 }
 .docx .docx-font-family-arial { font-family: Arial, sans-serif }
 .docx .docx-font-family-segoe-ui-emoji { font-family: "Segoe UI Emoji", sans-serif }
@@ -205,7 +224,7 @@ pre{white-space:pre-wrap;word-break:break-word}
 .docx .docx-font-family-times-new-roman { font-family: "Times New Roman", serif }
 .docx .docx-color-555555 { color: #555 }
 .docx .docx-color-111111 { color: #111 }
-.docx .docx-color-2386f5 { color: #2386f5 }
+.docx .docx-color-2386f5 { color: #0b5ed7 }
 .docx a { color: inherit; text-decoration: underline }
 .docx p { margin: 0 0 0.75rem }
 .docx p.docx-section-rule { border-bottom: 1.5pt solid #111; padding-bottom: 2px }

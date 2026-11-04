@@ -160,7 +160,7 @@ describe('CV DOCX styles', () => {
     )
     expect(cvStyles).toContain('.docx .docx-color-555555 { color: #555 }')
     expect(cvStyles).toContain('.docx .docx-color-111111 { color: #111 }')
-    expect(cvStyles).toContain('.docx .docx-color-2386f5 { color: #2386f5 }')
+    expect(cvStyles).toContain('.docx .docx-color-2386f5 { color: #0b5ed7 }')
   })
 
   it('records benchmark colours and both rule thicknesses without touching underline values', () => {
@@ -245,7 +245,7 @@ describe('CV DOCX styles', () => {
 
       expect(companyRun?.querySelector('strong')?.textContent).toBe('Suttons Seeds (Gap Personnel)')
       expect(companyRun?.classList.contains('docx-color-2386f5')).toBe(true)
-      expect(getComputedStyle(companyRun!).color).toBe('rgb(35, 134, 245)')
+      expect(getComputedStyle(companyRun!).color).toBe('rgb(11, 94, 215)')
 
       expect(underlinedRun?.textContent).toBe('Explicitly underlined source text')
       expect(bareUnderlineRun?.closest('u')).toBeNull()

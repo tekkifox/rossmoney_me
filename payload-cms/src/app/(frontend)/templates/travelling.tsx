@@ -93,7 +93,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   const heroMetrics = readMetrics(travelPayload.metrics || data.metrics || [])
 
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <PageMeta page={page} />
     <section className="hero container">
       <div className="hero-copy">

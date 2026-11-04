@@ -35,6 +35,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body>
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
         <ErrorReporter />
         <Providers>
           <AdminBar
