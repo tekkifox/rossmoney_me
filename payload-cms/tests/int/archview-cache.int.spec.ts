@@ -39,10 +39,11 @@ describe('architecture proxy cache', () => {
       fetchImpl,
       lookupSource: async () => null,
       lookupDefaultSource: async () => null,
+      cacheTtlMs: 50,
     })
 
     await GET(new Request('https://cms.example/api/architecture?project=p'))
-    await new Promise((resolve) => setTimeout(resolve, 5100))
+    await new Promise((resolve) => setTimeout(resolve, 60))
     await GET(new Request('https://cms.example/api/architecture?project=p'))
 
     expect(calls).toBe(2)

@@ -354,9 +354,9 @@ const fetchCandidate = async (
   }
 }
 
-// Shared across visitors, and shorter than the 10-second panel poll so a
-// cached entry never outlives the next poll by more than a few seconds.
-export const ARCHVIEW_CACHE_TTL_MS = 5000
+// Shared across visitors. The client polls every 45 seconds; a 60-second entry
+// means nearly every poll is served from this process instead of ArchView.
+export const ARCHVIEW_CACHE_TTL_MS = 60_000
 
 export type ArchitectureRouteDeps = {
   env?: ArchviewSourceEnv
@@ -364,6 +364,8 @@ export type ArchitectureRouteDeps = {
   lookupSource?: ArchviewSourceLookup
   lookupDefaultSource?: ArchviewDefaultSourceLookup
   timeoutMs?: number
+  /** Tests shorten this so they do not have to wait for the production TTL. */
+  cacheTtlMs?: number
 }
 
 type CachedArchitectureResponse = {
@@ -396,6 +398,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
       ? { ...baseEnv, ARCHVIEW_TIMEOUT_MS: String(deps.timeoutMs) }
       : { ...baseEnv }
   const fetchImpl = deps.fetchImpl ?? fetch
+  const cacheTtlMs = deps.cacheTtlMs ?? ARCHVIEW_CACHE_TTL_MS
   const lookupSource = deps.lookupSource ?? lookupFromDatabase
   const lookupDefaultSource = deps.lookupDefaultSource ?? lookupDefaultFromDatabase
 
@@ -423,11 +426,18 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
     return `${sourcePart}|${search}`
   }
 
-  const reconstruct = (value: CachedArchitectureResponse): Response =>
-    new Response(value.body.slice(0), {
+  const reconstruct = (value: CachedArchitectureResponse): Response => {
+    const headers = new Headers(value.headers)
+    // Shared, redacted snapshots are safe for the edge. The short lifetime is
+    // aligned with the client poll; failures keep the same brief window.
+    if (value.status === 200 && !headers.has('cache-control')) {
+      headers.set('cache-control', 'public, s-maxage=30, stale-while-revalidate=120')
+    }
+    return new Response(value.body.slice(0), {
       status: value.status,
-      headers: new Headers(value.headers),
+      headers,
     })
+  }
 
   const resolveSource = async (raw: string | null): Promise<ArchviewRequestSource | null> => {
     try {
@@ -473,7 +483,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
               status: 200,
               headers: [['content-type', 'application/json']],
               body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-              expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+              expiresAt: Date.now() + cacheTtlMs,
             }
           }
           const text = await res.text()
@@ -483,7 +493,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
             status: 200,
             headers: [['content-type', contentType]],
             body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-            expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+            expiresAt: Date.now() + cacheTtlMs,
           }
         }
         if (res) {
@@ -512,7 +522,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         status: 502,
         headers: [['content-type', 'application/json']],
         body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-        expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+        expiresAt: Date.now() + cacheTtlMs,
       }
     }
 
@@ -553,7 +563,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
             status: 200,
             headers: [['content-type', 'application/json']],
             body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-            expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+            expiresAt: Date.now() + cacheTtlMs,
           }
         }
 
@@ -564,7 +574,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
           status: 200,
           headers: [['content-type', contentType]],
           body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-          expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+          expiresAt: Date.now() + cacheTtlMs,
         }
       } catch (e) {
         console.warn('ArchView fetch attempt failed for', candidate.host, e instanceof Error ? e.message : e)
@@ -606,7 +616,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
 
     const value = await promise
     if (value) {
-      value.expiresAt = Date.now() + ARCHVIEW_CACHE_TTL_MS
+      value.expiresAt = Date.now() + cacheTtlMs
       if (!cache.has(key)) {
         setCache(key, value)
       }

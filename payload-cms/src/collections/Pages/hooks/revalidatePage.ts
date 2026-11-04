@@ -3,6 +3,7 @@ import type { CollectionAfterChangeHook, CollectionAfterDeleteHook } from 'paylo
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import type { Page } from '../../../payload-types'
+import { revalidateArchitectureCache } from '../../../utilities/architectureCache'
 
 export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   doc,
@@ -10,6 +11,10 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
   req: { payload, context },
 }) => {
   if (!context.disableRevalidate) {
+    // A page edit can change its ArchView source relation or project, so the
+    // shared snapshot cache is stale even when the page stays published.
+    revalidateArchitectureCache()
+
     if (doc._status === 'published') {
       const path = doc.slug === 'home' ? '/' : `/${doc.slug}`
 
@@ -34,6 +39,7 @@ export const revalidatePage: CollectionAfterChangeHook<Page> = ({
 
 export const revalidateDelete: CollectionAfterDeleteHook<Page> = ({ doc, req: { context } }) => {
   if (!context.disableRevalidate) {
+    revalidateArchitectureCache()
     const path = doc?.slug === 'home' ? '/' : `/${doc?.slug}`
     revalidatePath(path)
     revalidateTag('pages-sitemap', 'max')

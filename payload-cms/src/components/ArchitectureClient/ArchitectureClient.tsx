@@ -37,7 +37,11 @@ interface ArchitecturePayload {
   [key: string]: unknown
 }
 
-const REFRESH_INTERVAL_MS = 10000
+// The server has already rendered a snapshot, so polling is only a freshness
+// check. ArchView's sample cadence does not justify a request every 10 seconds;
+// 45 seconds keeps the panel current without turning every visitor into a load
+// generator against the upstream (and matches the proxy cache TTL).
+const REFRESH_INTERVAL_MS = 45000
 
 export const ArchitectureClient: React.FC<Props> = ({ project }) => {
   const inFlightRef = useRef(false)
@@ -68,6 +72,12 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
 
     const statusEl = document.getElementById('architecture-status')
     const sectionEl = document.getElementById('architecture')
+    // `Updated` means the server rendered a snapshot; `Loading` is the
+    // degraded state where the panel has nothing to show yet.
+    const updatedEl = document.getElementById('architecture-updated')
+    const serverRenderedSnapshot =
+      Boolean(updatedEl?.textContent?.trim()) && updatedEl?.textContent?.trim() !== 'Loading'
+    let lastFetchAt = serverRenderedSnapshot ? Date.now() : 0
     let lastStatus = ''
 
     function announceStatus(message: string) {
@@ -83,6 +93,7 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
     async function fetchArchitecture() {
       if (inFlightRef.current) return
       inFlightRef.current = true
+      lastFetchAt = Date.now()
       setBusy(true)
       try {
         const url = architectureUrl + (architectureUrl.includes('?') ? '&' : '?') + `t=${Date.now()}` + (projectLabel ? `&project=${encodeURIComponent(projectLabel)}` : '')
@@ -287,14 +298,20 @@ export const ArchitectureClient: React.FC<Props> = ({ project }) => {
       void fetchArchitecture()
     }, REFRESH_INTERVAL_MS)
 
-    // Fetch immediately when the tab becomes visible again
+    // Catch up when the tab becomes visible again, but not more often than the
+    // poll interval (switching tabs is not a refresh request).
     const onVisibilityChange = () => {
-      if (!document.hidden) void fetchArchitecture()
+      if (!document.hidden && Date.now() - lastFetchAt >= REFRESH_INTERVAL_MS) {
+        void fetchArchitecture()
+      }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
 
-    // Load architecture immediately on client mount so the page isn't empty
-    void fetchArchitecture()
+    // The server already rendered a snapshot, so do not fetch again on mount.
+    // Only a degraded server render (no snapshot) needs an immediate retry.
+    if (!serverRenderedSnapshot) {
+      void fetchArchitecture()
+    }
 
     return () => {
       clearInterval(intervalId)
