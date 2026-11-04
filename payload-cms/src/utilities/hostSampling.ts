@@ -63,11 +63,20 @@ const toCount = (v: unknown): number | null => {
   return v
 }
 
+// An accepted-login timestamp is only useful when it really is a moment in
+// time. Anything unparseable is omitted, not stored as an empty value, so a
+// reader can tell "the host did not report a window" from a real one.
+const toTimestamp = (v: unknown): string | null => {
+  if (typeof v !== 'string' || v.trim().length === 0) return null
+  const time = Date.parse(v)
+  return Number.isFinite(time) ? new Date(time).toISOString() : null
+}
+
 // The upstream breakdown is a list of { user, count } pairs. Entries that are
 // not a non-empty username with a non-negative whole-number count are dropped
 // rather than failing the sample, and the list is capped so one noisy host
-// cannot bloat a row.
-const toFailedLoginUsers = (v: unknown): Array<{ user: string; count: number }> => {
+// cannot bloat a row. Shared by the failed- and accepted-login breakdowns.
+const toUserCounts = (v: unknown): Array<{ user: string; count: number }> => {
   if (!Array.isArray(v)) return []
   const users: Array<{ user: string; count: number }> = []
   for (const raw of v) {
@@ -104,6 +113,11 @@ export type HostSampleRecord = {
   diskPercent: number | null
   failedLogins: number | null
   failedLoginUsers: Array<{ user: string; count: number }>
+  sshLogins: number | null
+  sshLoginUsers: Array<{ user: string; count: number }>
+  sshLoginsToday: number | null
+  sshLoginUsersToday: Array<{ user: string; count: number }>
+  sshLoginsTodaySince?: string
   swapPercent: number | null
   processCount: number | null
   hostCount: number | null
@@ -136,6 +150,8 @@ export function buildHostSampleRecord({
     return largest === null || count > largest ? count : largest
   }, null)
 
+  const sshLoginsTodaySince = toTimestamp(metrics.sshLoginsTodaySince)
+
   return {
     host: hostId,
     hostLabel,
@@ -148,7 +164,12 @@ export function buildHostSampleRecord({
     loadAvg: toNumber(metrics.loadAvg),
     diskPercent: toNumber(metrics.diskPercent),
     failedLogins: toCount(metrics.failedLogins),
-    failedLoginUsers: toFailedLoginUsers(metrics.failedLoginUsers),
+    failedLoginUsers: toUserCounts(metrics.failedLoginUsers),
+    sshLogins: toCount(metrics.sshLogins),
+    sshLoginUsers: toUserCounts(metrics.sshLoginUsers),
+    sshLoginsToday: toCount(metrics.sshLoginsToday),
+    sshLoginUsersToday: toUserCounts(metrics.sshLoginUsersToday),
+    ...(sshLoginsTodaySince === null ? {} : { sshLoginsTodaySince }),
     swapPercent: toNumber(metrics.swapPercent),
     processCount: toNumber(metrics.processCount),
     hostCount: toNumber(metrics.hostCount),
