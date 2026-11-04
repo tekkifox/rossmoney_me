@@ -6,9 +6,16 @@ body{margin:0;font-family:var(--primitive-font-sans);color:var(--text);backgroun
 a{color:var(--primary);text-decoration:none}
 a:hover{color:var(--primary-hover)}
 
-/* Bypass block (WCAG 2.4.1). Visually hidden until it takes focus. */
-.skip-link{position:absolute;left:var(--primitive-space-3);top:var(--primitive-space-3);z-index:100;transform:translateY(-200%);padding:var(--primitive-space-2) var(--primitive-space-3);border:1px solid var(--border-control);border-radius:var(--primitive-radius-8);background:var(--card-bg);color:var(--text);font-weight:var(--primitive-font-weight-600)}
-.skip-link:focus{transform:none}
+/* Bypass block (WCAG 2.4.1). Visually hidden until it takes focus; focused it
+   returns to normal flow so it pushes the header down instead of covering the
+   logo and nav. */
+.skip-link{position:absolute;left:var(--primitive-space-3);top:var(--primitive-space-3);transform:translateY(-200%);padding:var(--primitive-space-2) var(--primitive-space-3);border:1px solid var(--border-control);border-radius:var(--primitive-radius-8);background:var(--card-bg);color:var(--text);font-weight:var(--primitive-font-weight-600)}
+.skip-link:focus,.skip-link:focus-visible{position:static;display:block;width:max-content;transform:none;margin:var(--primitive-space-3)}
+
+/* Anchor-rendered buttons: the unlayered a{} colour above would otherwise win
+   over the button's text utility, leaving the 404 "Go home" label blue on blue.
+   Uses the same token the utility consumes, so legible buttons do not change. */
+a[data-slot='button'].text-primary-foreground{color:var(--primary-foreground)}
 
 .page-shell{width:100%;padding:var(--primitive-space-4) var(--primitive-space-3) var(--primitive-space-8)}
 .container{max-width:var(--container-max);margin:0 auto;padding:0 var(--primitive-space-3)}
