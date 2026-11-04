@@ -197,5 +197,8 @@ function tooManyRequests(retryAfter: number, csp: string | null): NextResponse {
 export const config = {
   // Every document and API response, but not immutable build assets or the
   // image optimiser (which sets its own restrictive CSP for SVG safety).
-  matcher: ['/((?!_next/static|_next/image|_vercel|favicon.ico).*)'],
+  // `/a` is the first-party Ackee proxy: its responses are scripts and
+  // collection API replies from another service, not CMS documents, so they
+  // must keep Ackee's own headers rather than this app's CSP.
+  matcher: ['/((?!_next/static|_next/image|_vercel|favicon.ico|a(?:/|$)).*)'],
 }
