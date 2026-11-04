@@ -95,7 +95,7 @@ describe('generateMeta', () => {
     expect(meta.alternates?.canonical).toBe(`${siteURL}/contact`)
     expect(meta.openGraph?.url).toBe(`${siteURL}/contact`)
     expect(meta.openGraph?.images).toEqual([
-      { url: `${siteURL}/og.png`, alt: expect.any(String) },
+      { url: `${siteURL}/og.jpg`, alt: expect.any(String) },
     ])
   })
 
@@ -122,7 +122,7 @@ describe('generateMeta', () => {
     expect(twitter.card).toBe('summary_large_image')
     expect(twitter).not.toHaveProperty('creator')
     expect(twitter.images).toEqual([
-      { url: `${siteURL}/og.png`, alt: expect.any(String) },
+      { url: `${siteURL}/og.jpg`, alt: expect.any(String) },
     ])
   })
 })

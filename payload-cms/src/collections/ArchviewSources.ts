@@ -1,4 +1,6 @@
 import type {
+  CollectionAfterChangeHook,
+  CollectionAfterDeleteHook,
   CollectionAfterReadHook,
   CollectionBeforeChangeHook,
   CollectionConfig,
@@ -6,6 +8,7 @@ import type {
 } from 'payload'
 
 import { authenticated } from '../access/authenticated'
+import { revalidateArchitectureCache } from '../utilities/architectureCache'
 import { asRecord, asString } from '../utilities/json'
 import {
   decryptArchviewSecret,
@@ -169,6 +172,23 @@ const isHttpsUrl = (value: unknown): string | true => {
  * this collection instead gives one extra instance its own credentials, so
  * adding an instance no longer means editing environment variables on the CMS.
  */
+/**
+ * The resolved source (origin, project and credentials) is part of every
+ * rendered snapshot, so any source edit must drop the cached snapshots as well
+ * as the page HTML that embeds them.
+ */
+const revalidateArchitectureAfterChange: CollectionAfterChangeHook = ({ context }) => {
+  if (!context.disableRevalidate) {
+    revalidateArchitectureCache()
+  }
+}
+
+const revalidateArchitectureAfterDelete: CollectionAfterDeleteHook = ({ context }) => {
+  if (!context.disableRevalidate) {
+    revalidateArchitectureCache()
+  }
+}
+
 export const ArchviewSources: CollectionConfig = {
   slug: 'archview-sources',
   labels: {
@@ -194,6 +214,8 @@ export const ArchviewSources: CollectionConfig = {
   hooks: {
     beforeChange: [enforceSingleDefault, encryptSubmittedSecret],
     afterRead: [decryptStoredSecret],
+    afterChange: [revalidateArchitectureAfterChange],
+    afterDelete: [revalidateArchitectureAfterDelete],
   },
   fields: [
     {

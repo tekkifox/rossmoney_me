@@ -12,6 +12,7 @@
  * `renderDiagram` annotates the API line with.
  */
 
+import { unstable_cache } from 'next/cache'
 import type { Payload } from 'payload'
 
 import {
@@ -20,6 +21,12 @@ import {
   isArchviewSourceFailure,
 } from '@/utilities/archviewPageSource'
 import type { ArchviewEnv } from '@/utilities/archviewAuth'
+import {
+  ARCHITECTURE_CACHE_REVALIDATE_SECONDS,
+  ARCHITECTURE_CACHE_TAG,
+  ARCHITECTURE_SNAPSHOT_TIMEOUT_MS,
+  ARCHITECTURE_UPSTREAM_REVALIDATE_SECONDS,
+} from '@/utilities/architectureCache'
 import { getSafePayload } from '@/utilities/getSafePayload'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
@@ -69,11 +76,11 @@ const architectureURL = (origin: string, project?: string): string => {
  */
 export { isArchviewSourceFailure } from '@/utilities/archviewPageSource'
 
-export async function loadArchitectureSnapshot(
+const loadArchitectureSnapshotUncached = async (
   page: unknown,
   section?: unknown,
   options: ArchitectureSnapshotOptions = {},
-): Promise<Record<string, unknown> | null> {
+): Promise<Record<string, unknown> | null> => {
   const env = options.env ?? process.env
   const label = options.label ? ` for ${options.label}` : ' snapshot'
 
@@ -105,7 +112,13 @@ export async function loadArchitectureSnapshot(
 
     const response = await archviewFetchForPageSource(
       url,
-      { cache: 'no-store' },
+      {
+        // The snapshot is safe to share: it is public data and is redacted below.
+        // The data cache normally owns the revalidation, but the upstream hint
+        // keeps a direct call from becoming an implicit `no-store` fetch.
+        next: { revalidate: ARCHITECTURE_UPSTREAM_REVALIDATE_SECONDS },
+        signal: AbortSignal.timeout(ARCHITECTURE_SNAPSHOT_TIMEOUT_MS),
+      } as RequestInit,
       resolvedSource,
       { env, fetchImpl: options.fetchImpl },
     )
@@ -122,4 +135,41 @@ export async function loadArchitectureSnapshot(
     console.warn(`Failed to fetch architecture${label}`, err)
     return null
   }
+}
+
+/**
+ * Shared data-cache entry for the expensive part of the render.
+ *
+ * The arguments are the page/section documents plus the explicit project and
+ * label, so the cache key follows the page, its resolved source and the
+ * requested project. A failure returns `null` and is cached for the same short
+ * window, which keeps a broken upstream from being retried on every request.
+ */
+const cachedArchitectureSnapshot = unstable_cache(
+  (page: unknown, section: unknown, project?: string, label?: string) =>
+    loadArchitectureSnapshotUncached(page, section, { project, label }),
+  ['architecture-snapshot'],
+  {
+    revalidate: ARCHITECTURE_CACHE_REVALIDATE_SECONDS,
+    tags: [ARCHITECTURE_CACHE_TAG],
+  },
+)
+
+export async function loadArchitectureSnapshot(
+  page: unknown,
+  section?: unknown,
+  options: ArchitectureSnapshotOptions = {},
+): Promise<Record<string, unknown> | null> {
+  // Tests and callers that inject a Payload client, environment or fetch
+  // implementation are deliberately uncached: they are exercising the fetch
+  // contract, not the Next.js data cache.
+  if (
+    options.payload !== undefined ||
+    options.env !== undefined ||
+    options.fetchImpl !== undefined
+  ) {
+    return loadArchitectureSnapshotUncached(page, section, options)
+  }
+
+  return cachedArchitectureSnapshot(page, section, options.project, options.label)
 }
