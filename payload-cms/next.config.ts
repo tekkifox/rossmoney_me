@@ -207,6 +207,13 @@ const nextConfig: NextConfig = {
         ],
       }
     : undefined,
+  // pdfjs loads its worker with a dynamic `import()`, so the tracer cannot see
+  // it from the server bundle. CV conversion runs from the media upload hooks
+  // (REST/admin/GraphQL), so include the worker and its siblings on every
+  // server trace; the whole legacy build is only a few files.
+  outputFileTracingIncludes: {
+    '/*': ['./node_modules/pdfjs-dist/legacy/build/*.mjs'],
+  },
   // Vercel builds with its own adapter and does not need a standalone server.
   // Next.js 16.3 leaves out `.next/next-server.js.nft.json` when an adapter and
   // `output: 'standalone'` are combined (vercel/next.js#96646), which fails the
