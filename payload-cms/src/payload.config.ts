@@ -20,8 +20,6 @@ import { Users } from './collections/Users';
 import { Projects } from './collections/Projects';
 import { Experience } from './collections/Experience';
 import { Media } from './collections/Media';
-import { Posts } from './collections/Posts';
-import { Categories } from './collections/Categories';
 import { ErrorLogs } from './collections/ErrorLogs';
 import { ArchviewSources } from './collections/ArchviewSources';
 import { HostSamples } from './collections/HostSamples';
@@ -122,7 +120,7 @@ export default buildConfig({
       ],
     },
   },
-  collections: [Users, Pages, Posts, Categories, Projects, Experience, Media, ErrorLogs, ArchviewSources, HostSamples],
+  collections: [Users, Pages, Projects, Experience, Media, ErrorLogs, ArchviewSources, HostSamples],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   email: emailAdapter,

@@ -9,8 +9,6 @@ import type { Payload } from 'payload'
  * dynamic route and the build-time generator.
  */
 export const SITEMAP_EXCLUDED_PATHS = [
-  '/posts',
-  '/search',
   // Legacy alias for `/experience`; it is never a canonical destination.
   '/experience-page',
   // Retired pages. `redirects.ts` 308s each of these to a homepage section, so
@@ -141,9 +139,8 @@ function referenceId(value: ReferenceValue): string | null {
   return String(value.id)
 }
 
-function referencePath(relationTo: 'pages' | 'posts', slug: string): string {
-  if (relationTo === 'pages') return `/${slug}`
-  return `/posts/${slug}`
+function referencePath(slug: string): string {
+  return `/${slug}`
 }
 
 function resolveReferencePath(
@@ -151,7 +148,7 @@ function resolveReferencePath(
   published?: PublishedReferenceIndex,
 ): string | null {
   const relationTo = reference.relationTo ?? 'pages'
-  if (relationTo !== 'pages' && relationTo !== 'posts') return null
+  if (relationTo !== 'pages') return null
 
   const value = reference.value
   const id = referenceId(value)
@@ -160,14 +157,14 @@ function resolveReferencePath(
   // not expose. The index is authoritative whenever it is supplied.
   if (published !== undefined) {
     if (!id) return null
-    const slug = published.get(`${relationTo}:${id}`)
-    return slug ? referencePath(relationTo, slug) : null
+    const slug = published.get(`pages:${id}`)
+    return slug ? referencePath(slug) : null
   }
 
   // A populated, non-draft document is the next best thing; a bare id cannot
   // be resolved without a client.
   if (value && typeof value === 'object' && value._status !== 'draft' && value.slug) {
-    return referencePath(relationTo, value.slug)
+    return referencePath(value.slug)
   }
 
   return null
@@ -202,7 +199,7 @@ export function pathsFromHeader(
 
     if (!path) continue
 
-    // Compare without a trailing slash so `/posts/` cannot sneak past the
+    // Compare without a trailing slash so a stray slash cannot sneak past the
     // exclusions, but keep the header's spelling for every other path.
     if (isSitemapExcluded(path) || seen.has(path)) continue
 
@@ -213,21 +210,18 @@ export function pathsFromHeader(
   return paths
 }
 
-function collectReferenceIds(header: SitemapHeader): Map<'pages' | 'posts', Set<string>> {
-  const ids = new Map<'pages' | 'posts', Set<string>>([
-    ['pages', new Set()],
-    ['posts', new Set()],
-  ])
+function collectReferenceIds(header: SitemapHeader): Map<'pages', Set<string>> {
+  const ids = new Map<'pages', Set<string>>([['pages', new Set()]])
 
   for (const item of header.navItems ?? []) {
     const reference = item?.link?.reference
     if (!reference) continue
 
     const relationTo = reference.relationTo ?? 'pages'
-    if (relationTo !== 'pages' && relationTo !== 'posts') continue
+    if (relationTo !== 'pages') continue
 
     const id = referenceId(reference.value)
-    if (id) ids.get(relationTo)?.add(id)
+    if (id) ids.get('pages')?.add(id)
   }
 
   return ids
@@ -235,7 +229,7 @@ function collectReferenceIds(header: SitemapHeader): Map<'pages' | 'posts', Set<
 
 async function loadPublishedIndex(
   payload: SitemapPayload,
-  idsByCollection: Map<'pages' | 'posts', Set<string>>,
+  idsByCollection: Map<'pages', Set<string>>,
 ): Promise<PublishedReferenceIndex> {
   const index = new Map<string, string>()
 

@@ -110,8 +110,6 @@ describe('header sitemap resolver', () => {
   it('never emits an excluded path, including a retired page', () => {
     const header: SitemapHeader = {
       navItems: [
-        { link: { type: 'custom', url: '/posts' } },
-        { link: { type: 'custom', url: '/search?q=payload' } },
         { link: { type: 'custom', url: '/experience-page/' } },
         { link: { type: 'custom', url: '/#experience-page' } },
         { link: { type: 'custom', url: '/work' } },

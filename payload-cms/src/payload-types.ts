@@ -69,8 +69,6 @@ export interface Config {
   collections: {
     users: User;
     pages: Page;
-    posts: Post;
-    categories: Category;
     projects: Project;
     experience: Experience;
     media: Media;
@@ -95,8 +93,6 @@ export interface Config {
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
-    posts: PostsSelect<false> | PostsSelect<true>;
-    categories: CategoriesSelect<false> | CategoriesSelect<true>;
     projects: ProjectsSelect<false> | ProjectsSelect<true>;
     experience: ExperienceSelect<false> | ExperienceSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
@@ -249,15 +245,10 @@ export interface Page {
           link: {
             type?: ('reference' | 'custom') | null;
             newTab?: boolean | null;
-            reference?:
-              | ({
-                  relationTo: 'pages';
-                  value: string | Page;
-                } | null)
-              | ({
-                  relationTo: 'posts';
-                  value: string | Post;
-                } | null);
+            reference?: {
+              relationTo: 'pages';
+              value: string | Page;
+            } | null;
             url?: string | null;
             label: string;
             /**
@@ -317,35 +308,6 @@ export interface Page {
   updatedAt: string;
   createdAt: string;
   _status?: ('draft' | 'published') | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "posts".
- */
-export interface Post {
-  id: string;
-  title: string;
-  slug?: string | null;
-  meta?: {
-    title?: string | null;
-    description?: string | null;
-    image?: (string | null) | Media;
-  };
-  categories?: (string | Category)[] | null;
-  heroImage?: (string | null) | Media;
-  populatedAuthors?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  publishedAt?: string | null;
-  relatedPosts?: (string | Post)[] | null;
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -468,26 +430,6 @@ export interface FolderInterface {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: string;
-  title: string;
-  slug?: string | null;
-  parent?: (string | null) | Category;
-  breadcrumbs?:
-    | {
-        doc?: (string | null) | Category;
-        url?: string | null;
-        label?: string | null;
-        id?: string | null;
-      }[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "CallToActionBlock".
  */
 export interface CallToActionBlock {
@@ -511,15 +453,10 @@ export interface CallToActionBlock {
         link: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
           /**
@@ -561,15 +498,10 @@ export interface ContentBlock {
         link?: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
           /**
@@ -999,15 +931,10 @@ export interface Redirect {
   from: string;
   to?: {
     type?: ('reference' | 'custom') | null;
-    reference?:
-      | ({
-          relationTo: 'pages';
-          value: string | Page;
-        } | null)
-      | ({
-          relationTo: 'posts';
-          value: string | Post;
-        } | null);
+    reference?: {
+      relationTo: 'pages';
+      value: string | Page;
+    } | null;
     url?: string | null;
   };
   updatedAt: string;
@@ -1153,14 +1080,6 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'pages';
         value: string | Page;
-      } | null)
-    | ({
-        relationTo: 'posts';
-        value: string | Post;
-      } | null)
-    | ({
-        relationTo: 'categories';
-        value: string | Category;
       } | null)
     | ({
         relationTo: 'projects';
@@ -1420,47 +1339,6 @@ export interface FormBlockSelect<T extends boolean = true> {
   introContent?: T;
   id?: T;
   blockName?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "posts_select".
- */
-export interface PostsSelect<T extends boolean = true> {
-  title?: T;
-  slug?: T;
-  meta?:
-    | T
-    | {
-        title?: T;
-        description?: T;
-        image?: T;
-      };
-  categories?: T;
-  heroImage?: T;
-  populatedAuthors?: T;
-  publishedAt?: T;
-  relatedPosts?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories_select".
- */
-export interface CategoriesSelect<T extends boolean = true> {
-  title?: T;
-  slug?: T;
-  parent?: T;
-  breadcrumbs?:
-    | T
-    | {
-        doc?: T;
-        url?: T;
-        label?: T;
-        id?: T;
-      };
-  updatedAt?: T;
-  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1937,15 +1815,10 @@ export interface Header {
         link: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
         };
@@ -1966,15 +1839,10 @@ export interface Footer {
         link: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
         };
