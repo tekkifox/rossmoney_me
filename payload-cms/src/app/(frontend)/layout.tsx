@@ -7,6 +7,7 @@ import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import React from 'react'
 
+import AckeeTracker from '@/components/AckeeTracker'
 import { AdminBar } from '@/components/AdminBar'
 import { ErrorReporter } from '@/components/ErrorReporter'
 // Footer removed per request: site uses a minimal branded footer in templates
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         <ErrorReporter />
+        <AckeeTracker />
         <Providers>
           <AdminBar
             adminBarProps={{

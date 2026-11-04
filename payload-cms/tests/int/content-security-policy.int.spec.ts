@@ -4,6 +4,7 @@ import {
   archviewOrigins,
   buildContentSecurityPolicy,
   createNonce,
+  nonceFromCspHeader,
   VERCEL_BLOB_API_ORIGIN,
   VERCEL_BLOB_ORIGIN,
 } from '@/utilities/contentSecurityPolicy'
@@ -26,6 +27,22 @@ describe('createNonce', () => {
 
   it('does not repeat', () => {
     expect(createNonce()).not.toBe(createNonce())
+  })
+})
+
+describe('nonceFromCspHeader', () => {
+  it('reads the nonce out of a forwarded policy', () => {
+    expect(
+      nonceFromCspHeader(
+        "default-src 'none'; script-src 'nonce-abc123' 'strict-dynamic' 'self'",
+      ),
+    ).toBe('abc123')
+  })
+
+  it('returns undefined when there is no nonce', () => {
+    expect(nonceFromCspHeader("default-src 'none'")).toBeUndefined()
+    expect(nonceFromCspHeader(null)).toBeUndefined()
+    expect(nonceFromCspHeader('')).toBeUndefined()
   })
 })
 
