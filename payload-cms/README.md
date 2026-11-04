@@ -69,7 +69,7 @@ See the [Collections](https://payloadcms.com/docs/configuration/collections) doc
 
 - #### Projects
 
-  The work and project entries rendered on the homepage.
+  The work and project entries rendered on the homepage. Each entry's optional **URL** field is an absolute `http://` or `https://` address; when set, the corresponding **Selected work** card links to it in a new tab, and when empty the card stays static.
 
 - #### Experience
 
