@@ -28,6 +28,45 @@ pnpm --filter payload-cms run lint:tokens
   so it does not need a live MongoDB.
 - No new dependencies are needed for the token guard; it is plain Node.
 
+## Browser smoke and PR screenshots
+
+`.github/workflows/browser-smoke.yml` runs on the self-hosted `paseo` runner
+against the VM's shared dev MongoDB instead of starting a MongoDB server of its
+own. `DEV_MONGO_URI` is a repository secret containing only the base URI; the
+workflow appends a run-scoped database name:
+
+- smoke: `rossmoney_ci_<run-id>_<attempt>`;
+- screenshots: `rossmoney_shots_<run-id>_<attempt>`, copied from the seeded
+  `rossmoney_dev` database by `payload-cms/scripts/mongo-db.mjs` over the
+  project's `mongodb` driver (the paseo VM has no `mongosh`, Docker or MongoDB
+  Database Tools). `rossmoney_dev` is only ever read.
+
+Both databases are dropped at the end of the run. `PAYLOAD_SEED=true` is set so
+the default pages and documents are refreshed on every run; that is what makes
+a change to a seeded page visible in the screenshot.
+
+The workflow copies the nightly production media mirror at
+`/opt/rossmoney-dev-sync/media` into `payload-cms/public/media` before the
+screenshot server starts; the mirror is refreshed daily at 03:40 UTC and its
+absence fails the job. Without those files the copied pages point at missing
+images and the CV seed hook waits on a fetch that cannot succeed.
+
+Screenshots are captured by `payload-cms/playwright.screenshots.ts` (separate
+from `pnpm test:e2e`) after the smoke suite, against the throwaway copy, with
+`HOST_SAMPLER=off`. The default paths are `/` and
+`/admin/collections/host-samples`; a manual `workflow_dispatch` can pass a
+comma-separated `paths` input. `payload-cms/scripts/publish-screenshots.ts`
+checks both the PNGs and the captured page text for secret-shaped material
+before uploading to BookStack; a finding fails the job without uploading
+anything. Images attach to the page in `BOOKSTACK_SCREENSHOT_PAGE_ID` as
+`gallery` images, and one marker comment on the pull request is created or
+updated with the image URLs.
+
+```bash
+pnpm --filter payload-cms run screenshots
+pnpm --filter payload-cms run screenshots:publish
+```
+
 ## Server URL
 
 Payload builds absolute URLs (media, password resets) from
