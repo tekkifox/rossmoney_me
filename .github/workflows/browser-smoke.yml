@@ -57,10 +57,6 @@ jobs:
       # Live Preview builds this into the iframe URL and checks it on the
       # preview route, so both processes need the same value.
       PREVIEW_SECRET: browser-smoke-preview-secret
-      # Force-refresh the default documents on every startup. The per-run
-      # databases are disposable, so this is safe, and it is what makes a pull
-      # request that changes a seeded page show that change in the screenshot.
-      PAYLOAD_SEED: 'true'
       # CI must never write host samples. The production deployment owns
       # sampling; the screenshot database is a throwaway copy.
       HOST_SAMPLER: 'off'
