@@ -108,6 +108,8 @@ for why that needs the small `src/proxy.ts` origin normalisation.
 | `payload-cms/src/utilities/ogImage.ts` | OG defaults, cache lifetime and URL builder |
 | `payload-cms/src/utilities/ogTheme.ts` | OG card's mirror of the rendered token values |
 | `payload-cms/public/og-fonts/` | Geist font assets for the OG card |
+| `payload-cms/src/collections/ArchviewSnapshots.ts` | Last-known-good ArchView JSON cache (one row per key) |
+| `payload-cms/src/utilities/architectureStore.ts` | Snapshot cache key, read, throttled in-place write |
 | `payload-cms/tailwind.config.mjs` | Tailwind typography plugin overrides |
 | `payload-cms/scripts/check-tokens.mjs` | Raw-colour guard and named exceptions |
 | `payload-cms/src/app/(payload)/custom.scss` | Payload admin styling (leave alone) |
@@ -132,6 +134,24 @@ pnpm --filter payload-cms run backfill:page-templates -- --apply
 The helper is a dry run by default and only fills missing values. `onInit`
 applies the same fill-in automatically to older databases; fresh seeds already
 store templates. Never overwrite a template an editor has chosen.
+
+## ArchView snapshots and host usage
+
+`loadArchitectureSnapshot` and `/api/architecture` write the complete, redacted
+`/api/architecture` body to `archview-snapshots` after a successful live fetch,
+one row per resolved source and project, replaced in place. A failed live fetch
+reads that row and serves it; only a missing or older-than-30-day row falls back
+to the degraded state. `ARCHVIEW_SNAPSHOT_MAX_AGE_DAYS` overrides the ceiling.
+Writes are throttled to one a minute and skipped when the body is unchanged.
+
+Source resolution does not require `ARCHVIEW_SECRET_KEY`: without a usable key
+it reads the row's origin, project and id and omits the credentials. That is what
+lets dev and CI render the cached snapshot. The key is still required for an
+authenticated live fetch.
+
+The admin host-usage view opens on the first source that has samples in the
+selected range (one grouped query), falling back to the first source only when
+none has samples. An explicit `?host=` that still exists is always honoured.
 
 ## Public repository: no real hosts or secrets in documentation
 

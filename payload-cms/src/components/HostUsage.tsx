@@ -8,6 +8,7 @@ import {
   bucketHostSamples,
   hostIdOf,
   recentHostSamples,
+  selectHostUsageSource,
   type HostUsageRange,
   type HostSample,
   type HostRef,
@@ -80,6 +81,32 @@ async function loadSamples(host: string | undefined, range: HostUsageRange, now:
 }
 
 /**
+ * The sources that have at least one sample in the selected range.
+ *
+ * One grouped query, not one per source: the default tab must not cost the page
+ * a fan-out. The result is only used when the request does not already name an
+ * existing source.
+ */
+async function loadHostsWithSamples(range: HostUsageRange, now: number): Promise<Set<string>> {
+  const payload = await getPayload({ config })
+  const cutoff = new Date(now - HOST_USAGE_RANGE_MS[range]).toISOString()
+  const result = await payload.findDistinct({
+    collection: 'host-samples',
+    field: 'host',
+    where: { sampledAt: { greater_than_equal: cutoff } },
+    depth: 0,
+    overrideAccess: true,
+  })
+
+  const hosts = new Set<string>()
+  for (const row of result.values as Array<{ host?: HostRef }>) {
+    const id = hostIdOf(row.host)
+    if (id) hosts.add(id)
+  }
+  return hosts
+}
+
+/**
  * The table below the graph is always the last 15 minutes, whatever the range
  * selector says, so it queries separately and caps the result.
  */
@@ -130,13 +157,20 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
     .filter((source) => source.id !== undefined && source.id !== null)
     .map((source) => ({ id: String(source.id), name: source.name ?? String(source.id) }))
 
-  // A missing or stale `host` falls back to the first source in the order the
-  // sources come back. There is deliberately no "all hosts" selection: showing
-  // one host at a time is what keeps this page short.
-  const selectedSource = sources.find((source) => source.id === requestedHost) ?? sources[0]
+  const now = Date.now()
+
+  // An explicit host that still exists always wins. Otherwise open on the first
+  // source with samples in this range, so the newest configured source cannot
+  // leave the page blank just because it has never reported. There is
+  // deliberately no "all hosts" selection: one host at a time keeps the page
+  // short. The grouped query only runs when the fallback is actually needed.
+  let selectedSource = sources.find((source) => source.id === requestedHost)
+  if (!selectedSource && sources.length > 0) {
+    const hostsWithSamples = await loadHostsWithSamples(range, now)
+    selectedSource = selectHostUsageSource(sources, undefined, hostsWithSamples)
+  }
   const selectedHost = selectedSource?.id
 
-  const now = Date.now()
   const docs = selectedHost ? await loadSamples(selectedHost, range, now) : []
   const recentDocs = selectedHost ? await loadRecentSamples(selectedHost, now) : []
 

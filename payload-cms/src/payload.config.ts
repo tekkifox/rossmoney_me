@@ -22,6 +22,7 @@ import { Experience } from './collections/Experience';
 import { Media } from './collections/Media';
 import { ErrorLogs } from './collections/ErrorLogs';
 import { ArchviewSources } from './collections/ArchviewSources';
+import { ArchviewSnapshots } from './collections/ArchviewSnapshots';
 import { HostSamples } from './collections/HostSamples';
 import { BotSettings } from './BotSettings/config';
 import { seedBotSettings } from './endpoints/seed/bot-settings';
@@ -120,7 +121,7 @@ export default buildConfig({
       ],
     },
   },
-  collections: [Users, Pages, Projects, Experience, Media, ErrorLogs, ArchviewSources, HostSamples],
+  collections: [Users, Pages, Projects, Experience, Media, ErrorLogs, ArchviewSources, ArchviewSnapshots, HostSamples],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   email: emailAdapter,
