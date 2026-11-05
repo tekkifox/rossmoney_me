@@ -2,7 +2,7 @@
 
 **Status:** enforced on every production response.
 
-**Date:** 2026-10-26; public-document handling updated 2026-11-04.
+**Date:** 2026-10-26; public-document handling and Turnstile updated 2026-11-04.
 
 **Scope:** `www.example.com` (Portainer/Nginx Proxy Manager), `example.vercel.app`
 (Vercel production), `dev.example.com` (Vercel preview), and local
@@ -39,18 +39,18 @@ The builder is `src/utilities/contentSecurityPolicy.ts`; the unit tests are
 
 ```text
 default-src 'none';
-script-src 'nonce-{nonce}' 'strict-dynamic' 'self' https://www.google.com https://www.gstatic.com;
+script-src 'nonce-{nonce}' 'strict-dynamic' 'self' https://challenges.cloudflare.com;
 style-src 'self';
 style-src-elem 'self';
 style-src-attr 'unsafe-inline';
 script-src-attr 'none';
-img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://www.gstatic.com;
+img-src 'self' data: blob: https://*.public.blob.vercel-storage.com;
 font-src 'self' data:;
-connect-src 'self' https://*.public.blob.vercel-storage.com https://archview.example.org https://www.google.com https://www.gstatic.com;
+connect-src 'self' https://*.public.blob.vercel-storage.com https://archview.example.org;
 media-src 'self' blob:;
 worker-src 'self' blob:;
 manifest-src 'self';
-frame-src https://www.google.com;
+frame-src https://challenges.cloudflare.com;
 frame-ancestors 'self';
 object-src 'none';
 base-uri 'none';
@@ -62,7 +62,7 @@ its HTML cannot carry the request's nonce. Those responses use the static
 script allowlist instead:
 
 ```text
-script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com;
+script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
 ```
 
 Everything else is identical, and dynamic drafts (the preview renderer under
@@ -90,8 +90,8 @@ frame-src 'self';
 frame-ancestors 'none'
 ```
 
-The admin does not get the Google reCAPTCHA sources and public pages do not get
-Gravatar/jsDelivr.
+The admin does not get the Cloudflare Turnstile sources and public pages do not
+get Gravatar/jsDelivr.
 
 ## Live Preview
 
@@ -172,7 +172,7 @@ every script on the page.
 The policy is enforced, not `Report-Only`. The browser checks in the audit ran
 against a production build and finished with zero `securitypolicyviolation`
 events on the home page, the CV page (DOCX viewer), a page with an image, the
-contact page (including the reCAPTCHA flow), `/admin` from first paint through
+contact page (including the Turnstile widget), `/admin` from first paint through
 login through editing/saving, and the 404 page. The admin save was verified by
 reading the changed field back, and an upload returned `201`. After the Live
 Preview allowance was added, the same production-build check also opened a Page
@@ -212,10 +212,10 @@ on `main`/`dev` with a disposable MongoDB service.
 - **`script-src` nonce + `'strict-dynamic'` + `'self'`.** The nonce covers
   Next.js's inline RSC/theme scripts and every `<script src>` that Next renders.
   `'strict-dynamic'` lets the trusted bootstrap insert the chunks that
-  client-side navigation needs, and lets the analytics and reCAPTCHA packages
+  client-side navigation needs, and lets the analytics and Turnstile packages
   insert their scripts without nonces. `'self'` is kept for browsers that do
-  not implement `strict-dynamic`. Google/gstatic host sources are the CSP2
-  fallback for reCAPTCHA; CSP3 browsers ignore host sources in a
+  not implement `strict-dynamic`. The Cloudflare host source is the CSP2
+  fallback for Turnstile; CSP3 browsers ignore host sources in a
   `strict-dynamic` policy and rely on the trusted insertion instead.
 - **`style-src 'self'` + `style-src-elem 'self'` + `style-src-attr
   'unsafe-inline'`.** Public pages use React `style` attributes (inline style
@@ -230,7 +230,7 @@ on `main`/`dev` with a disposable MongoDB service.
 - **`img-src 'self' data: blob: https://*.public.blob.vercel-storage.com`.** Self
   covers Payload media and the image optimiser; `data:` covers the blur
   placeholder and DOCX images; `blob:` covers admin previews; the Blob host is
-  the Vercel storage adapter. `gstatic` is the reCAPTCHA badge image; Gravatar
+  the Vercel storage adapter. Gravatar
   and jsDelivr codicons are admin-only.
 - **`font-src 'self' data:`.** Geist is self-hosted in `/_next/static/media`.
   The admin's Monaco codicon font comes from jsDelivr.
@@ -241,7 +241,8 @@ on `main`/`dev` with a disposable MongoDB service.
   list is explicit rather than `https:` so a compromised page cannot exfiltrate
   to an arbitrary HTTPS origin. `ARCHVIEW_URL`/`ARCHVIEW_HOST` can add public
   HTTPS origins without a code change; internal HTTP hosts are filtered out.
-  Google and gstatic are reCAPTCHA's token/challenge endpoints.
+  The Turnstile token is exchanged with Cloudflare from inside the widget
+  frame, so the parent document needs no `connect-src` entry for it.
 - **`https://vercel.com` in the admin `connect-src` only.** Vercel's serverless
   request-body limit is 4.5 MB, so large media uses Payload's client uploads:
   the admin obtains an upload token from `/api/vercel-blob-client-upload-route`
@@ -255,10 +256,10 @@ on `main`/`dev` with a disposable MongoDB service.
   and a missed upload is silent data loss.
 - **`media-src 'self' blob:`.** Uploaded audio/video and admin previews.
 - **`worker-src 'self' blob:`.** Monaco's workers; jsDelivr is the admin
-  fallback. reCAPTCHA's worker runs inside its own frame.
+  fallback. Turnstile's worker runs inside its own frame.
 - **`manifest-src 'self'`.** `site.webmanifest`.
-- **`frame-src https://www.google.com` / `'self'`.** reCAPTCHA v3's invisible
-  anchor / bframe is the only third-party frame on public pages. The admin
+- **`frame-src https://challenges.cloudflare.com` / `'self'`.** Turnstile
+  renders its challenge in a frame from Cloudflare on public pages. The admin
   additionally allows `'self'` for Payload's Live Preview iframe.
 - **`frame-ancestors 'self'` on public pages, `'none'` on the admin.** Public
   pages may only be framed by their own origin, which is what Live Preview

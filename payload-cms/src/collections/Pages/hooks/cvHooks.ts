@@ -3,6 +3,7 @@ import path from 'path'
 import type { CollectionAfterChangeHook, CollectionBeforeChangeHook } from 'payload'
 
 import type { Media, Page } from '@/payload-types'
+import { isCvFilename } from '@/utilities/cvFile'
 import { asRecord } from '@/utilities/json'
 
 /** The CV upload may be a media ID, a populated media doc, or legacy `{ value }` data. */
@@ -23,7 +24,7 @@ function mediaFilename(media: Media): string {
   return ''
 }
 
-// Validate that the selected media is a .docx file
+// Validate that the selected media is a .docx or .pdf file
 export const validateCVFile: CollectionBeforeChangeHook<Page> = async ({ req, data }) => {
   const id = cvMediaID(data?.cvFile)
   if (!id) return
@@ -32,14 +33,15 @@ export const validateCVFile: CollectionBeforeChangeHook<Page> = async ({ req, da
   if (!media) return
 
   const filename = mediaFilename(media)
-  if (!filename.toLowerCase().endsWith('.docx')) {
-    throw new Error('CV file must be a .docx file')
+  if (!isCvFilename(filename)) {
+    throw new Error('CV file must be a .docx or .pdf file')
   }
 }
 
-// Copy the uploaded media file to public/media/rossmoney_cv.docx for static access.
-// When Vercel Blob owns uploads there is no durable local filesystem to write to,
-// and the CV link resolves through `media.url` instead (see CVViewer), so skip it.
+// Copy the uploaded media file to public/media/rossmoney_cv.<ext> for static
+// access. When Vercel Blob owns uploads there is no durable local filesystem to
+// write to, and the CV link resolves through `media.url` instead (see CVViewer),
+// so skip it.
 export const syncCVToPublic: CollectionAfterChangeHook<Page> = async ({ req, doc }) => {
   if (process.env.BLOB_READ_WRITE_TOKEN) return
 
@@ -51,10 +53,11 @@ export const syncCVToPublic: CollectionAfterChangeHook<Page> = async ({ req, doc
     if (!media) return
 
     const filename = mediaFilename(media)
-    if (!filename.toLowerCase().endsWith('.docx')) return
+    if (!isCvFilename(filename)) return
 
+    const extension = path.extname(filename).toLowerCase()
     const src = path.resolve(process.cwd(), 'public', 'media', filename)
-    const dest = path.resolve(process.cwd(), 'public', 'media', 'rossmoney_cv.docx')
+    const dest = path.resolve(process.cwd(), 'public', 'media', `rossmoney_cv${extension}`)
 
     // Copy file (overwrite) if it exists locally
     try {

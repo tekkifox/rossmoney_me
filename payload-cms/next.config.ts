@@ -185,6 +185,10 @@ const nextConfig: NextConfig = {
     return webpackConfig
   },
   reactStrictMode: true,
+  // CV conversion runs in the Node runtime at upload time. pdfjs-dist ships a
+  // worker and optional canvas bindings that should stay outside the server
+  // bundle; text extraction only needs the plain Node entry point.
+  serverExternalPackages: ['pdfjs-dist'],
   // `withPayload` adds `X-Powered-By: Next.js, Payload` unless this is `false`.
   // The explicit false also stops Next.js emitting its own header.
   poweredByHeader: false,
@@ -203,6 +207,13 @@ const nextConfig: NextConfig = {
         ],
       }
     : undefined,
+  // pdfjs loads its worker with a dynamic `import()`, so the tracer cannot see
+  // it from the server bundle. CV conversion runs from the media upload hooks
+  // (REST/admin/GraphQL), so include the worker and its siblings on every
+  // server trace; the whole legacy build is only a few files.
+  outputFileTracingIncludes: {
+    '/*': ['./node_modules/pdfjs-dist/legacy/build/*.mjs'],
+  },
   // Vercel builds with its own adapter and does not need a standalone server.
   // Next.js 16.3 leaves out `.next/next-server.js.nft.json` when an adapter and
   // `output: 'standalone'` are combined (vercel/next.js#96646), which fails the
@@ -241,12 +252,12 @@ const nextConfig: NextConfig = {
     // dependencies to `../node_modules/.pnpm`, and Turbopack refuses to resolve
     // files outside its root.
     root: path.resolve(dirname, '..'),
-    // Mammoth's browser zip reader imports `jszip`, and Turbopack otherwise
-    // resolves jszip's Node entry point. That pulls in `readable-stream` and
-    // Next's `util` polyfill, which feature-detects generators with
-    // `Function(...)` at module load and trips a nonce-only CSP. JSZip only
-    // needs a stream implementation for `generateNodeStream`, which the CV
-    // viewer never calls, so a browser shim is sufficient.
+    // Mammoth's zip reader imports `jszip`, and Turbopack otherwise resolves
+    // jszip's Node entry point. That pulls in `readable-stream` and Next's
+    // `util` polyfill, which feature-detects generators with `Function(...)`
+    // at module load and trips a nonce-only CSP. JSZip only needs a stream
+    // implementation for `generateNodeStream`, which the CV converter never
+    // calls (it only reads the archive), so a small shim is sufficient.
     resolveAlias: {
       'readable-stream': './src/shims/readable-stream.ts',
     },

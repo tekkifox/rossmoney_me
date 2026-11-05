@@ -1,7 +1,18 @@
+import { DOMParser as XmlDOMParser, XMLSerializer as XmlXMLSerializer } from '@xmldom/xmldom'
 import type { MammothRun } from 'mammoth'
 
 const CV_FONT_SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 13.5, 14, 22] as const
 const WORD_NAMESPACE = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+// w:sz is measured in half-points. A 20pt+ run is the document title; 13pt+
+// runs are the CV's uppercase section labels. The Word source uses direct
+// formatting rather than Heading styles, so these thresholds are what turn the
+// visual outline into real <h2>/<h3> elements.
+const TITLE_MIN_HALF_POINTS = 40
+const SECTION_MIN_HALF_POINTS = 26
+
+/** Paragraph style ids whose meaning is generic enough to replace with a heading. */
+const REPLACEABLE_PARAGRAPH_STYLES = /^(?:Body A A|Default|cvSectionRule|cvEntryRule)?$/i
 
 const CV_FONT_FAMILIES = [
   { name: 'Arial', token: 'arial' },
@@ -37,8 +48,95 @@ function wordChild(parent: Element, localName: string) {
   )
 }
 
+function paragraphStyleId(paragraph: Element): string | undefined {
+  const properties = wordChild(paragraph, 'pPr')
+  if (!properties) return undefined
+  return wordChild(properties, 'pStyle')?.getAttributeNS(WORD_NAMESPACE, 'val') ?? undefined
+}
+
+function setParagraphStyle(document: Document, paragraph: Element, styleId: string) {
+  let properties = wordChild(paragraph, 'pPr')
+  if (!properties) {
+    properties = document.createElementNS(WORD_NAMESPACE, 'w:pPr')
+    paragraph.insertBefore(properties, paragraph.firstChild)
+  }
+
+  let paragraphStyle = wordChild(properties, 'pStyle')
+  if (!paragraphStyle) {
+    paragraphStyle = document.createElementNS(WORD_NAMESPACE, 'w:pStyle')
+    properties.insertBefore(paragraphStyle, properties.firstChild)
+  }
+  paragraphStyle.setAttributeNS(WORD_NAMESPACE, 'w:val', styleId)
+}
+
+function paragraphHasSectionRule(paragraph: Element): boolean {
+  return paragraphStyleId(paragraph) === 'cvSectionRule'
+}
+
+function largestRunHalfPoints(paragraph: Element): number {
+  const sizes = [
+    ...Array.from(paragraph.getElementsByTagNameNS(WORD_NAMESPACE, 'sz')),
+    ...Array.from(paragraph.getElementsByTagNameNS(WORD_NAMESPACE, 'szCs')),
+  ]
+  let largest = 0
+  for (const size of sizes) {
+    const value = Number(size.getAttributeNS(WORD_NAMESPACE, 'val') ?? 0)
+    if (Number.isFinite(value) && value > largest) largest = value
+  }
+  return largest
+}
+
+function paragraphText(paragraph: Element): string {
+  return Array.from(paragraph.getElementsByTagNameNS(WORD_NAMESPACE, 't'))
+    .map((text) => text.textContent ?? '')
+    .join('')
+    .trim()
+}
+
+/**
+ * Promote direct-formatted title and section-label paragraphs to style ids the
+ * style map turns into real headings. This runs after the border pass so a
+ * section heading keeps its rule class instead of losing it to the heading.
+ */
+function promoteHeadings(document: Document): boolean {
+  let changed = false
+  const paragraphs = document.getElementsByTagNameNS(WORD_NAMESPACE, 'p')
+  for (const paragraph of Array.from(paragraphs)) {
+    const text = paragraphText(paragraph)
+    if (!text) continue
+
+    const existingStyle = paragraphStyleId(paragraph)
+    if (existingStyle && !REPLACEABLE_PARAGRAPH_STYLES.test(existingStyle)) continue
+
+    const halfPoints = largestRunHalfPoints(paragraph)
+    if (halfPoints >= TITLE_MIN_HALF_POINTS) {
+      setParagraphStyle(document, paragraph, 'cvTitleHeading')
+      changed = true
+      continue
+    }
+
+    // Section labels are short. A long paragraph at 13-14pt is more likely a
+    // lead-in than a heading; leave it as a paragraph.
+    if (halfPoints >= SECTION_MIN_HALF_POINTS && text.length <= 80) {
+      setParagraphStyle(
+        document,
+        paragraph,
+        paragraphHasSectionRule(paragraph) ? 'cvSectionHeadingRule' : 'cvSectionHeading',
+      )
+      changed = true
+    }
+  }
+  return changed
+}
+
 export function normalizeCVDocxXml(xmlText: string): string {
-  const document = new DOMParser().parseFromString(xmlText, 'application/xml')
+  // Conversion runs during the upload hook in the Node runtime, where
+  // DOMParser/XMLSerializer do not exist. The same parser is used by the
+  // jsdom tests so both paths share this implementation.
+  const document = new XmlDOMParser().parseFromString(
+    xmlText,
+    'application/xml',
+  ) as unknown as Document
   if (document.getElementsByTagName('parsererror').length > 0) {
     throw new Error('Unable to parse CV DOCX document XML')
   }
@@ -98,22 +196,24 @@ export function normalizeCVDocxXml(xmlText: string): string {
     changed = true
   }
 
-  return changed ? new XMLSerializer().serializeToString(document) : xmlText
+  if (promoteHeadings(document)) changed = true
+
+  return changed
+    ? new XmlXMLSerializer().serializeToString(
+        document as unknown as Parameters<XmlXMLSerializer['serializeToString']>[0],
+      )
+    : xmlText
 }
 
 export async function normalizeCVDocxForRendering(arrayBuffer: ArrayBuffer): Promise<ArrayBuffer> {
-  // Import the browser zip reader lazily. The Node entry point pulls in Node's
-  // `fs`/`util` polyfills, and Next's `util` polyfill feature-detects generators
-  // with `Function(...)` at module load — a CSP `eval` violation on a page that
-  // otherwise never evaluates strings. The browser entry point reads the zip
-  // from an in-memory buffer; JSZip's unused stream import is shimmed in
-  // `next.config.ts`.
-  const { openZip } = await import('mammoth/browser/unzip')
+  // The upload hook runs in Node, so use mammoth's Node zip reader. It reads
+  // the package from memory; no temporary file is written.
   // Mammoth drops run colours, so record the benchmark colours as run styles.
   // An omitted w:u val means "no underline" in the benchmark (as in LibreOffice
   // and Mammoth); explicit values such as "single" are preserved by Mammoth.
+  const { openZip } = await import('mammoth/lib/unzip')
   const zip = await openZip({ arrayBuffer, buffer: arrayBuffer })
-  const xmlText = await zip.read('word/document.xml', 'utf-8')
+  const xmlText: string = await zip.read('word/document.xml', 'utf-8')
   const normalizedXml = normalizeCVDocxXml(xmlText)
 
   if (normalizedXml === xmlText) return arrayBuffer
@@ -158,6 +258,11 @@ const CV_TEXT_COLOR_OPTIONS: Array<string | null> = [
 
 export const cvDocxStyleMap = [
   'u => u',
+  // The page owns the single <h1>, so the document title becomes <h2> and its
+  // section labels become <h3>.
+  'p.cvTitleHeading => h2.docx-title:fresh',
+  'p.cvSectionHeading => h3:fresh',
+  'p.cvSectionHeadingRule => h3.docx-section-rule:fresh',
   'p.cvSectionRule => p.docx-section-rule:fresh',
   'p.cvEntryRule => p.docx-entry-rule:fresh',
   ...CV_FONT_SIZE_OPTIONS.flatMap((fontSize) =>
@@ -200,24 +305,18 @@ export function applyCVDocxRunStyle(run: MammothRun): MammothRun {
 }
 
 export async function convertCVDocxToHtml(arrayBuffer: ArrayBuffer): Promise<string> {
-  // `mammoth.browser` is mammoth's prebuilt browser bundle. The package main
-  // entry point resolves to the Node build, which drags in jszip's Node
-  // `readable-stream` and Next's `util` polyfill; that polyfill calls
-  // `Function(...)` at import time and is incompatible with a nonce-only CSP.
-  const mammoth = await import('mammoth/mammoth.browser')
-  const result = await mammoth.convertToHtml(
-    // The browser Mammoth build reads `arrayBuffer` while the Node build reads
-    // `buffer`; pass both so the viewer and the jsdom tests share this path.
-    { arrayBuffer, buffer: arrayBuffer } as Parameters<typeof mammoth.convertToHtml>[0],
-    {
-      styleMap: cvDocxStyleMap,
-      transformDocument: mammoth.transforms.run(applyCVDocxRunStyle),
-      // Experience separators are empty paragraphs. Mammoth drops those by
-      // default, which would discard the rules tagged in normalizeCVDocxXml();
-      // keep them and let local-styles.css hide every empty paragraph except
-      // the rule classes.
-      ignoreEmptyParagraphs: false,
-    },
-  )
+  // Conversion is server-side (the media upload hook), so use mammoth's Node
+  // entry point with a Buffer. The browser bundle was only needed when the page
+  // parsed the DOCX in the client, which it no longer does.
+  const mammoth = await import('mammoth')
+  const result = await mammoth.convertToHtml({ buffer: Buffer.from(arrayBuffer) }, {
+    styleMap: cvDocxStyleMap,
+    transformDocument: mammoth.transforms.run(applyCVDocxRunStyle),
+    // Experience separators are empty paragraphs. Mammoth drops those by
+    // default, which would discard the rules tagged in normalizeCVDocxXml();
+    // keep them and let local-styles.css hide every empty paragraph except
+    // the rule classes.
+    ignoreEmptyParagraphs: false,
+  })
   return result.value ?? ''
 }

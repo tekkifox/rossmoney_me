@@ -154,10 +154,14 @@ export const Pages: CollectionConfig<'pages'> = {
     },
     {
       name: 'cvFile',
-      label: 'CV (DOCX)',
+      label: 'CV (DOCX or PDF)',
       type: 'upload',
       relationTo: 'media',
-      admin: { position: 'sidebar', description: 'Upload a .docx CV file here' },
+      admin: {
+        position: 'sidebar',
+        description:
+          'Upload a .docx or .pdf CV here. The HTML preview is generated once at upload and served by /cv; the original file stays as the download.',
+      },
     },
     {
       name: 'liveUrl',

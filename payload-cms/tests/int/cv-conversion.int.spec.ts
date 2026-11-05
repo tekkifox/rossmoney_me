@@ -1,0 +1,215 @@
+// @vitest-environment node
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import { CV_PDF_NOTE } from '@/utilities/cvFile'
+import {
+  convertCvFile,
+  normalizeCvHeadingLevels,
+  resolvePdfjsWorkerPath,
+  sanitizeCvHtml,
+} from '@/utilities/cvRender'
+
+const sampleDocx = () =>
+  readFileSync(resolve(process.cwd(), 'tests/fixtures/cv-sample.docx'))
+
+/** A small, standards-compliant PDF with a name, section label, bullets and a URL. */
+function samplePdf(): Buffer {
+  const content = `BT /F1 20 Tf 72 720 Td (ROSS MONEY) Tj ET
+BT /F1 10 Tf 72 690 Td (Backend developer with ten years of experience) Tj ET
+BT /F1 12 Tf 72 665 Td (SKILLS) Tj ET
+BT /F1 10 Tf 72 645 Td (\\267 Led a team of five engineers) Tj ET
+BT /F1 10 Tf 72 625 Td (\\267 Cut deploy time by half) Tj ET
+BT /F1 10 Tf 72 595 Td (https://example.com/portfolio) Tj ET`
+
+  const objects: string[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+  ]
+
+  let out = '%PDF-1.4\n'
+  const offsets: number[] = [0]
+  objects.forEach((body, index) => {
+    offsets.push(Buffer.byteLength(out, 'latin1'))
+    out += `${index + 1} 0 obj\n${body}\nendobj\n`
+  })
+
+  const xref = Buffer.byteLength(out, 'latin1')
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  for (let index = 1; index <= objects.length; index += 1) {
+    out += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`
+  }
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+
+  return Buffer.from(out, 'latin1')
+}
+
+/** A two-column CV page: job entries on the left, skills labels on the right. */
+function sampleTwoColumnPdf(): Buffer {
+  const left = [
+    [700, 13.5, 'KEY ACHIEVEMENTS'],
+    [680, 10.5, 'Morphsites - Support Ticket Resolution'],
+    [668, 9.5, 'Resolved 20+ Jira tickets monthly, alternating between'],
+    [656, 9.5, 'support and new development; owned triage, prioritisation'],
+    [644, 9.5, 'and client communication through to resolution.'],
+    [560, 13.5, 'EXPERIENCE'],
+    [530, 12, 'Job One'],
+    [490, 12, 'Job Two'],
+  ] as const
+  const right = [
+    [700, 13.5, 'SKILLS'],
+    [680, 10.5, 'Backend'],
+    [668, 9.5, 'PHP, Laravel, Statamic, API development'],
+    [656, 10.5, 'Frontend'],
+    [644, 9.5, 'JavaScript, Vue.js, HTML, CSS'],
+    [632, 10.5, 'Databases'],
+    [620, 9.5, 'MongoDB, MySQL'],
+    [608, 10.5, 'Tools and methods'],
+    [596, 9.5, 'Git, Jira, Make, Agile'],
+  ] as const
+
+  const text = (x: number, y: number, size: number, value: string) =>
+    `BT /F1 ${size} Tf ${x} ${y} Td (${value}) Tj ET`
+  const content = [
+    text(36, 740, 20, 'ROSS MONEY'),
+    ...left.map(([y, size, value]) => text(36, y, size, value)),
+    ...right.map(([y, size, value]) => text(320, y, size, value)),
+  ].join('\n')
+
+  const objects: string[] = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+  ]
+
+  let out = '%PDF-1.4\n'
+  const offsets: number[] = [0]
+  objects.forEach((body, index) => {
+    offsets.push(Buffer.byteLength(out, 'latin1'))
+    out += `${index + 1} 0 obj\n${body}\nendobj\n`
+  })
+  const xref = Buffer.byteLength(out, 'latin1')
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  for (let index = 1; index <= objects.length; index += 1) {
+    out += `${String(offsets[index]).padStart(10, '0')} 00000 n \n`
+  }
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(out, 'latin1')
+}
+
+describe('CV conversion', () => {
+  it('resolves the pdfjs worker to an existing file', () => {
+    const workerPath = resolvePdfjsWorkerPath()
+    expect(workerPath.endsWith('/pdfjs-dist/legacy/build/pdf.worker.mjs')).toBe(true)
+    expect(existsSync(workerPath)).toBe(true)
+  })
+
+  it('renders a DOCX into real headings, lists, tables and links', async () => {
+    const result = await convertCvFile({ buffer: sampleDocx(), filename: 'cv.docx' })
+
+    expect(result.source).toBe('docx')
+    expect(result.note).toBeUndefined()
+    expect(result.html).toContain('<h2 class="docx-title">')
+    expect(result.html).toContain('ROSS MONEY')
+    expect(result.html).toContain('<h3 class="docx-section-rule">')
+    expect(result.html).toContain('<ul><li>')
+    expect(result.html).toContain('<table>')
+    expect(result.html).toContain('<a href="https://example.com/portfolio"')
+    expect(result.html).not.toContain('<h1')
+  })
+
+  it('extracts PDF text into headings, lists and links and records the limitation', async () => {
+    const result = await convertCvFile({ buffer: samplePdf(), filename: 'cv.pdf' })
+
+    expect(result.source).toBe('pdf')
+    expect(result.note).toBe(CV_PDF_NOTE)
+    expect(result.html).toContain('<h2 class="docx-title">')
+    expect(result.html).toContain('>ROSS MONEY</strong>')
+    expect(result.html).toContain('<h3 class="docx-section-rule">')
+    expect(result.html).toContain('>SKILLS</strong>')
+    expect(result.html).toContain('<ul><li><span class="docx-font-size-10')
+    expect(result.html).toContain('>Led a team of five engineers</span></li>')
+    expect(result.html).toContain('<a href="https://example.com/portfolio"')
+  })
+
+  it('keeps two-column PDF job entries together and promotes right-column labels', async () => {
+    const result = await convertCvFile({ buffer: sampleTwoColumnPdf(), filename: 'cv.pdf' })
+
+    // Left column is emitted in full before the right column, so the job title
+    // and its description stay adjacent and no right-column label is spliced
+    // into the left-hand sentence.
+    const descriptionEnd = result.html.indexOf('and client communication through to resolution.')
+    const skills = result.html.indexOf('>SKILLS</strong>')
+    const frontend = result.html.indexOf('>Frontend</strong>')
+
+    expect(result.html.indexOf('Morphsites - Support Ticket Resolution')).toBeLessThan(
+      result.html.indexOf('Resolved 20+ Jira tickets monthly'),
+    )
+    expect(result.html.indexOf('Resolved 20+ Jira tickets monthly')).toBeLessThan(descriptionEnd)
+    expect(descriptionEnd).toBeLessThan(skills)
+    expect(skills).toBeLessThan(frontend)
+    expect(result.html).not.toContain('prioritisation Frontend')
+    expect(result.html).not.toContain('resolution. Frontend')
+    expect(result.html).toContain('>Backend</strong>')
+    expect(result.html).toContain('>Databases</strong>')
+    expect(result.html).toContain('>Tools and methods</strong>')
+  })
+
+  it('uses the same docx-* hooks as the DOCX path so both render styled', async () => {
+    const docx = await convertCvFile({ buffer: sampleDocx(), filename: 'cv.docx' })
+    const pdf = await convertCvFile({ buffer: sampleTwoColumnPdf(), filename: 'cv.pdf' })
+
+    for (const className of ['docx-title', 'docx-section-rule']) {
+      expect(docx.html).toContain(className)
+      expect(pdf.html).toContain(className)
+    }
+
+    expect(pdf.html).toMatch(/<h2 class="docx-title">/)
+    expect(pdf.html).toMatch(/<h3 class="docx-section-rule">/)
+    expect(pdf.html).toContain('<p class="docx-entry-rule"></p>')
+    expect(pdf.html).toMatch(/docx-font-size-/)
+    expect(pdf.html).toContain('docx-font-family-arial')
+    expect(pdf.html).toContain('docx-color-111111')
+    expect(pdf.html).toContain('docx-color-555555')
+  })
+
+  it('rejects an unsupported file type', async () => {
+    await expect(
+      convertCvFile({ buffer: Buffer.from('text'), filename: 'cv.txt' }),
+    ).rejects.toThrow('CV must be a .docx or .pdf file')
+  })
+
+  it('strips scripts, event handlers and unsafe link schemes from stored HTML', () => {
+    const html = sanitizeCvHtml(
+      '<h2 class="docx-title" onclick="alert(1)">Title</h2>' +
+        '<script>alert(1)</script><p style="color:red">Body</p>' +
+        '<a href="javascript:alert(1)">bad</a>' +
+        '<a href="https://example.com">good</a>' +
+        '<iframe src="https://example.com"></iframe>',
+    )
+
+    expect(html).toContain('<h2 class="docx-title">Title</h2>')
+    expect(html).toContain('<p>Body</p>')
+    expect(html).not.toContain('script')
+    expect(html).not.toContain('onclick')
+    expect(html).not.toContain('javascript:')
+    expect(html).not.toContain('iframe')
+    expect(html).toContain('href="https://example.com"')
+  })
+
+  it('keeps a single top-level heading by shifting document headings under the page h1', () => {
+    expect(normalizeCvHeadingLevels('<h1>Name</h1><h2>Skills</h2>')).toBe(
+      '<h2>Name</h2><h3>Skills</h3>',
+    )
+    expect(normalizeCvHeadingLevels('<h2>Name</h2><h3>Skills</h3>')).toBe(
+      '<h2>Name</h2><h3>Skills</h3>',
+    )
+  })
+})

@@ -168,8 +168,8 @@ MONGODB_URI=mongodb://mongo:27017/rossmoney_me
 PAYLOAD_SECRET=rossmoney_payload_secret_key_change_me
 SERVER_URL=https://www.example.com
 PAYLOAD_SEED=true
-NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
-RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-turnstile-site-key
+TURNSTILE_SECRET_KEY=your-turnstile-secret-key
 
 # ArchView lives in its own stack at https://archview.example.com and accepts
 # Auth0 client-credentials tokens (no static API keys). At seed time these values
@@ -194,7 +194,7 @@ HOST_SAMPLER_INSTANCE=portainer
 HOST_SAMPLER_OWNER=portainer
 ```
 
-The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.example.com/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.example.com/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public Turnstile site key at runtime, while its secret key remains server-side. `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` come from a Turnstile widget created in the Cloudflare dashboard (free plan, no DNS change). Without them the form still works under `next dev` and on Vercel preview deployments, with a warning in the server log; a production deployment rejects contact submissions with a readable configuration error rather than silently skipping verification. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
 
 ### Host sampling
 
