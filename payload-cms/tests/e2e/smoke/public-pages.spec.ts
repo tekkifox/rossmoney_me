@@ -1,7 +1,4 @@
-import {
-  ACKEE_DOMAIN_ID,
-  ACKEE_OPTS,
-} from '../../../src/utilities/ackeeTracker'
+import { ACKEE_DOMAIN_ID, ACKEE_OPTS } from '../../../src/utilities/ackeeTracker'
 import { expect, expectCspHeader, test } from '../support/csp'
 
 /**
@@ -16,7 +13,9 @@ const PUBLIC_PAGES = ['/', '/cv', '/contact', '/travelling', '/game-servers']
 
 for (const path of PUBLIC_PAGES) {
   test(`public page ${path} loads with no CSP violations`, async ({ page }) => {
-    const response = await page.goto(path, { waitUntil: 'load' })
+    // Wait for the document, not every subresource. A stalled analytics script
+    // must not consume the whole test timeout.
+    const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
     expectCspHeader(response)
     expect(response?.status(), `${path} should be served successfully`).toBe(200)
 
@@ -30,7 +29,12 @@ for (const path of PUBLIC_PAGES) {
 }
 
 test('public page loads the first-party Ackee tracker with no CSP violation', async ({ page }) => {
-  const response = await page.goto('/', { waitUntil: 'load' })
+  test.skip(
+    process.env.ACKEE_ENABLED === 'false',
+    'The CI smoke environment disables the tracker because it has no ackee service',
+  )
+
+  const response = await page.goto('/', { waitUntil: 'domcontentloaded' })
   const csp = expectCspHeader(response)
 
   const tracker = page.locator(`script[data-ackee-domain-id="${ACKEE_DOMAIN_ID}"]`)
@@ -49,9 +53,7 @@ test('public page loads the first-party Ackee tracker with no CSP violation', as
   // tracker load itself.
   const nonce = await tracker.evaluate((element) => (element as HTMLScriptElement).nonce)
   expect(nonce, 'a cached public document has no request nonce').toBeFalsy()
-  expect(csp, 'the static policy must allow the first-party tracker').toContain(
-    "script-src 'self'",
-  )
+  expect(csp, 'the static policy must allow the first-party tracker').toContain("script-src 'self'")
 
   // The fixture's teardown fails the test on any securitypolicyviolation, so
   // this also covers the tracker load being blocked by script-src.

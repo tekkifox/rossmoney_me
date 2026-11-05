@@ -24,6 +24,13 @@ export type AckeeTrackerEnvironment = {
   nodeEnv?: string
   draft?: boolean
   vercel?: boolean
+  /**
+   * Explicit opt-out for an environment that is not behind the production
+   * edge. The CI smoke build sets `ACKEE_ENABLED=false`: the `/a` rewrite
+   * targets the `ackee` Docker service, which is absent there, so a rendered
+   * tracker would leave a request hanging and block the page's `load` event.
+   */
+  enabled?: boolean
 }
 
 /**
@@ -36,7 +43,9 @@ export const shouldEnableAckeeTracker = ({
   nodeEnv = process.env.NODE_ENV,
   draft = false,
   vercel = isVercelRuntime(),
-}: AckeeTrackerEnvironment = {}): boolean => nodeEnv === 'production' && !draft && !vercel
+  enabled = process.env.ACKEE_ENABLED !== 'false',
+}: AckeeTrackerEnvironment = {}): boolean =>
+  enabled && nodeEnv === 'production' && !draft && !vercel
 
 /** Site origin plus the first-party ingestion path, with no double slash. */
 export const ackeeServerURL = (origin: string): string =>

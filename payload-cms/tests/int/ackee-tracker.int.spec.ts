@@ -56,6 +56,17 @@ describe('shouldEnableAckeeTracker', () => {
       true,
     )
   })
+
+  it('can be switched off outside the production edge', () => {
+    expect(
+      shouldEnableAckeeTracker({
+        nodeEnv: 'production',
+        draft: false,
+        vercel: false,
+        enabled: false,
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('AckeeTracker', () => {
@@ -69,7 +80,18 @@ describe('AckeeTracker', () => {
   })
 
   it('renders nothing for a draft render', () => {
-    const { container } = render(React.createElement<AckeeTrackerProps>(AckeeTracker, { draft: true }))
+    const { container } = render(
+      React.createElement<AckeeTrackerProps>(AckeeTracker, { draft: true }),
+    )
+
+    expect(container.innerHTML).toBe('')
+    expect(document.querySelector(trackerSelector)).toBeNull()
+  })
+
+  it('renders nothing when the environment switches the tracker off', () => {
+    vi.stubEnv('ACKEE_ENABLED', 'false')
+
+    const { container } = render(React.createElement(AckeeTracker))
 
     expect(container.innerHTML).toBe('')
     expect(document.querySelector(trackerSelector)).toBeNull()

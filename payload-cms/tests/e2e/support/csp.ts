@@ -127,9 +127,7 @@ const settlePendingViolations = async (context: BrowserContext) => {
   }
 }
 
-const collectQueuedViolations = async (
-  context: BrowserContext,
-): Promise<CspViolation[]> => {
+const collectQueuedViolations = async (context: BrowserContext): Promise<CspViolation[]> => {
   const queued: CspViolation[] = []
 
   for (const page of context.pages()) {
@@ -138,8 +136,7 @@ const collectQueuedViolations = async (
         const frameViolations = (await frame.evaluate(
           (queueName) =>
             ((window as unknown as Record<string, unknown>)[queueName] as
-              | CspViolation[]
-              | undefined) ?? [],
+              CspViolation[] | undefined) ?? [],
           VIOLATION_QUEUE,
         )) as CspViolation[]
 
@@ -169,13 +166,30 @@ export const test = base.extend<CspFixtures>({
     async ({ context }, use) => {
       const violations: CspViolation[] = []
 
-      await context.exposeBinding(
-        VIOLATION_BINDING,
-        (source, violation: CspViolation) => {
-          violations.push({ ...violation, frameUrl: source.frame.url() })
-        },
-      )
+      await context.exposeBinding(VIOLATION_BINDING, (source, violation: CspViolation) => {
+        violations.push({ ...violation, frameUrl: source.frame.url() })
+      })
       await context.addInitScript(installViolationListener)
+
+      // The Ackee tracker is served through `/a`, a rewrite to a Docker service
+      // that does not exist in CI. If a future change re-enables the production
+      // gate here, abort the request at the browser boundary instead of letting
+      // it hold the page's `load` event open forever. The log names the request
+      // so a stall is diagnosable rather than silent.
+      await context.route('**/a/**', async (route) => {
+        const request = route.request()
+        const detail = `${request.method()} ${request.url()}`
+
+        if (process.env.ACKEE_ENABLED === 'false') {
+          // The environment promises no tracker, so a request here is a
+          // regression in the production gate. Fail with the request name
+          // instead of letting it stall the page.
+          throw new Error(`Ackee tracker request was attempted while disabled: ${detail}`)
+        }
+
+        console.warn(`[browser-smoke] aborting unroutable analytics request: ${detail}`)
+        await route.abort('blockedbyclient')
+      })
 
       await use()
 
@@ -183,15 +197,10 @@ export const test = base.extend<CspFixtures>({
       violations.push(...(await collectQueuedViolations(context)))
 
       const uniqueViolations = [
-        ...new Map(
-          violations.map((violation) => [violationKey(violation), violation]),
-        ).values(),
+        ...new Map(violations.map((violation) => [violationKey(violation), violation])).values(),
       ]
 
-      expect(
-        uniqueViolations,
-        formatViolations(uniqueViolations),
-      ).toEqual([])
+      expect(uniqueViolations, formatViolations(uniqueViolations)).toEqual([])
     },
     { auto: true },
   ],
@@ -200,10 +209,7 @@ export const test = base.extend<CspFixtures>({
 export { expect }
 
 /** Parse one directive out of a CSP header value (case-sensitive names). */
-export const cspDirective = (
-  header: string,
-  name: string,
-): string | undefined =>
+export const cspDirective = (header: string, name: string): string | undefined =>
   header
     .split(';')
     .map((part) => part.trim())
@@ -234,9 +240,7 @@ export const expectCspHeader = (
     )
   }
 
-  expect(header, 'CSP must start from a deny-all default').toContain(
-    "default-src 'none'",
-  )
+  expect(header, 'CSP must start from a deny-all default').toContain("default-src 'none'")
 
   if (admin) {
     expect(header, 'CSP scripts must be nonce-based in the admin').toMatch(
@@ -251,12 +255,8 @@ export const expectCspHeader = (
     expect(header, 'CSP scripts must be nonce-based or the static allowlist').toMatch(
       /script-src (?:'nonce-[A-Za-z0-9+/_-]+={0,2}' 'strict-dynamic'|'self' 'unsafe-inline')/,
     )
-    expect(cspDirective(header, 'frame-ancestors')).toBe(
-      "frame-ancestors 'self'",
-    )
-    expect(cspDirective(header, 'style-src-elem')).not.toContain(
-      "'unsafe-inline'",
-    )
+    expect(cspDirective(header, 'frame-ancestors')).toBe("frame-ancestors 'self'")
+    expect(cspDirective(header, 'style-src-elem')).not.toContain("'unsafe-inline'")
   }
 
   return header
@@ -268,12 +268,14 @@ export const waitForPreviewFrame = async (
   slugFragment: string,
 ): Promise<import('@playwright/test').Frame> => {
   const findFrame = () =>
-    page.frames().find(
-      (frame) =>
-        frame !== page.mainFrame() &&
-        frame.parentFrame() === page.mainFrame() &&
-        frame.url().includes(slugFragment),
-    )
+    page
+      .frames()
+      .find(
+        (frame) =>
+          frame !== page.mainFrame() &&
+          frame.parentFrame() === page.mainFrame() &&
+          frame.url().includes(slugFragment),
+      )
 
   await expect
     .poll(() => findFrame()?.url() ?? '', {
