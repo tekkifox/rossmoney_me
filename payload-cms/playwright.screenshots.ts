@@ -24,7 +24,6 @@ const webServerEnv = {
   SERVER_URL: baseURL,
   NEXT_PUBLIC_SERVER_URL: baseURL,
   HOST_SAMPLER: 'off',
-  PAYLOAD_SEED: process.env.PAYLOAD_SEED ?? 'true',
   NEXT_TELEMETRY_DISABLED: '1',
 }
 

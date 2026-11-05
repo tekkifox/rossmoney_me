@@ -9,7 +9,7 @@ import { imageHero1 } from './image-hero-1'
 import { travelling } from './travelling-page'
 import { gameservers } from './game-servers-page'
 import { services } from './services-page'
-import { cv } from './cv-page'
+import { cv, ensureSeededCvMedia } from './cv-page'
 import { seedArchviewSources } from './archview-sources'
 
 const collections: CollectionSlug[] = [
@@ -142,6 +142,8 @@ export const seed = async ({
 
   payload.logger.info(`— Seeding pages...`)
 
+  const seededCvMedia = await ensureSeededCvMedia(payload)
+
     const [, contactPage, servicesPage] = await Promise.all([
     payload.create({
       collection: 'pages',
@@ -174,7 +176,7 @@ export const seed = async ({
     payload.create({
       collection: 'pages',
       depth: 0,
-      data: cv,
+      data: { ...cv, cvFile: seededCvMedia },
     }),
   ])
 
