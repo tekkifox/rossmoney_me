@@ -745,6 +745,10 @@ export interface ArchviewSource {
    */
   sshPort?: number | null;
   /**
+   * Optional tailnet IPv4 address for this host, for example 203.0.113.10. Leave blank when the host has none; the notification agent then dials the hostname.
+   */
+  tailnet?: string | null;
+  /**
    * The ArchView project label used when polling this instance, for example rossmoney_me, image-mosaic or vortexservers. Rows without a project are skipped by the host sampler.
    */
   project?: string | null;
@@ -1553,6 +1557,7 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   name?: T;
   origin?: T;
   sshPort?: T;
+  tailnet?: T;
   project?: T;
   audience?: T;
   tokenUrl?: T;
