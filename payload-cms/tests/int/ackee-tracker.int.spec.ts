@@ -107,6 +107,12 @@ describe('AckeeTracker', () => {
     expect(script?.getAttribute('data-ackee-server')).toBe('https://www.example.com/a')
     expect(script?.getAttribute('data-ackee-domain-id')).toBe(ACKEE_DOMAIN_ID)
     expect(script?.getAttribute('data-ackee-opts')).toBe(ACKEE_OPTS)
+    // Detailed tracking is what fills the browser/OS/device/screen/language
+    // panels; assert the rendered tag carries it rather than just the constant.
+    expect(JSON.parse(script?.getAttribute('data-ackee-opts') ?? '{}')).toMatchObject({
+      ignoreOwnVisits: false,
+      detailed: true,
+    })
     // Public documents are served from the ISR cache, so their policy allows
     // same-origin scripts and there is no per-request nonce to carry.
     expect(script?.getAttribute('nonce')).toBeNull()
