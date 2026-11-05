@@ -22,6 +22,7 @@ import {
   validateRunbookAccess,
   validateSourceChannelMatchesTarget,
   validateSourceTarget,
+  validateTailnet,
   validateTargetHostScope,
   validateTargetName,
 } from '@/utilities/botSettings'
@@ -266,8 +267,9 @@ describe('GET /api/bot-settings hosts', () => {
   })
 
   it('returns every enabled source with a port, sorted by name', async () => {
-    await createSource('mike', { sshPort: 2200 })
-    // No sshPort: the stored default applies.
+    await createSource('mike', { sshPort: 2200, tailnet: '203.0.113.10' })
+    // No sshPort or tailnet: the stored default applies, and the entry carries
+    // no tailnet key at all.
     await createSource('alpha')
     await createSource('zulu', { enabled: false, sshPort: 2201 })
 
@@ -288,11 +290,24 @@ describe('GET /api/bot-settings hosts', () => {
     expect(names).toEqual([...names].sort())
 
     expect(body.hosts).toContainEqual({ name: `${prefix}-alpha.example.test`, sshPort: 22 })
-    expect(body.hosts).toContainEqual({ name: `${prefix}-mike.example.test`, sshPort: 2200 })
+    expect(body.hosts).toContainEqual({
+      name: `${prefix}-mike.example.test`,
+      sshPort: 2200,
+      tailnet: '203.0.113.10',
+    })
     expect(names).not.toContain(`${prefix}-zulu.example.test`)
 
+    const alpha = body.hosts.find(
+      (host: { name: string }) => host.name === `${prefix}-alpha.example.test`,
+    )
+    expect(alpha).not.toHaveProperty('tailnet')
+
     for (const doc of enabled.docs) {
-      expect(body.hosts).toContainEqual({ name: doc.name, sshPort: doc.sshPort ?? 22 })
+      expect(body.hosts).toContainEqual({
+        name: doc.name,
+        sshPort: doc.sshPort ?? 22,
+        ...(doc.tailnet ? { tailnet: doc.tailnet } : {}),
+      })
     }
   })
 
@@ -306,6 +321,18 @@ describe('GET /api/bot-settings hosts', () => {
     await expect(createSource('port-fraction', { sshPort: 22.5 })).rejects.toMatchObject({
       name: 'ValidationError',
     })
+  })
+
+  it('rejects a tailnet address that is not a plain IPv4 address', async () => {
+    await expect(
+      createSource('tailnet-high', { tailnet: '203.0.113.256' }),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+    await expect(
+      createSource('tailnet-short', { tailnet: '203.0.113' }),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
+    await expect(
+      createSource('tailnet-hostname', { tailnet: 'host1.example.com' }),
+    ).rejects.toMatchObject({ name: 'ValidationError' })
   })
 
   it('leaves targets and sources byte-identical when hosts are added', async () => {
@@ -640,6 +667,22 @@ describe('bot-settings validators', () => {
     expect(validateHostScope(null)).not.toBe(true)
   })
 
+  it('accepts plain IPv4 tailnet addresses and nothing else', () => {
+    expect(validateTailnet('203.0.113.10')).toBe(true)
+    expect(validateTailnet('0.0.0.0')).toBe(true)
+    expect(validateTailnet('255.255.255.255')).toBe(true)
+    expect(validateTailnet('')).toBe(true)
+    expect(validateTailnet(null)).toBe(true)
+    expect(validateTailnet(undefined)).toBe(true)
+
+    expect(validateTailnet('203.0.113.256')).not.toBe(true)
+    expect(validateTailnet('203.0.113')).not.toBe(true)
+    expect(validateTailnet('203.0.113.10.1')).not.toBe(true)
+    expect(validateTailnet('203.0.113.010')).not.toBe(true)
+    expect(validateTailnet('host1.example.com')).not.toBe(true)
+    expect(validateTailnet(' 203.0.113.10 ')).not.toBe(true)
+  })
+
   it('skips the host list when the target reports on all hosts', () => {
     expect(validateTargetHostScope(undefined, true)).toBe(true)
     expect(validateTargetHostScope(null, true)).toBe(true)
@@ -831,11 +874,17 @@ describe('bot-settings validators', () => {
         { name: '   ' },
         { name: 'alpha.example.test' },
         { name: 'mike.example.test', sshPort: 0 },
+        { name: 'delta.example.test', tailnet: '203.0.113.10' },
+        // Defensive: the field rejects this, but a stored value that slips
+        // through must not reach the agent as an address.
+        { name: 'bravo.example.test', tailnet: '203.0.113.256' },
       ],
     )
 
     expect(shaped?.hosts).toEqual([
       { name: 'alpha.example.test', sshPort: 22 },
+      { name: 'bravo.example.test', sshPort: 22 },
+      { name: 'delta.example.test', sshPort: 22, tailnet: '203.0.113.10' },
       { name: 'mike.example.test', sshPort: 22 },
       { name: 'zulu.example.test', sshPort: 2200 },
     ])
