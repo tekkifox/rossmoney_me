@@ -10,7 +10,6 @@ import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
 import { resolveServerURL } from './utilities/serverURL'
-import { SAMPLER_INTERVAL_MS } from './utilities/hostUsage'
 import { resendAdapter } from '@payloadcms/email-resend'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
 import { contactForm as contactFormData } from './endpoints/seed/contact-form';
@@ -471,27 +470,6 @@ export default buildConfig({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       payload.logger.error(`Error seeding default documents: ${message}`);
-    }
-
-    // Independent host sampler: the only writer of host samples. It covers
-    // every enabled source, including hosts nobody browses, and runs in the
-    // long-lived Node process (disabled on Vercel/serverless where an interval
-    // cannot survive). Retention (30 days) happens in the same sweep, daily.
-    // Cadence lives in utilities/hostUsage.ts next to the "last hour" bucket
-    // width; the two are deliberately equal (one sample per bucket).
-    const { describeHostSamplerDecision, sampleAllEnabledHosts, shouldRunHostSampler } =
-      await import('./utilities/hostSampling')
-    const runsHostSampler = shouldRunHostSampler(process.env)
-    payload.logger.info(describeHostSamplerDecision(process.env))
-    if (process.env.NODE_ENV === 'production' && runsHostSampler) {
-      try {
-        const interval = setInterval(() => {
-          void sampleAllEnabledHosts(payload)
-        }, SAMPLER_INTERVAL_MS)
-        interval.unref?.()
-      } catch (err) {
-        console.warn('host sampler schedule failed:', err)
-      }
     }
   },
 });

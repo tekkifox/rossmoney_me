@@ -200,8 +200,11 @@ The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment
 
 The host sampler is the only writer of `host-samples`. It records ArchView
 telemetry for every enabled source once every three minutes on a timer, so it
-must run on exactly one deployment. Browsing a page adds no samples: the
-`/api/architecture` proxy only fetches, caches and redacts. Name each
+must run on exactly one deployment. The timer is started by
+`src/instrumentation.ts` when the server process starts, never from Payload's
+`onInit`; that keeps every tick outside any request or render context (see the
+comment in `src/utilities/hostSamplerSchedule.ts`). Browsing a page adds no
+samples: the `/api/architecture` proxy only fetches, caches and redacts. Name each
 deployment with `HOST_SAMPLER_INSTANCE` and name the one allowed to sample with
 `HOST_SAMPLER_OWNER`. The decision is made in this order:
 
