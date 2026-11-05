@@ -17,7 +17,9 @@ pnpm --filter payload-cms run test:int
 pnpm --filter payload-cms run lint:tokens
 ```
 
-- `test:int` starts a disposable MongoDB when no `MONGODB_URI` is configured.
+- `test:int` needs a MongoDB URI (`MONGODB_URI`, `DATABASE_URL` or `DEV_MONGO_URI`)
+  and runs in a throwaway database on that server, dropped at the end. It never
+  touches the database named in the URI.
 - `lint` is [oxlint](https://oxc.rs/), configured by `payload-cms/.oxlintrc.json`
   (correctness rules plus react, react-hooks, nextjs, import, promise, vitest
   and jsx-a11y). `lint:fix` applies its safe fixes. ESLint is gone: its

@@ -203,7 +203,7 @@ The suite must target `next start`, not `next dev`: the proxy deliberately omits
 the policy in development, and the header assertion fails if it is missing.
 `pnpm build && pnpm start` is the local path (`pnpm dev:prod` wraps it);
 `.github/workflows/browser-smoke.yml` runs the same suite on pull requests and
-on `main`/`dev` with a disposable MongoDB service.
+on `main`/`dev` against a throwaway database on the shared dev MongoDB.
 
 ## Directive and source justifications
 

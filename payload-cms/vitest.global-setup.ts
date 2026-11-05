@@ -1,37 +1,40 @@
-// Development-only test helper: `pnpm test:int` starts a disposable MongoDB
-// when no database is configured. Nothing here runs in the CMS, the build or
-// the deployment — Vitest only.
+// Development-only test helper: `pnpm test:int` connects to the MongoDB server
+// configured in MONGODB_URI/DATABASE_URL/DEV_MONGO_URI and runs the suite in a
+// throwaway database there. Nothing here runs in the CMS, the build or the
+// deployment — Vitest only.
 import 'dotenv/config'
 
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { MongoMemoryServer } from 'mongodb-memory-server'
-
+import {
+  createScratchDatabase,
+  dropScratchDatabase,
+  resolveBaseMongoUri,
+} from './scripts/scratch-db'
 import { DatabaseHandoff, HANDOFF_FILE } from './vitest-db-handoff'
 
 export default async function setup() {
-  // A developer or CI database always wins and is never modified.
-  if (process.env.MONGODB_URI || process.env.DATABASE_URL) {
-    console.log('[test:int] Using the externally configured MongoDB (MONGODB_URI/DATABASE_URL).')
-    removeHandoff()
-    return
-  }
-
-  const databaseName = `rossmoney_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  const server = await MongoMemoryServer.create()
-  const uri = server.getUri(databaseName)
+  const scratch = createScratchDatabase(resolveBaseMongoUri())
 
   // Workers usually inherit this, but vitest.setup-db.ts reads the handoff file
-  // so the URI is guaranteed to be set before the test file is imported.
-  process.env.MONGODB_URI = uri
-  writeHandoff(uri)
-  console.log(`[test:int] Started disposable MongoDB at ${uri}`)
+  // so the scratch URI is guaranteed to be set before the test file is imported.
+  process.env.MONGODB_URI = scratch.uri
+  writeHandoff(scratch.uri)
+  console.log(
+    `[test:int] Using throwaway database ${scratch.databaseName} on the configured MongoDB server.`,
+  )
 
   return async () => {
     removeHandoff()
-    await server.stop()
-    console.log('[test:int] Stopped disposable MongoDB.')
+    try {
+      await dropScratchDatabase(scratch)
+      console.log(`[test:int] Dropped throwaway database ${scratch.databaseName}.`)
+    } catch {
+      throw new Error(
+        `Could not drop throwaway database ${scratch.databaseName}; remove it from the MongoDB server manually.`,
+      )
+    }
   }
 }
 
