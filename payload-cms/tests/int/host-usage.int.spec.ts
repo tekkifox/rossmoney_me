@@ -11,6 +11,7 @@ import {
   bucketLabelFor,
   hostIdOf,
   recentHostSamples,
+  selectHostUsageSource,
   type HostSample,
 } from '@/utilities/hostUsage'
 
@@ -209,5 +210,36 @@ describe('recent 15 minute selection', () => {
     const [row] = recentHostSamples([sample('2026-10-30T11:57:05.000Z')], { now })
 
     expect(row.time).toBe('11:57:05')
+  })
+})
+
+describe('host usage default selection', () => {
+  const sources = [
+    { id: 'newest-empty', name: 'Newest but silent' },
+    { id: 'older-data', name: 'Older with samples' },
+    { id: 'oldest-data', name: 'Oldest with samples' },
+  ]
+
+  it('opens on the first source that has samples when no host is named', () => {
+    expect(
+      selectHostUsageSource(sources, undefined, new Set(['older-data', 'oldest-data'])),
+    ).toEqual(sources[1])
+  })
+
+  it('skips an empty source even when a stale host parameter names one', () => {
+    expect(
+      selectHostUsageSource(sources, 'deleted-source', new Set(['oldest-data'])),
+    ).toEqual(sources[2])
+  })
+
+  it('keeps an explicit host that still exists, even when it has no samples', () => {
+    expect(
+      selectHostUsageSource(sources, 'newest-empty', new Set(['older-data', 'oldest-data'])),
+    ).toEqual(sources[0])
+  })
+
+  it('falls back to the first source when no source has samples', () => {
+    expect(selectHostUsageSource(sources, undefined, new Set())).toEqual(sources[0])
+    expect(selectHostUsageSource([], undefined, new Set())).toBeUndefined()
   })
 })

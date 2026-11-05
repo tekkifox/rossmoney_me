@@ -27,11 +27,39 @@ import {
   ARCHITECTURE_SNAPSHOT_TIMEOUT_MS,
   ARCHITECTURE_UPSTREAM_REVALIDATE_SECONDS,
 } from '@/utilities/architectureCache'
+import {
+  cacheKeyFor,
+  readCachedSnapshot,
+  writeCachedSnapshot,
+  type SnapshotCacheIdentity,
+} from '@/utilities/architectureStore'
 import { getSafePayload } from '@/utilities/getSafePayload'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 /** The fallback the templates have always used when no source resolves. */
 const LOCAL_ARCHVIEW_URL = 'http://localhost:8080'
+
+const snapshotOf = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+
+/**
+ * The cache identity for a source failure. A reference that is a URL keys by
+ * origin; anything else is the collection row id.
+ */
+const failureIdentity = (
+  ref: string,
+  project?: string,
+): SnapshotCacheIdentity | null => {
+  const value = ref.trim()
+  if (!value) {
+    return null
+  }
+  return /^https?:\/\//i.test(value)
+    ? { origin: value, project }
+    : { sourceId: value, project }
+}
 
 export type ArchitectureSnapshotEnv = ArchviewEnv & {
   ARCHVIEW_HOST?: string
@@ -83,9 +111,11 @@ const loadArchitectureSnapshotUncached = async (
 ): Promise<Record<string, unknown> | null> => {
   const env = options.env ?? process.env
   const label = options.label ? ` for ${options.label}` : ' snapshot'
+  let payload: Payload | null | undefined
+  let fallbackKey: string | null = null
 
   try {
-    const payload =
+    payload =
       options.payload === undefined ? await getSafePayload() : options.payload
     const resolvedSource = await resolvePageArchviewSource(page, section, {
       // `null` is the "no database" signal; the resolver treats undefined the same.
@@ -95,6 +125,17 @@ const loadArchitectureSnapshotUncached = async (
     if (isArchviewSourceFailure(resolvedSource)) {
       const ref = resolvedSource.ref
       const reason = resolvedSource.reason
+      const identity = failureIdentity(ref, options.project)
+      const cached = identity
+        ? await readCachedSnapshot(payload, cacheKeyFor(identity), { env })
+        : null
+      if (cached) {
+        console.warn(
+          `ArchView source "${ref}" could not be used (${reason}); serving the cached snapshot.`,
+        )
+        return cached.snapshot
+      }
+
       const message = `ArchView source "${ref}" could not be used: ${reason}.`
       return {
         archviewSourceFailure: true,
@@ -105,10 +146,19 @@ const loadArchitectureSnapshotUncached = async (
       } as Record<string, unknown>
     }
 
-    const url = architectureURL(
-      resolvedSource?.origin || fallbackOrigin(env),
-      options.project,
-    )
+    // The resolved row's project is what the browser poll and the sampler use,
+    // so the page path requests it too. This keeps the cache key identical on
+    // both paths instead of storing an unprojected and a projected copy.
+    const project = options.project ?? resolvedSource?.project
+    const origin = resolvedSource?.origin || fallbackOrigin(env)
+    const identity: SnapshotCacheIdentity = {
+      sourceId: resolvedSource?.id,
+      origin,
+      project,
+    }
+    const key = cacheKeyFor(identity)
+    fallbackKey = key
+    const url = architectureURL(origin, project)
 
     const response = await archviewFetchForPageSource(
       url,
@@ -125,14 +175,28 @@ const loadArchitectureSnapshotUncached = async (
 
     if (!response.ok) {
       console.warn('ArchView returned', response.status, response.statusText, 'for', url)
-      return null
+      return (await readCachedSnapshot(payload, key, { env }))?.snapshot ?? null
     }
 
-    return redactInternalEndpoints(
-      (await response.json()) as Record<string, unknown>,
-    )
+    const fetched = snapshotOf(await response.json())
+    if (!fetched || fetched.degraded === true) {
+      console.warn('ArchView returned an unusable snapshot for', url)
+      return (await readCachedSnapshot(payload, key, { env }))?.snapshot ?? null
+    }
+
+    const snapshot = redactInternalEndpoints(fetched)
+    // Only a successful, redacted live fetch may replace the last good row.
+    await writeCachedSnapshot(payload, identity, snapshot, {
+      sourceName: resolvedSource?.name,
+    })
+    return snapshot
   } catch (err) {
+    // Invalid JSON, a timeout or a network error all land here. Serve the last
+    // known good row when there is one; never overwrite it with the failure.
     console.warn(`Failed to fetch architecture${label}`, err)
+    if (payload && fallbackKey) {
+      return (await readCachedSnapshot(payload, fallbackKey, { env }))?.snapshot ?? null
+    }
     return null
   }
 }

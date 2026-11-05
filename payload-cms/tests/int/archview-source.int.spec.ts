@@ -44,9 +44,9 @@ describe('resolveArchviewSource', () => {
 
 describe('architecture proxy explicit source failures', () => {
   const sourceOne: ArchviewSourceCredentials = {
-    origin: 'https://archview.one.example',
-    audience: 'https://archview.one.example/api',
-    tokenUrl: 'https://identity.one.example/oauth/token',
+    origin: 'https://archview.failing.example',
+    audience: 'https://archview.failing.example/api',
+    tokenUrl: 'https://identity.failing.example/oauth/token',
     clientId: 'cms-one',
     clientSecret: 'secret-one',
     scope: 'archview:read',
@@ -59,7 +59,7 @@ describe('architecture proxy explicit source failures', () => {
     const calls: string[] = []
     const fetchImpl: typeof fetch = async (input) => {
       const url = requestURL(input)
-      if (url.startsWith('https://identity.one.example/')) {
+      if (url.startsWith('https://identity.failing.example/')) {
         return new Response(JSON.stringify({ access_token: 'token-1', expires_in: 3600 }), {
           status: 200,
           headers: { 'content-type': 'application/json' },

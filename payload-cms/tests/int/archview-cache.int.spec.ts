@@ -22,8 +22,8 @@ describe('architecture proxy cache', () => {
       lookupDefaultSource: async () => null,
     })
 
-    await GET(new Request('https://cms.example/api/architecture?project=p&t=1'))
-    await GET(new Request('https://cms.example/api/architecture?project=p&t=2'))
+    await GET(new Request('https://cms.example/api/architecture?project=cache-ttl&t=1'))
+    await GET(new Request('https://cms.example/api/architecture?project=cache-ttl&t=2'))
 
     expect(calls).toBe(1)
   })
@@ -42,9 +42,9 @@ describe('architecture proxy cache', () => {
       cacheTtlMs: 50,
     })
 
-    await GET(new Request('https://cms.example/api/architecture?project=p'))
+    await GET(new Request('https://cms.example/api/architecture?project=cache-refresh'))
     await new Promise((resolve) => setTimeout(resolve, 60))
-    await GET(new Request('https://cms.example/api/architecture?project=p'))
+    await GET(new Request('https://cms.example/api/architecture?project=cache-refresh'))
 
     expect(calls).toBe(2)
   })
@@ -66,9 +66,9 @@ describe('architecture proxy cache', () => {
       lookupDefaultSource: async () => null,
     })
 
-    await GET(new Request('https://cms.example/api/architecture?project=p'))
+    await GET(new Request('https://cms.example/api/architecture?project=cache-failure'))
     mode = 'ok'
-    await GET(new Request('https://cms.example/api/architecture?project=p'))
+    await GET(new Request('https://cms.example/api/architecture?project=cache-failure'))
 
     expect(calls).toBe(2)
   })
@@ -88,8 +88,8 @@ describe('architecture proxy cache', () => {
     })
 
     const [first, second] = await Promise.all([
-      GET(new Request('https://cms.example/api/architecture?project=p')),
-      GET(new Request('https://cms.example/api/architecture?project=p')),
+      GET(new Request('https://cms.example/api/architecture?project=cache-coalesce')),
+      GET(new Request('https://cms.example/api/architecture?project=cache-coalesce')),
     ])
 
     expect(calls).toBe(1)
