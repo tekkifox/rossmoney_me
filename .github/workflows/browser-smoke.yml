@@ -64,6 +64,10 @@ jobs:
       # CI must never write host samples. The production deployment owns
       # sampling; the screenshot database is a throwaway copy.
       HOST_SAMPLER: 'off'
+      # The `/a` rewrite targets the `ackee` Docker service, which is not part
+      # of this job. Rendering the tracker would leave one request hanging and
+      # block the page's load event.
+      ACKEE_ENABLED: 'false'
 
     steps:
       - name: Checkout repository
@@ -135,32 +139,10 @@ jobs:
           corepack pnpm --filter payload-cms exec playwright install
           chromium firefox
 
-      # Playwright starts the production server itself (see webServer in
-      # payload-cms/playwright.config.ts). `CI=true` selects the production
-      # command and disables reusing a stray dev server. Bind loopback so the
-      # server banner does not print the runner's network address into a public
-      # CI log.
-      - name: Run browser smoke suite
-        env:
-          PLAYWRIGHT_WEB_SERVER_COMMAND: pnpm start:loopback
-        run: corepack pnpm --filter payload-cms run test:e2e
-
-      - name: Upload Playwright report and traces
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-report
-          path: |
-            payload-cms/playwright-report
-            payload-cms/test-results
-            !payload-cms/test-results/screenshot-artifacts
-            !payload-cms/test-results/screenshots
-          if-no-files-found: ignore
-          retention-days: 7
-
-      # Screenshots run on pull requests and manual dispatches, after the smoke
-      # suite, reusing the production build from the step above. A push to main
-      # still smoke-tests but does not add gallery images.
+      # Screenshots run on pull requests and manual dispatches. The database copy
+      # and media install happen before the smoke suite so the one production
+      # build has everything it needs. A push to main still smoke-tests but does
+      # not add gallery images.
       #
       # The screenshot server gets a throwaway copy of the seeded dev database,
       # never `rossmoney_dev` itself. The runner has Node and the project's
@@ -217,6 +199,29 @@ jobs:
 
           FILES=$(find payload-cms/public/media -maxdepth 1 -type f | wc -l)
           echo "Installed ${FILES} mirrored media files"
+
+      # Playwright starts the production server itself (see webServer in
+      # payload-cms/playwright.config.ts). `CI=true` selects the production
+      # command and disables reusing a stray dev server. Bind loopback so the
+      # server banner does not print the runner's network address into a public
+      # CI log.
+      - name: Run browser smoke suite
+        env:
+          PLAYWRIGHT_WEB_SERVER_COMMAND: pnpm start:loopback
+        run: corepack pnpm --filter payload-cms run test:e2e
+
+      - name: Upload Playwright report and traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            payload-cms/playwright-report
+            payload-cms/test-results
+            !payload-cms/test-results/screenshot-artifacts
+            !payload-cms/test-results/screenshots
+          if-no-files-found: ignore
+          retention-days: 7
 
       # `payload-cms/playwright.screenshots.ts` starts the built app on port
       # 3001 against the copy, with HOST_SAMPLER=off. `SCREENSHOT_PATHS` comes

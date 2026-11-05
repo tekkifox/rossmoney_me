@@ -43,7 +43,10 @@ workflow appends a run-scoped database name:
 
 Both databases are dropped at the end of the run. `PAYLOAD_SEED=true` is set so
 the default pages and documents are refreshed on every run; that is what makes
-a change to a seeded page visible in the screenshot.
+a change to a seeded page visible in the screenshot. `ACKEE_ENABLED=false` is
+also set: the `/a` tracker rewrite targets the `ackee` Docker service, which is
+not part of this job, so a rendered tracker would leave a request hanging and
+stall the page's `load` event.
 
 The workflow copies the nightly production media mirror at
 `/opt/rossmoney-dev-sync/media` into `payload-cms/public/media` before the
