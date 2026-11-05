@@ -14,6 +14,7 @@ import {
   decryptArchviewSecret,
   encryptArchviewSecret,
 } from '../utilities/archviewSourceSecret'
+import { validateTailnet } from '../utilities/botSettings'
 import { revalidateAllPublicPages } from '../utilities/revalidatePublicPages'
 
 /**
@@ -260,6 +261,15 @@ export const ArchviewSources: CollectionConfig = {
         (Number.isInteger(value) && value >= 1 && value <= 65535)
           ? true
           : 'Enter a whole port number between 1 and 65535.',
+    },
+    {
+      name: 'tailnet',
+      type: 'text',
+      validate: validateTailnet,
+      admin: {
+        description:
+          'Optional tailnet IPv4 address for this host, for example 203.0.113.10. Leave blank when the host has none; the notification agent then dials the hostname.',
+      },
     },
     {
       name: 'project',

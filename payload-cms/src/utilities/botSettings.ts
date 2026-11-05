@@ -22,6 +22,9 @@ export const TARGET_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/
 /** A hostname: no scheme, path, port, wildcard or whitespace. */
 export const HOSTNAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/
 
+/** One dotted-decimal IPv4 part: 0-255, without a leading zero. */
+const IPV4_PART_PATTERN = /^(?:0|[1-9]\d{0,2})$/
+
 /** A BookStack slug, for example `runbooks` or `v-rising`. */
 const BOOK_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 
@@ -59,10 +62,13 @@ export type BotSettingsSource = {
 /**
  * One host the notification agent may probe, taken from the enabled ArchView
  * sources. `name` is the source's hostname and `sshPort` is its SSH port.
+ * `tailnet` is the optional tailnet IPv4 address the agent dials when the host
+ * is not reachable over public SSH.
  */
 export type BotSettingsHost = {
   name: string
   sshPort: number
+  tailnet?: string
 }
 
 export type BotSettingsResponse = {
@@ -181,6 +187,30 @@ export const validateTargetHostScope = (
   value: unknown,
   allHosts: boolean,
 ): string | true => (allHosts ? true : validateHostScope(value))
+
+/**
+ * A host's optional tailnet address is a plain IPv4 address (`a.b.c.d`, each
+ * part 0-255). Blank is valid: an older panel has no address, and the agent
+ * falls back to the hostname.
+ */
+export const validateTailnet = (value: unknown): string | true => {
+  if (isBlank(value)) {
+    return true
+  }
+  if (typeof value !== 'string') {
+    return 'Enter a tailnet IPv4 address, for example 203.0.113.10'
+  }
+
+  const parts = value.split('.')
+  const valid =
+    parts.length === 4 &&
+    parts.every((part) => IPV4_PART_PATTERN.test(part) && Number(part) <= 255)
+
+  if (!valid) {
+    return `"${value}" is not an IPv4 address. Enter four numbers between 0 and 255 separated by dots, for example 203.0.113.10`
+  }
+  return true
+}
 
 /** Discord ids are snowflakes: 1–32 digits, and nothing else. */
 export const SNOWFLAKE_PATTERN = /^[0-9]{1,32}$/
@@ -388,7 +418,8 @@ export const toBotSettingsResponse = (
  * Turns the enabled ArchView sources into the host-to-port list the notification
  * agent consumes. The source's `name` is its hostname, and an empty `sshPort`
  * reads as the conventional default. A source without a name is skipped rather
- * than emitted with an empty name.
+ * than emitted with an empty name. `tailnet` is emitted only when it is a valid
+ * IPv4 address; absent means the agent dials the hostname.
  */
 const toHosts = (rows: unknown): BotSettingsHost[] => {
   const hosts: BotSettingsHost[] = []
@@ -399,7 +430,13 @@ const toHosts = (rows: unknown): BotSettingsHost[] => {
     if (!name) {
       continue
     }
-    hosts.push({ name, sshPort: toSshPort(source.sshPort) })
+
+    const entry: BotSettingsHost = { name, sshPort: toSshPort(source.sshPort) }
+    const tailnet = stringOrEmpty(source.tailnet)
+    if (tailnet && validateTailnet(tailnet) === true) {
+      entry.tailnet = tailnet
+    }
+    hosts.push(entry)
   }
 
   return hosts.sort((left, right) =>
