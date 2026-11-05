@@ -11,11 +11,25 @@ import { isVercelRuntime } from './serverURL'
 export const ACKEE_DOMAIN_ID = '3191a3db-fc9b-4663-ac13-e862015111f3'
 
 /**
+ * Ackee's "CV download" event, created in the production dashboard.
+ *
+ * Like the domain id above this is a constant, not an environment variable: a
+ * preview build must never record a conversion into a different domain's
+ * event namespace. The event is one entry with a `key` per file format, so the
+ * dashboard can show DOCX and PDF counts separately.
+ */
+export const ACKEE_CV_DOWNLOAD_EVENT_ID = '6b8b5a36-fdc0-474f-95a9-e33d3ea53d5a'
+
+/**
  * Ackee's `ignoreOwnVisits` default sets an `ackee_ignore` cookie. Visitors
  * must stay cookie-free, so the integration disables it and the operator is
  * excluded another way (a separate browser profile or a network rule).
+ *
+ * `detailed` adds browser, OS, device, screen and language dimensions. The
+ * dashboard panels for those are empty without it. Keep `ignoreOwnVisits`
+ * unchanged: it is a cookie decision, independent of how much detail is sent.
  */
-export const ACKEE_OPTS = '{"ignoreOwnVisits":false}'
+export const ACKEE_OPTS = '{"ignoreOwnVisits":false,"detailed":true}'
 
 /** Path prefix proxied to the Ackee container by `next.config.ts`. */
 export const ACKEE_PATH = '/a'
