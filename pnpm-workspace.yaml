@@ -20,6 +20,5 @@ minimumReleaseAge: 720
 # are the same packages that were allow-listed before the upgrade.
 allowBuilds:
   esbuild: true
-  mongodb-memory-server: true
   sharp: true
   unrs-resolver: true
