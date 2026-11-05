@@ -43,9 +43,10 @@ workflow appends a run-scoped database name:
   project's `mongodb` driver (the paseo VM has no `mongosh`, Docker or MongoDB
   Database Tools). `rossmoney_dev` is only ever read.
 
-Both databases are dropped at the end of the run. `PAYLOAD_SEED=true` is set so
-the default pages and documents are refreshed on every run; that is what makes
-a change to a seeded page visible in the screenshot. `ACKEE_ENABLED=false` is
+Both databases are dropped at the end of the run. The smoke database starts
+empty, so `onInit` creates the default pages and documents, including the CV
+document that page needs. The screenshot database is a copy of the seeded
+`rossmoney_dev`, so its documents are left as they are. `ACKEE_ENABLED=false` is
 also set: the `/a` tracker rewrite targets the `ackee` Docker service, which is
 not part of this job, so a rendered tracker would leave a request hanging and
 stall the page's `load` event.
@@ -136,6 +137,27 @@ pnpm --filter payload-cms run backfill:page-templates -- --apply
 The helper is a dry run by default and only fills missing values. `onInit`
 applies the same fill-in automatically to older databases; fresh seeds already
 store templates. Never overwrite a template an editor has chosen.
+
+## CV page
+
+The CV page renders the media document its `cvFile` upload field points at. A
+DOCX or PDF is converted once on upload and the HTML is stored on the media
+document, so the viewer needs the populated relation, not a raw id.
+
+`onInit` creates a small sample CV (`CV_SEED_FILENAME` in
+`src/endpoints/seed/cv-page.ts`) and links it when the seeded page has no
+document, so a fresh dev or CI database renders a CV instead of the "not
+available" card. An editor's upload is never replaced, and the full seed
+endpoint links the same document when it recreates the page. `renderPage`
+resolves an id-only `cvFile` before rendering, so a shallow (depth 0) page still
+reaches the viewer populated.
+
+Seeded runs are not isolated from Next.js' full route cache: CI's smoke server
+and screenshot server share one build directory, and the route cache lives
+inside it, so the screenshot can serve a page rendered against the smoke
+database rather than the copy of `rossmoney_dev`. That is why the seeded page
+must be valid on its own — the CV page carries a document in every seeded
+database.
 
 ## ArchView snapshots and host usage
 

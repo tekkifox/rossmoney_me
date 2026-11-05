@@ -29,7 +29,7 @@ import { seedBotSettings } from './endpoints/seed/bot-settings';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
-import { cv } from './endpoints/seed/cv-page';
+import { attachSeededCv, cv } from './endpoints/seed/cv-page';
 import { seedArchviewSources, type SeededArchviewSources } from './endpoints/seed/archview-sources';
 import { asRecord } from './utilities/json';
 import { DEFAULT_PAGE_TEMPLATE, templateFromSlug } from './utilities/pageTemplates';
@@ -306,6 +306,28 @@ export default buildConfig({
           const message = err instanceof Error ? err.message : String(err);
           payload.logger.error(`Failed to seed page "${pageData.slug}": ${message}`);
         }
+      }
+
+      // The CV page is the one default page whose content lives in a media
+      // document. A database created by the seed has no upload, so the page
+      // renders the "not available" card in dev and CI. Link the seeded sample
+      // document when the field is empty; an editor's upload is never replaced.
+      try {
+        const cvPages = await pClient.find({
+          collection: 'pages',
+          where: { slug: { equals: 'cv' } },
+          depth: 0,
+          limit: 1,
+          pagination: false,
+          overrideAccess: true,
+        })
+        const cvPage = cvPages.docs[0]
+        if (cvPage && (await attachSeededCv(pClient, cvPage))) {
+          payload.logger.info('Linked the seeded CV document to the CV page')
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        payload.logger.error(`Failed to seed the CV document: ${message}`)
       }
 
       // Older databases predate `pages.template`. Fill it in from the slug

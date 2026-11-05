@@ -24,6 +24,7 @@ import { PageRoot } from '@/components/PageRoot'
 import { StructuredData } from '@/components/StructuredData'
 import { browserArchitectureApi, browserArchitectureProject } from '@/utilities/architectureURL'
 import { resolvePageArchviewSource, isArchviewSourceFailure } from '@/utilities/archviewPageSource'
+import { populateCvFile } from '@/utilities/cvPageFile'
 import { resolvePageTemplate } from '@/utilities/pageTemplates'
 
 type RenderPageArgs = {
@@ -67,8 +68,14 @@ export async function renderPage({ slug, draft, track }: RenderPageArgs) {
     return <PayloadRedirects url={url} />
   }
 
+  const payload = await getSafePayload()
+  // A shallow query (or a cached shell built from one) hands the viewer an id
+  // instead of the CV media document. Resolve it here so the download and the
+  // stored HTML never depend on the caller's depth.
+  page = await populateCvFile(payload, page)
+
   const resolvedSource = await resolvePageArchviewSource(page, null, {
-    payload: await getSafePayload(),
+    payload,
   })
   const resolvedOrigin =
     resolvedSource && !isArchviewSourceFailure(resolvedSource) ? resolvedSource.origin : undefined
