@@ -1,6 +1,7 @@
 import React from 'react'
 import type { Media } from '@/payload-types'
 import { cvSourceFromFilename } from '@/utilities/cvFile'
+import CVDownloadLink, { type CVDownloadFormat } from './CVDownloadLink'
 
 type Props = {
   cvFile?: Media | string | null
@@ -17,13 +18,16 @@ function readCvDocument(cvFile: Props['cvFile']): Media | null {
 
 /**
  * Server-rendered CV. The HTML was produced once at upload time and stored on
- * the media document, so this component has no client JavaScript: the document
- * is part of the first response and works with JS disabled.
+ * the media document, so the document itself needs no client JavaScript: only
+ * the download anchors hydrate, to count the one real conversion. The anchors
+ * keep their `href`/`download`, so they still download if that script is
+ * absent or fails.
  */
 export default function CVViewer({ cvFile }: Props) {
   const cvUrl = getCVFileUrl(cvFile)
   const document = readCvDocument(cvFile)
   const source = cvSourceFromFilename(document?.filename)
+  const format = source ? (source.toUpperCase() as CVDownloadFormat) : null
   const downloadLabel = source ? `Download CV (${source.toUpperCase()})` : 'Download CV'
   const html = document?.cvHtml?.trim() ?? ''
   const note = document?.cvRenderNote?.trim() ?? ''
@@ -39,9 +43,9 @@ export default function CVViewer({ cvFile }: Props) {
   return (
     <div className="cv-viewer">
       <div className="cv-download-bar">
-        <a className="cv-download-top" href={cvUrl} download>
+        <CVDownloadLink className="cv-download-top" href={cvUrl} format={format}>
           {downloadLabel}
-        </a>
+        </CVDownloadLink>
       </div>
 
       {note ? <p className="cv-render-note">{note}</p> : null}
@@ -59,9 +63,9 @@ export default function CVViewer({ cvFile }: Props) {
             it.
           </p>
           <p>
-            <a href={cvUrl} download>
+            <CVDownloadLink href={cvUrl} format={format}>
               {downloadLabel}
-            </a>
+            </CVDownloadLink>
           </p>
         </article>
       )}
