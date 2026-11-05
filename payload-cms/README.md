@@ -174,7 +174,7 @@ To spin up this example locally, follow the [Quick Start](#quick-start). Then [S
 
 ### Tests
 
-`pnpm test:int` provisions its own disposable MongoDB for the run, so no database needs to be running. Setting `MONGODB_URI` (or `DATABASE_URL`) overrides that and uses your database untouched.
+`pnpm test:int` needs a MongoDB server: set `MONGODB_URI` (or `DATABASE_URL`/`DEV_MONGO_URI`). The run uses a throwaway database on that server and drops it at the end, so the database named in the URI is never read or written.
 
 ### Working with Postgres
 

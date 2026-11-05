@@ -3,22 +3,27 @@
  *
  *   corepack pnpm@12.15.0 verify:rate-limit
  *
- * The parent starts a disposable MongoDB and then runs this file twice as a
- * child process, so each run has its own module graph, MongoClient and
- * in-memory limiter — the same situation as two warm Vercel instances. The
- * first child consumes six of the ten login attempts, the second one must see
- * attempts 7..10 allowed and 11..12 refused.
+ * The parent creates a throwaway database on the configured MongoDB server and
+ * then runs this file twice as a child process, so each run has its own module
+ * graph, MongoClient and in-memory limiter — the same situation as two warm
+ * Vercel instances. The first child consumes six of the ten login attempts, the
+ * second one must see attempts 7..10 allowed and 11..12 refused. The database
+ * is dropped at the end; the database named in the configured URI is never used.
  *
  * Development-only; nothing here is imported by the app or the build.
  */
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-import { MongoMemoryServer } from 'mongodb-memory-server'
 import { MongoClient } from 'mongodb'
 
 import { SharedFixedWindowRateLimiter } from '../src/utilities/rateLimit'
 import { MongoRateLimitStore, RATE_LIMIT_COLLECTION } from '../src/utilities/rateLimitStore'
+import {
+  createScratchDatabase,
+  dropScratchDatabase,
+  resolveBaseMongoUri,
+} from './scratch-db'
 
 const LIMIT = 10
 const WINDOW_MS = 10 * 60 * 1000
@@ -46,8 +51,8 @@ if (process.env.RATE_LIMIT_PROOF_CHILD === '1') {
 
   await store.close()
 } else {
-  const server = await MongoMemoryServer.create()
-  const uri = server.getUri()
+  const scratch = createScratchDatabase(resolveBaseMongoUri(), 'rossmoney_rate_limit')
+  const uri = scratch.uri
   const admin = new MongoClient(uri)
 
   const runChild = (label: string) =>
@@ -68,17 +73,17 @@ if (process.env.RATE_LIMIT_PROOF_CHILD === '1') {
     })
 
   try {
-    console.log(`stores: ${uri}`)
+    console.log(`throwaway database: ${scratch.databaseName}`)
     console.log('one budget: 10 attempts per key, window 10m')
     await runChild('process A')
     await runChild('process B')
 
     await admin.connect()
     const document = await admin
-      .db()
+      .db(scratch.databaseName)
       .collection(RATE_LIMIT_COLLECTION)
       .findOne({ _id: `proof:${KEY}` })
-    const indexes = await admin.db().collection(RATE_LIMIT_COLLECTION).indexes()
+    const indexes = await admin.db(scratch.databaseName).collection(RATE_LIMIT_COLLECTION).indexes()
 
     console.log('shared counter:', JSON.stringify(document))
     console.log(
@@ -88,6 +93,7 @@ if (process.env.RATE_LIMIT_PROOF_CHILD === '1') {
     console.log('expected shared count: 12 (6 from each process)')
   } finally {
     await admin.close()
-    await server.stop()
+    await dropScratchDatabase(scratch)
+    console.log(`dropped throwaway database: ${scratch.databaseName}`)
   }
 }
