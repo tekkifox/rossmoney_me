@@ -11,7 +11,18 @@ const NEXT_PUBLIC_SERVER_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
   ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   : process.env.__NEXT_PRIVATE_ORIGIN || 'http://localhost:3000'
 
+/**
+ * The browser-smoke job runs two servers from one checkout: the smoke suite and
+ * the screenshot capture. They must not share Next.js' build output, because
+ * the full route cache written by one server is read by any other server using
+ * the same `distDir`, even when the two point at different databases. CI copies
+ * the build into `.next-screenshots` and sets this variable for the screenshot
+ * server only; unset keeps the normal `.next` directory.
+ */
+const distDir = process.env.NEXT_DIST_DIR?.trim() || '.next'
+
 const nextConfig: NextConfig = {
+  distDir,
   // Temporarily required on Windows until Next.js fixes Turbopack Sass resolution.
   // See: https://github.com/vercel/next.js/issues/86431
     async headers() {

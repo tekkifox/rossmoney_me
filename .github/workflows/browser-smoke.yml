@@ -57,6 +57,12 @@ jobs:
       # Live Preview builds this into the iframe URL and checks it on the
       # preview route, so both processes need the same value.
       PREVIEW_SECRET: browser-smoke-preview-secret
+      # Force-refresh the default documents on every startup. The per-run
+      # databases are disposable, so this is safe, and it is what makes a pull
+      # request that changes a seeded page show that change in the screenshot.
+      # The screenshot server inherits this too, but force-seeding only merges
+      # page fields: it never replaces the CV media an editor uploaded.
+      PAYLOAD_SEED: 'true'
       # CI must never write host samples. The production deployment owns
       # sampling; the screenshot database is a throwaway copy.
       HOST_SAMPLER: 'off'
@@ -124,6 +130,19 @@ jobs:
 
       - name: Build production app
         run: corepack pnpm --filter payload-cms run build
+
+      # The smoke suite and the screenshot capture run two servers from this
+      # one checkout. Next.js keeps its full route cache inside the build
+      # directory, so a shared `.next` lets the screenshot server answer with a
+      # page the smoke server rendered against the smoke database. Copy the
+      # freshly built output before the smoke run; the screenshot server starts
+      # with NEXT_DIST_DIR pointing at the copy and writes its own cache there.
+      - name: Stage an isolated screenshot build
+        run: |
+          set -euo pipefail
+          rm -rf payload-cms/.next-screenshots
+          cp -a payload-cms/.next payload-cms/.next-screenshots
+          echo "Staged $(du -sh payload-cms/.next-screenshots | cut -f1) screenshot build"
 
       # The runner hosts Chromium's system libraries already, so this only
       # downloads the browsers the config's projects use (chromium and
@@ -220,15 +239,20 @@ jobs:
           retention-days: 7
 
       # `payload-cms/playwright.screenshots.ts` starts the built app on port
-      # 3001 against the copy, with HOST_SAMPLER=off. `SCREENSHOT_PATHS` comes
-      # from the workflow_dispatch input so a pull request can ask for its own
-      # page. The screenshots and the visible page text are written under
-      # test-results/screenshots for the publish step to inspect.
+      # 3001 against the database copy and the isolated build, with
+      # HOST_SAMPLER=off. `SCREENSHOT_PATHS` comes from the workflow_dispatch
+      # input so a pull request can ask for its own page. When `/cv` is
+      # captured, the spec compares the download link with the filename this
+      # server's database holds and fails on a mismatch. The screenshots and the
+      # visible page text are written under test-results/screenshots for the
+      # publish step to inspect.
       - name: Capture screenshots
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         env:
           SCREENSHOT_BASE_URL: http://localhost:3001
           SCREENSHOT_PATHS: ${{ inputs.paths }}
+          # Start from the pre-smoke copy of the build, never from `.next`.
+          SCREENSHOT_DIST_DIR: .next-screenshots
         run: corepack pnpm --filter payload-cms run screenshots
 
       # This step checks every PNG and its captured page text for material that

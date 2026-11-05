@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { test, type Page } from '@playwright/test'
+import { test, type APIRequestContext, type Page } from '@playwright/test'
 
 import { login } from '../helpers/login'
 
@@ -100,6 +100,87 @@ const waitForRenderedPage = async (page: Page): Promise<void> => {
   })
 }
 
+const CV_PATH = '/cv'
+
+const isCvPath = (target: string): boolean => {
+  try {
+    const pathname = new URL(target, 'http://localhost').pathname.replace(/\/+$/, '')
+    return pathname === CV_PATH
+  } catch {
+    return false
+  }
+}
+
+const documentNameFromHref = (href: string | null): string | null => {
+  if (!href) return null
+
+  try {
+    const segments = new URL(href, 'http://localhost').pathname.split('/').filter(Boolean)
+    const name = segments.pop()
+    return name ? decodeURIComponent(name) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Proves the captured CV came from this server's own database.
+ *
+ * The page route is cached (ISR), while `/api/pages` is read live. If the
+ * screenshot server is answering with a render another server cached, the
+ * download link names a different file than the one this database holds. That
+ * is the failure that made `/cv` show the seeded sample (or the empty card)
+ * while `rossmoney_dev` held the real upload.
+ */
+const assertCapturedCv = async ({
+  page,
+  request,
+}: {
+  page: Page
+  request: APIRequestContext
+}): Promise<void> => {
+  const response = await request.get(
+    '/api/pages?where%5Bslug%5D%5Bequals%5D=cv&depth=1&limit=1&pagination=false',
+  )
+  if (!response.ok()) {
+    throw new Error(`CV lookup returned HTTP ${response.status()}`)
+  }
+
+  const body = (await response.json()) as {
+    docs?: Array<{ cvFile?: { filename?: string | null } | string | null }>
+  }
+  const cvFile = body.docs?.[0]?.cvFile
+  const expected =
+    cvFile && typeof cvFile === 'object' && typeof cvFile.filename === 'string'
+      ? cvFile.filename
+      : null
+
+  const href = await page.evaluate(
+    () =>
+      document
+        .querySelector('.cv-download-bar a[download], .cv-document a[download]')
+        ?.getAttribute('href') ?? null,
+  )
+  const served = documentNameFromHref(href)
+
+  if (!expected) {
+    throw new Error('the screenshot database has no CV document on the cv page')
+  }
+  if (!served) {
+    throw new Error(
+      `the captured cv page has no download link; the screenshot database holds ${expected}`,
+    )
+  }
+  if (served !== expected) {
+    throw new Error(
+      `the captured cv page served ${served} but the screenshot database holds ${expected}; ` +
+        'the screenshot server answered with another database\'s render',
+    )
+  }
+
+  console.log(`CV document served by the screenshot server: ${served}`)
+}
+
 const visibleText = async (page: Page): Promise<string> => {
   return page.evaluate(() => {
     const lines: string[] = []
@@ -116,7 +197,7 @@ const visibleText = async (page: Page): Promise<string> => {
   })
 }
 
-test('capture the requested pages', async ({ page, baseURL }) => {
+test('capture the requested pages', async ({ page, request, baseURL }) => {
   const paths = requestedPaths()
   const names = uniqueNames(paths)
   const entries: ManifestEntry[] = []
@@ -148,6 +229,10 @@ test('capture the requested pages', async ({ page, baseURL }) => {
       }
 
       await waitForRenderedPage(page)
+
+      if (isCvPath(target)) {
+        await assertCapturedCv({ page, request })
+      }
 
       await page.screenshot({
         path: path.join(OUTPUT_DIR, `${name}.png`),
