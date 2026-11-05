@@ -43,13 +43,24 @@ workflow appends a run-scoped database name:
   project's `mongodb` driver (the paseo VM has no `mongosh`, Docker or MongoDB
   Database Tools). `rossmoney_dev` is only ever read.
 
-Both databases are dropped at the end of the run. The smoke database starts
-empty, so `onInit` creates the default pages and documents, including the CV
-document that page needs. The screenshot database is a copy of the seeded
-`rossmoney_dev`, so its documents are left as they are. `ACKEE_ENABLED=false` is
-also set: the `/a` tracker rewrite targets the `ackee` Docker service, which is
-not part of this job, so a rendered tracker would leave a request hanging and
-stall the page's `load` event.
+Both databases are dropped at the end of the run. `PAYLOAD_SEED=true` makes
+`onInit` refresh the default documents on every startup: the per-run databases
+are disposable, and this is what makes a pull request that changes a seeded page
+show that change in its screenshot. The smoke database starts empty, so it gets
+the sample CV. The screenshot database is a copy of the seeded `rossmoney_dev`,
+so force-seeding merges the page fields but leaves the real CV upload in place
+(`attachSeededCv` only links the sample when the field is empty).
+`ACKEE_ENABLED=false` is also set: the `/a` tracker rewrite targets the `ackee`
+Docker service, which is not part of this job, so a rendered tracker would leave
+a request hanging and stall the page's `load` event.
+
+The two servers must not share a build directory. Next.js keeps its full route
+cache inside `distDir`, so a render the smoke server cached against the smoke
+database would be served by the screenshot server even though it points at the
+copy of `rossmoney_dev`. After the build the workflow copies `payload-cms/.next`
+to `payload-cms/.next-screenshots` *before* the smoke run; the screenshot server
+starts with `NEXT_DIST_DIR=.next-screenshots` (`SCREENSHOT_DIST_DIR` in
+`playwright.screenshots.ts`), so it reads and writes only its own copy.
 
 The workflow copies the nightly production media mirror at
 `/opt/rossmoney-dev-sync/media` into `payload-cms/public/media` before the
@@ -58,9 +69,12 @@ absence fails the job. Without those files the copied pages point at missing
 images and the CV seed hook waits on a fetch that cannot succeed.
 
 Screenshots are captured by `payload-cms/playwright.screenshots.ts` (separate
-from `pnpm test:e2e`) after the smoke suite, against the throwaway copy, with
-`HOST_SAMPLER=off`. The default paths are `/` and
-`/admin/collections/host-samples`; a manual `workflow_dispatch` can pass a
+from `pnpm test:e2e`) after the smoke suite, against the throwaway copy and the
+isolated build, with `HOST_SAMPLER=off`. When `/cv` is captured the spec also
+reads `/api/pages` from that server and compares the CV download filename with
+the media document the database holds, so a stale render from the smoke server
+fails the step instead of publishing the wrong image. The default paths are `/`
+and `/admin/collections/host-samples`; a manual `workflow_dispatch` can pass a
 comma-separated `paths` input. `payload-cms/scripts/publish-screenshots.ts`
 checks both the PNGs and the captured page text for secret-shaped material
 before uploading to BookStack; a finding fails the job without uploading
@@ -152,12 +166,12 @@ endpoint links the same document when it recreates the page. `renderPage`
 resolves an id-only `cvFile` before rendering, so a shallow (depth 0) page still
 reaches the viewer populated.
 
-Seeded runs are not isolated from Next.js' full route cache: CI's smoke server
-and screenshot server share one build directory, and the route cache lives
-inside it, so the screenshot can serve a page rendered against the smoke
-database rather than the copy of `rossmoney_dev`. That is why the seeded page
-must be valid on its own — the CV page carries a document in every seeded
-database.
+Next.js' full route cache lives inside the build directory, so the CI smoke
+server and screenshot server must not share one. The workflow gives the
+screenshot server its own copy (`.next-screenshots`), and the screenshot spec
+asserts that the captured `/cv` download matches the media document the
+screenshot database holds. That check is what catches a render leaking from
+another server or database.
 
 ## ArchView snapshots and host usage
 

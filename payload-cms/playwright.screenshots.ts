@@ -2,13 +2,16 @@ import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Screenshot capture runs separately from `pnpm test:e2e` so the browser smoke
- * suite keeps its own database, assertions and reporter. It reuses the same
- * production build and drives the same login helper.
+ * suite keeps its own database, assertions and reporter. It runs from a copy of
+ * the production build (`SCREENSHOT_DIST_DIR`) and drives the same login helper.
  *
  * The server starts against the throwaway copy prepared by the workflow
  * (`SCREENSHOT_MONGODB_URI`), never against `rossmoney_dev` itself. It listens
  * on a port other than the e2e server's because the two servers must be able to
  * coexist in one job, and `HOST_SAMPLER=off` keeps CI from writing samples.
+ * The separate build directory matters as much as the separate database: the
+ * full route cache lives inside `distDir`, so a shared build would let this
+ * server answer with a page the smoke server rendered against its own data.
  */
 import 'dotenv/config'
 
@@ -24,6 +27,16 @@ const webServerEnv = {
   SERVER_URL: baseURL,
   NEXT_PUBLIC_SERVER_URL: baseURL,
   HOST_SAMPLER: 'off',
+  // CI always runs this server against a throwaway copy, and force-seeding is
+  // what makes a pull request that changes a seeded page show that change.
+  // Force-seeding merges page fields; it never replaces the CV media an editor
+  // uploaded, so the copied `rossmoney_dev` keeps its real CV.
+  PAYLOAD_SEED: process.env.PAYLOAD_SEED ?? 'true',
+  // The workflow copies the production build into a second directory so this
+  // server cannot read the route cache the smoke server wrote against its own
+  // database. `next.config.ts` uses this as `distDir`. Unset for a local run,
+  // which keeps the normal `.next` build.
+  NEXT_DIST_DIR: process.env.SCREENSHOT_DIST_DIR || '.next',
   NEXT_TELEMETRY_DISABLED: '1',
 }
 
