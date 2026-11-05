@@ -74,6 +74,7 @@ export interface Config {
     media: Media;
     'error-logs': ErrorLog;
     'archview-sources': ArchviewSource;
+    'archview-snapshots': ArchviewSnapshot;
     'host-samples': HostSample;
     redirects: Redirect;
     forms: Form;
@@ -98,6 +99,7 @@ export interface Config {
     media: MediaSelect<false> | MediaSelect<true>;
     'error-logs': ErrorLogsSelect<false> | ErrorLogsSelect<true>;
     'archview-sources': ArchviewSourcesSelect<false> | ArchviewSourcesSelect<true>;
+    'archview-snapshots': ArchviewSnapshotsSelect<false> | ArchviewSnapshotsSelect<true>;
     'host-samples': HostSamplesSelect<false> | HostSamplesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
@@ -858,6 +860,43 @@ export interface ErrorLog {
   lastSeen: string;
 }
 /**
+ * Last known good ArchView response per source and project. The CMS writes this automatically after a successful live fetch and serves it when ArchView is unreachable.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-snapshots".
+ */
+export interface ArchviewSnapshot {
+  id: string;
+  /**
+   * Resolved source (id, otherwise origin) plus the project.
+   */
+  key: string;
+  /**
+   * The archview-sources id, when the snapshot came from a collection row.
+   */
+  sourceId?: string | null;
+  sourceName?: string | null;
+  origin?: string | null;
+  project?: string | null;
+  /**
+   * The complete redacted /api/architecture body, including images, hosts, services, regions, endpoints and telemetry.
+   */
+  snapshot:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  fetchedAt: string;
+  /**
+   * Size of the stored snapshot in bytes, for operational visibility.
+   */
+  byteSize?: number | null;
+}
+/**
  * Sampled ArchView host metrics, one row per source per sampler sweep.
  *
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1109,6 +1148,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'archview-sources';
         value: string | ArchviewSource;
+      } | null)
+    | ({
+        relationTo: 'archview-snapshots';
+        value: string | ArchviewSnapshot;
       } | null)
     | ({
         relationTo: 'host-samples';
@@ -1520,6 +1563,20 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   isDefault?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-snapshots_select".
+ */
+export interface ArchviewSnapshotsSelect<T extends boolean = true> {
+  key?: T;
+  sourceId?: T;
+  sourceName?: T;
+  origin?: T;
+  project?: T;
+  snapshot?: T;
+  fetchedAt?: T;
+  byteSize?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

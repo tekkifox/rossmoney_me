@@ -68,6 +68,29 @@ export const RECENT_SAMPLE_WINDOW_MS = 15 * 60 * 1000
  */
 export const RECENT_SAMPLES_LIMIT = 100
 
+/**
+ * Picks the tab a host-usage request should open on.
+ *
+ * An explicit, existing `host` always wins. Otherwise the first source with at
+ * least one sample in the selected range is the useful default; a page that
+ * opens on a configured-but-silent host looks broken. Only when no source has
+ * samples does this fall back to the first source, matching the old default.
+ */
+export function selectHostUsageSource<T extends { id: string }>(
+  sources: readonly T[],
+  requestedHost: string | undefined,
+  hostsWithSamples: ReadonlySet<string>,
+): T | undefined {
+  if (sources.length === 0) return undefined
+
+  const requested = requestedHost
+    ? sources.find((source) => source.id === requestedHost)
+    : undefined
+  if (requested) return requested
+
+  return sources.find((source) => hostsWithSamples.has(source.id)) ?? sources[0]
+}
+
 export type RecentHostSample = {
   time: string
   host: string | null

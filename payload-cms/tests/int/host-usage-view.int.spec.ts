@@ -213,7 +213,7 @@ describe('host usage tabs', () => {
     expect(screen.getByRole('heading', { level: 2, name: first.name })).not.toBeNull()
   })
 
-  it('falls back to the first source when the host is unknown', async () => {
+  it('falls back to the first source with samples when the host is unknown', async () => {
     const first = await firstSourceInViewOrder()
     const ui = await HostUsage({
       searchParams: { range: '1h', host: `unknown-${runId}` },
@@ -223,6 +223,39 @@ describe('host usage tabs', () => {
     const nav = screen.getByRole('navigation', { name: 'Hosts' })
     expect(currentTab(nav).textContent).toBe(first.name)
     expect(screen.getByRole('heading', { level: 2, name: first.name })).not.toBeNull()
+  })
+
+  it('skips a newer source that has no samples in the selected range', async () => {
+    const withSamples = await firstSourceInViewOrder()
+    const empty = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `usage-view-empty-${runId}`,
+        origin: `https://empty-${runId}.example.test`,
+        audience: `https://empty-${runId}.example.test/api`,
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    try {
+      const ui = await HostUsage({ searchParams: { range: '1h' } })
+      render(ui)
+
+      const nav = screen.getByRole('navigation', { name: 'Hosts' })
+      // The empty row is newest, so it sorts first; the default must move past
+      // it to the first source that actually has a graph.
+      expect(currentTab(nav).textContent).toBe(withSamples.name)
+      expect(currentTab(nav).textContent).not.toBe(String(empty.name))
+      expect(screen.queryByText(/No samples in the selected range/)).toBeNull()
+    } finally {
+      await payload.delete({
+        collection: 'archview-sources',
+        id: empty.id,
+        overrideAccess: true,
+      })
+    }
   })
 
   it('keeps the selected range on every tab link', async () => {
