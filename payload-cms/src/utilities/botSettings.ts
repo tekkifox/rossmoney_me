@@ -25,6 +25,15 @@ export const HOSTNAME_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/
 /** One dotted-decimal IPv4 part: 0-255, without a leading zero. */
 const IPV4_PART_PATTERN = /^(?:0|[1-9]\d{0,2})$/
 
+/**
+ * One tailnet DNS label: 1–63 letters, digits or hyphens, and no hyphen at
+ * either end. A single character is allowed.
+ */
+const TAILNET_LABEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/
+
+/** A tailnet DNS name is at most 253 characters, dots included. */
+const TAILNET_NAME_MAX_LENGTH = 253
+
 /** A BookStack slug, for example `runbooks` or `v-rising`. */
 const BOOK_SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/
 
@@ -62,8 +71,8 @@ export type BotSettingsSource = {
 /**
  * One host the notification agent may probe, taken from the enabled ArchView
  * sources. `name` is the source's hostname and `sshPort` is its SSH port.
- * `tailnet` is the optional tailnet IPv4 address the agent dials when the host
- * is not reachable over public SSH.
+ * `tailnet` is the optional tailnet IPv4 address or DNS name the agent dials
+ * when the host is not reachable over public SSH.
  */
 export type BotSettingsHost = {
   name: string
@@ -188,28 +197,57 @@ export const validateTargetHostScope = (
   allHosts: boolean,
 ): string | true => (allHosts ? true : validateHostScope(value))
 
+/** Four dotted-decimal parts, each 0-255 and without a leading zero. */
+const isIPv4Address = (value: string): boolean => {
+  const parts = value.split('.')
+  return (
+    parts.length === 4 &&
+    parts.every((part) => IPV4_PART_PATTERN.test(part) && Number(part) <= 255)
+  )
+}
+
+/** A dot-separated tailnet DNS name, with the digits-only case left to the address rule. */
+const isTailnetName = (value: string): boolean => {
+  if (value.length > TAILNET_NAME_MAX_LENGTH) {
+    return false
+  }
+  // Digits and dots only means an address, so a three-part or out-of-range
+  // quad is a typo to refuse, not a name to dial.
+  if (/^[0-9.]+$/.test(value)) {
+    return false
+  }
+  return value.split('.').every((label) => TAILNET_LABEL_PATTERN.test(label))
+}
+
 /**
- * A host's optional tailnet address is a plain IPv4 address (`a.b.c.d`, each
- * part 0-255). Blank is valid: an older panel has no address, and the agent
- * falls back to the hostname.
+ * A host's optional tailnet address is either a plain IPv4 address (`a.b.c.d`,
+ * each part 0-255) or a tailnet DNS name (`host.example.ts.net`). Blank is
+ * valid: an older panel has no address, and the agent falls back to the
+ * hostname.
+ *
+ * A name is preferred, because an address changes whenever a node re-registers
+ * while a MagicDNS name does not. The name rule is deliberately strict: one or
+ * more dot-separated labels of `[A-Za-z0-9-]`, 1–63 characters per label, no
+ * leading or trailing hyphen, at most 253 characters in total, so no scheme,
+ * port, underscore, trailing dot or whitespace slips through.
+ *
+ * A value made only of digits and dots is an address, or a mistyped one. If it
+ * is not a valid dotted quad it is refused rather than accepted as a name:
+ * dialling `203.0.113.256` as a hostname would hide the typo.
  */
 export const validateTailnet = (value: unknown): string | true => {
   if (isBlank(value)) {
     return true
   }
   if (typeof value !== 'string') {
-    return 'Enter a tailnet IPv4 address, for example 203.0.113.10'
+    return 'Enter a tailnet IPv4 address or DNS name, for example 203.0.113.10 or host.example.ts.net'
   }
 
-  const parts = value.split('.')
-  const valid =
-    parts.length === 4 &&
-    parts.every((part) => IPV4_PART_PATTERN.test(part) && Number(part) <= 255)
-
-  if (!valid) {
-    return `"${value}" is not an IPv4 address. Enter four numbers between 0 and 255 separated by dots, for example 203.0.113.10`
+  if (isIPv4Address(value) || isTailnetName(value)) {
+    return true
   }
-  return true
+
+  return `"${value}" is not an IPv4 address or a tailnet DNS name. Enter an address such as 203.0.113.10, or a name such as host.example.ts.net, without a scheme, port, underscore, trailing dot or whitespace.`
 }
 
 /** Discord ids are snowflakes: 1–32 digits, and nothing else. */
@@ -419,7 +457,8 @@ export const toBotSettingsResponse = (
  * agent consumes. The source's `name` is its hostname, and an empty `sshPort`
  * reads as the conventional default. A source without a name is skipped rather
  * than emitted with an empty name. `tailnet` is emitted only when it is a valid
- * IPv4 address; absent means the agent dials the hostname.
+ * IPv4 address or tailnet DNS name, and is then passed through unchanged: the
+ * agent decides which form to dial. Absent means the agent dials the hostname.
  */
 const toHosts = (rows: unknown): BotSettingsHost[] => {
   const hosts: BotSettingsHost[] = []
