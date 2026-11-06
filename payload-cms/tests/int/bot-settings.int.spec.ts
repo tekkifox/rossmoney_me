@@ -323,16 +323,35 @@ describe('GET /api/bot-settings hosts', () => {
     })
   })
 
-  it('rejects a tailnet address that is not a plain IPv4 address', async () => {
-    await expect(
-      createSource('tailnet-high', { tailnet: '203.0.113.256' }),
-    ).rejects.toMatchObject({ name: 'ValidationError' })
-    await expect(
-      createSource('tailnet-short', { tailnet: '203.0.113' }),
-    ).rejects.toMatchObject({ name: 'ValidationError' })
-    await expect(
-      createSource('tailnet-hostname', { tailnet: 'host1.example.com' }),
-    ).rejects.toMatchObject({ name: 'ValidationError' })
+  it('rejects a tailnet value that is neither an IPv4 address nor a DNS name', async () => {
+    const invalid = [
+      ['tailnet-high', '203.0.113.256'],
+      ['tailnet-short', '203.0.113'],
+      ['tailnet-underscore', 'host_name.example.ts.net'],
+      ['tailnet-trailing-dot', 'host.example.ts.net.'],
+      ['tailnet-scheme', 'https://host.example.ts.net'],
+      ['tailnet-port', 'host.example.ts.net:41641'],
+    ] as const
+
+    for (const [suffix, tailnet] of invalid) {
+      await expect(createSource(suffix, { tailnet })).rejects.toMatchObject({
+        name: 'ValidationError',
+      })
+    }
+  })
+
+  it('passes a stored tailnet DNS name through unchanged', async () => {
+    await createSource('tailnet-name', { tailnet: 'host.example.ts.net' })
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+
+    expect(body.hosts).toContainEqual({
+      name: `${prefix}-tailnet-name.example.test`,
+      sshPort: 22,
+      tailnet: 'host.example.ts.net',
+    })
   })
 
   it('leaves targets and sources byte-identical when hosts are added', async () => {
@@ -667,7 +686,8 @@ describe('bot-settings validators', () => {
     expect(validateHostScope(null)).not.toBe(true)
   })
 
-  it('accepts plain IPv4 tailnet addresses and nothing else', () => {
+  it('accepts IPv4 tailnet addresses and tailnet DNS names', () => {
+    // IPv4, exactly as before.
     expect(validateTailnet('203.0.113.10')).toBe(true)
     expect(validateTailnet('0.0.0.0')).toBe(true)
     expect(validateTailnet('255.255.255.255')).toBe(true)
@@ -675,12 +695,48 @@ describe('bot-settings validators', () => {
     expect(validateTailnet(null)).toBe(true)
     expect(validateTailnet(undefined)).toBe(true)
 
+    // A tailnet DNS name: one or more labels, hyphens inside them, mixed case.
+    expect(validateTailnet('host.example.ts.net')).toBe(true)
+    expect(validateTailnet('my-host.example.ts.net')).toBe(true)
+    expect(validateTailnet('node-1.example.ts.net')).toBe(true)
+    expect(validateTailnet('Host.Example.TS.net')).toBe(true)
+    expect(validateTailnet('host')).toBe(true)
+    expect(validateTailnet('a-b.c')).toBe(true)
+
+    // Label and total-length boundaries: 63 and 253 are allowed, one more is not.
+    const label63 = 'a'.repeat(63)
+    const name253 = [label63, label63, label63, 'a'.repeat(61)].join('.')
+    const name254 = [label63, label63, label63, 'a'.repeat(62)].join('.')
+    expect(name253).toHaveLength(253)
+    expect(validateTailnet(name253)).toBe(true)
+    expect(name254).toHaveLength(254)
+    expect(validateTailnet(name254)).not.toBe(true)
+    expect(validateTailnet(`${label63}b.example.ts.net`)).not.toBe(true)
+
+    // A mistyped address stays a mistyped address, not a name.
     expect(validateTailnet('203.0.113.256')).not.toBe(true)
     expect(validateTailnet('203.0.113')).not.toBe(true)
     expect(validateTailnet('203.0.113.10.1')).not.toBe(true)
     expect(validateTailnet('203.0.113.010')).not.toBe(true)
-    expect(validateTailnet('host1.example.com')).not.toBe(true)
+
+    // Malformed name shapes: scheme, port, underscore, trailing dot,
+    // whitespace, empty label, hyphen at either end.
+    expect(validateTailnet('https://host.example.ts.net')).not.toBe(true)
+    expect(validateTailnet('host.example.ts.net:41641')).not.toBe(true)
+    expect(validateTailnet('host_name.example.ts.net')).not.toBe(true)
+    expect(validateTailnet('host.example.ts.net.')).not.toBe(true)
+    expect(validateTailnet(' host.example.ts.net')).not.toBe(true)
     expect(validateTailnet(' 203.0.113.10 ')).not.toBe(true)
+    expect(validateTailnet('host..example.ts.net')).not.toBe(true)
+    expect(validateTailnet('-host.example.ts.net')).not.toBe(true)
+    expect(validateTailnet('host-.example.ts.net')).not.toBe(true)
+    expect(validateTailnet(41641)).not.toBe(true)
+
+    // The refusal names both accepted forms.
+    const message = validateTailnet('not a valid value')
+    expect(message).not.toBe(true)
+    expect(String(message)).toContain('203.0.113.10')
+    expect(String(message)).toContain('host.example.ts.net')
   })
 
   it('skips the host list when the target reports on all hosts', () => {
@@ -875,6 +931,8 @@ describe('bot-settings validators', () => {
         { name: 'alpha.example.test' },
         { name: 'mike.example.test', sshPort: 0 },
         { name: 'delta.example.test', tailnet: '203.0.113.10' },
+        // A tailnet DNS name is passed through exactly as stored.
+        { name: 'echo.example.test', tailnet: 'host.example.ts.net' },
         // Defensive: the field rejects this, but a stored value that slips
         // through must not reach the agent as an address.
         { name: 'bravo.example.test', tailnet: '203.0.113.256' },
@@ -885,6 +943,7 @@ describe('bot-settings validators', () => {
       { name: 'alpha.example.test', sshPort: 22 },
       { name: 'bravo.example.test', sshPort: 22 },
       { name: 'delta.example.test', sshPort: 22, tailnet: '203.0.113.10' },
+      { name: 'echo.example.test', sshPort: 22, tailnet: 'host.example.ts.net' },
       { name: 'mike.example.test', sshPort: 22 },
       { name: 'zulu.example.test', sshPort: 2200 },
     ])
