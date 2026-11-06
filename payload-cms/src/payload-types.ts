@@ -745,7 +745,7 @@ export interface ArchviewSource {
    */
   sshPort?: number | null;
   /**
-   * Optional tailnet IPv4 address for this host, for example 203.0.113.10. Leave blank when the host has none; the notification agent then dials the hostname.
+   * Optional tailnet address or tailnet DNS name for this host, for example 203.0.113.10 or host.example.ts.net. A name is preferred: it survives the node re-registering, where an address changes. Leave blank when the host has none; the notification agent then dials the hostname.
    */
   tailnet?: string | null;
   /**
