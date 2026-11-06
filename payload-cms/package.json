@@ -4,7 +4,7 @@
   "description": "Website template for Payload",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@12.16.1",
+  "packageManager": "pnpm@12.18.0",
   "scripts": {
     "audit:prod": "node ./scripts/audit-production.mjs",
     "backfill:cv-html": "cross-env NODE_OPTIONS=--no-deprecation tsx ./scripts/backfill-cv-html.ts",
