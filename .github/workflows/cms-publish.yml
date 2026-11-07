@@ -181,7 +181,7 @@ jobs:
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
-          hostname: gh-rossmoney_me-${{ github.run_id }}
+          hostname: gh-rossmoney-me-${{ github.run_id }}
 
       - name: Redeploy Portainer stack
         env:
