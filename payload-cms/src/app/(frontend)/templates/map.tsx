@@ -4,18 +4,22 @@ import React from 'react'
 import { PageDoc, PageMeta, RenderLayout, Section } from './shared'
 
 const LEGEND = [
-  { label: 'Hub', detail: 'the only public host, carrying the front door and control plane' },
-  { label: 'Media', detail: 'streaming and library services, kept off the public edge' },
-  { label: 'Storage', detail: 'scheduled backups and the notification service' },
+  { label: 'Hub', detail: 'the management host, carrying the front door and control plane' },
+  { label: 'Edge', detail: 'the public host that terminates TLS and proxies into the mesh' },
+  { label: 'Media', detail: 'streaming services, kept off the public edge' },
+  { label: 'Storage', detail: 'the library worker and scheduled backups' },
   { label: 'Photos', detail: 'the photo library and the public travel site' },
-  { label: 'Agent', detail: 'the build and automation host' },
-  { label: 'Edge', detail: 'the single public entry point that terminates TLS' },
+  { label: 'Build', detail: 'the agent runtime and the image builds' },
+  { label: 'Games', detail: 'game hosting and the game panel' },
   { label: 'Mesh', detail: 'the private encrypted network the hosts talk over' },
-  { label: 'Data store', detail: 'the managed content database and read-only analytics warehouse' },
+  {
+    label: 'Managed data',
+    detail: 'three hosted stores: the content database, an analytics warehouse, and an object store for backups',
+  },
 ]
 
 const DIAGRAM_ALT =
-  'Public architecture diagram: any client reaches the public edge over HTTPS, which proxies requests into a private encrypted mesh. The mesh connects five hosts by role — hub, media, storage, photos, and agent — each running its own services. A managed data layer sits off-host with a content database and a read-only analytics warehouse.'
+  'Public architecture diagram: any client reaches the public edge over HTTPS, which proxies requests into a private encrypted mesh. The mesh connects seven hosts by role — hub, edge, media, storage, photos, build, and games — each running its own services. A managed data layer sits off-host with three hosted stores: a content database, an analytics warehouse, and an object store for backups.'
 
 export default function MapTemplate({ page }: { page: PageDoc }) {
   return (
