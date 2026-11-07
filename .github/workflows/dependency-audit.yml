@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   audit:
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     env:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
     steps:

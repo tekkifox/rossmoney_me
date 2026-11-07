@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   oxlint:
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     env:

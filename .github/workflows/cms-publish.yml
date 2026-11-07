@@ -26,7 +26,7 @@ env:
 jobs:
   build:
     name: Build linux/amd64
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -126,7 +126,7 @@ jobs:
 
   merge:
     name: Publish multi-arch manifest
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     needs:
       - build
       - build-arm64
@@ -168,15 +168,21 @@ jobs:
             "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/amd64/digest)" \
             "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/arm64/digest)"
 
-  # The deployment host is on the tailnet, which GitHub-hosted runners cannot
-  # reach, so this job runs on the fleet runner.
+  # The deployment target is only reachable over the tailnet, so the job joins
+  # it with a reusable ephemeral auth key before calling Portainer.
   deploy:
     name: Deploy to Portainer
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     needs:
       - merge
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
+      - name: Join the tailnet
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          hostname: gh-rossmoney-me-${{ github.run_id }}
+
       - name: Redeploy Portainer stack
         env:
           PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
@@ -189,7 +195,7 @@ jobs:
 
           # Find the stack by name; never hardcode Id or EndpointId. Stacks are
           # re-created when the hub's environments change, so both move.
-          stacks_status=$(curl -sS -o /tmp/stacks.json -w '%{http_code}' \
+          stacks_status=$(curl -k -sS -o /tmp/stacks.json -w '%{http_code}' \
             -H "X-API-Key: ${PORTAINER_API_KEY}" \
             "${PORTAINER_URL}/api/stacks")
           if [ "$stacks_status" -lt 200 ] || [ "$stacks_status" -ge 300 ]; then
@@ -216,7 +222,7 @@ jobs:
             '.[] | select(.Name == $name) | .Id' /tmp/stacks.json)
 
           # Read the stack itself to carry its existing environment forward.
-          get_status=$(curl -sS -o /tmp/stack.json -w '%{http_code}' \
+          get_status=$(curl -k -sS -o /tmp/stack.json -w '%{http_code}' \
             -H "X-API-Key: ${PORTAINER_API_KEY}" \
             "${PORTAINER_URL}/api/stacks/${stack_id}")
           if [ "$get_status" -lt 200 ] || [ "$get_status" -ge 300 ]; then
@@ -236,7 +242,7 @@ jobs:
           echo "Found stack '${STACK_NAME}': Id=${stack_id}, EndpointId=${endpoint_id}"
 
           # Preserve the stack's current compose file; only pull the new image.
-          file_status=$(curl -sS -o /tmp/stack-file.json -w '%{http_code}' \
+          file_status=$(curl -k -sS -o /tmp/stack-file.json -w '%{http_code}' \
             -H "X-API-Key: ${PORTAINER_API_KEY}" \
             "${PORTAINER_URL}/api/stacks/${stack_id}/file")
           if [ "$file_status" -lt 200 ] || [ "$file_status" -ge 300 ]; then
@@ -269,7 +275,7 @@ jobs:
             --argjson env "$env_json" \
             '{StackFileContent: $compose, Env: $env, PullImage: true}')
 
-          put_status=$(curl -sS -o /tmp/put.json -w '%{http_code}' -X PUT \
+          put_status=$(curl -k -sS -o /tmp/put.json -w '%{http_code}' -X PUT \
             -H "X-API-Key: ${PORTAINER_API_KEY}" \
             -H "Content-Type: application/json" \
             --data "$body" \

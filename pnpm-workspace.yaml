@@ -15,6 +15,20 @@ packages:
 # refused.
 minimumReleaseAge: 720
 
+# Dependency pins that cannot be moved by upgrading the package that pulls them
+# in. Keep this list short and explain each entry; remove it as soon as the
+# parent dependency allows the fixed version on its own.
+#
+# @vercel/blob@2.8.2 (the latest at the time of writing) caps @vercel/oidc at
+# ^3.6.1, and the newest matching oidc (3.8.10) pins @vercel/cli-config to
+# 0.3.1, which in turn pins zod 4.1.11 (GHSA-mrhx-c7xc-m3w5; patched >=4.6.6).
+# cli-config 0.3.7 is the same API with `zod: ^4.6.6`, so lift that one package
+# instead of forcing zod past cli-config 0.3.1's exact pin. Drop this override
+# once @vercel/blob accepts an @vercel/oidc 4.x release that already depends on
+# cli-config 0.3.7.
+overrides:
+  '@vercel/cli-config': 0.3.7
+
 # pnpm 12 no longer reads `pnpm.onlyBuiltDependencies` from package.json, and
 # refuses to run dependency build scripts unless they are allowed here. These
 # are the same packages that were allow-listed before the upgrade.

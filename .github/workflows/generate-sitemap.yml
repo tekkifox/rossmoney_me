@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   generate:
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7

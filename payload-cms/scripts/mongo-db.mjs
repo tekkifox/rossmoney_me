@@ -12,6 +12,7 @@
  *   MONGO_URI=... DROP_DBS=rossmoney_ci_1,rossmoney_shots_1 \
  *     node scripts/mongo-db.mjs drop
  *   MONGO_URI=... node scripts/mongo-db.mjs count
+ *   MONGO_URI=... node scripts/mongo-db.mjs media-filenames
  *
  * The source database is only read. The copy targets a different database and
  * drops/recreates that target, so the seeded `rossmoney_dev` is never written
@@ -33,8 +34,8 @@ const fail = (message) => {
 
 if (!uri) {
   fail('MONGO_URI is not configured')
-} else if (!['ping', 'copy', 'drop', 'count'].includes(command)) {
-  fail('usage: mongo-db.mjs <ping|copy|drop|count>')
+} else if (!['ping', 'copy', 'drop', 'count', 'media-filenames'].includes(command)) {
+  fail('usage: mongo-db.mjs <ping|copy|drop|count|media-filenames>')
 } else {
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 15_000 })
 
@@ -49,6 +50,19 @@ if (!uri) {
     if (command === 'count') {
       const collections = await client.db().listCollections().toArray()
       console.log(collections.length)
+    }
+
+    if (command === 'media-filenames') {
+      // The workflow's fallback downloads these from the public media mirror.
+      // Only the original filename is served there; size variants have no
+      // `filename` of their own for the documents CI copies.
+      const filenames = await client.db().collection('media').distinct('filename')
+      const usable = filenames
+        .filter((name) => typeof name === 'string' && name.trim() !== '')
+        .sort()
+      for (const name of usable) {
+        console.log(name)
+      }
     }
 
     if (command === 'copy') {
