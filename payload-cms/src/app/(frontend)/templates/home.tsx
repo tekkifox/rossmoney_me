@@ -220,7 +220,16 @@ export default async function HomeTemplate({ page }: { page: PageDoc }) {
             {archFailed ? (
               <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
             ) : (
-              <pre aria-label="Architecture diagram" className="diagram-view" id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+              <>
+                <pre aria-label="Architecture diagram" className="diagram-view diagram-view-capped" data-architecture-diagram id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+                <details className="diagram-toggle">
+                  <summary>
+                    <span className="diagram-toggle-closed">View full diagram</span>
+                    <span className="diagram-toggle-open">Show less</span>
+                  </summary>
+                  <pre aria-label="Architecture diagram, full height" className="diagram-view diagram-view-full" data-architecture-diagram role="region" tabIndex={0}>{archDiagram}</pre>
+                </details>
+              </>
             )}
 
             <div className="raw-json-wrap">

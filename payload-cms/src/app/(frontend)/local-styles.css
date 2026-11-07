@@ -87,8 +87,10 @@ h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(-
 .cards-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--primitive-space-35);margin-top:var(--primitive-space-3)}
 .feature-card p{color:var(--muted)}
 
-.architecture-layout{display:grid;grid-template-columns:2fr 1fr;gap:var(--primitive-space-4);align-items:start}
+.architecture-layout{display:grid;grid-template-columns:2fr 1fr;gap:var(--primitive-space-4);align-items:stretch}
 .architecture-layout>*{min-width:0}
+.architecture-diagram{display:flex;flex-direction:column;min-height:0}
+.architecture-diagram .diagram-view{flex:1 1 auto;min-height:0}
 .image-column{display:flex;flex-direction:column;gap:var(--primitive-space-3)}
 .diagram-view{white-space:pre;background:var(--diagram-bg);padding:var(--primitive-space-3);border-radius:var(--primitive-radius-8);font-family:var(--primitive-font-mono);color:var(--diagram-text);overflow:auto;font-size:var(--primitive-font-size-90)}
 
@@ -98,9 +100,12 @@ h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(-
 .project-screenshot-caption{padding:var(--primitive-space-25) var(--primitive-space-3);border-top:1px solid var(--border);color:var(--muted);font-size:var(--primitive-font-size-85)}
 
 /* The topology <pre> is also the Docker image list, so it is extremely tall.
-   Show a capped, scrollable preview; the disclosure reveals a full-height copy
-   of the same diagram (ArchitectureClient keeps both in sync). */
-.diagram-view-capped{max-height:420px}
+   Show a scrollable preview; the disclosure reveals a full-height copy of the
+   same diagram (ArchitectureClient keeps both in sync). */
+.diagram-view-capped{flex:1 1 auto;min-height:0}
+@media (max-width: 992px){
+  .diagram-view-capped{max-height:420px}
+}
 .diagram-toggle{margin-top:var(--primitive-space-2)}
 .diagram-toggle summary{cursor:pointer;width:fit-content;color:var(--primary);font-size:var(--primitive-font-size-90);font-weight:var(--primitive-font-weight-600)}
 .diagram-toggle summary:hover{color:var(--primary-hover)}
@@ -109,6 +114,15 @@ h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(-
 .diagram-toggle[open] .diagram-toggle-open{display:inline}
 .diagram-toggle[open] .diagram-toggle-closed{display:none}
 .architecture-diagram:has(.diagram-toggle[open]) .diagram-view-capped{display:none}
+
+/* Side by side, the host-stats card sizes the row and the topology card takes
+   that height. Size containment lets the topology card ignore its very tall
+   content; opening either disclosure restores normal flow so the card can grow
+   to show the full diagram or the raw payload. */
+@media (min-width: 993px){
+  .architecture-layout > .architecture-diagram{contain:size}
+  .architecture-layout > .architecture-diagram:has(details[open]){contain:none}
+}
 .image-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--primitive-space-35)}
 .image-card{display:block;padding:var(--primitive-space-35);border-radius:var(--primitive-radius-10);background:var(--color-card);border:1px solid var(--color-border);box-shadow:var(--shadow-metric);color:var(--color-card-foreground)}
 .image-name{font-weight:var(--primitive-font-weight-600)}
