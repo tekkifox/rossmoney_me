@@ -20,7 +20,6 @@ import { assembleSite } from '@/utilities/assembleSite'
 // Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
-import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
@@ -159,7 +158,6 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
                 </details>
               </>
             )}
-            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre aria-label="Raw architecture payload" className="raw-json" id="architecture-raw" role="region" tabIndex={0}>{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre></details></div>
           </article>
 
           <aside className="image-column card">
