@@ -245,6 +245,28 @@ matching on origin so reruns do not duplicate rows or overwrite admin edits:
 No secret literals live in the seed; the production secret is read from the
 environment only at seed time.
 
+### Startup seeding and the optional dev admin
+
+Every CMS startup runs the same idempotent seed: the header, the default pages
+(including `/map`), the sample CV, projects, experience, ArchView sources and
+the bot settings are created when missing, and missing pages are added on later
+starts. `PAYLOAD_SEED=true` still forces the default documents to be rewritten,
+so an editor's changes are only replaced when that flag is set. Uploads may live
+on local disk or in Vercel Blob: `BLOB_READ_WRITE_TOKEN` decides where media is
+stored, never whether seeding runs.
+
+Two optional variables create a dev admin on startup:
+
+```ini
+PAYLOAD_SEED_ADMIN_EMAIL=dev@example.com
+PAYLOAD_SEED_ADMIN_PASSWORD=replace-with-a-password
+```
+
+The user is created only when both variables are set and no user with that email
+exists. An existing user is never modified: the password is never reset and no
+user is ever deleted. Set neither variable to keep the previous behaviour. The
+password is never written to the logs.
+
 ### Media storage
 
 Media uploads are stored on the deployment's local filesystem by default. On Vercel that filesystem is ephemeral, so set `BLOB_READ_WRITE_TOKEN` (created by Vercel when Blob storage is added to the project) to store media in Vercel Blob instead.

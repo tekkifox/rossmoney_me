@@ -9,9 +9,11 @@ import type { Payload, SanitizedConfig } from 'payload'
 import { getPayload, handleEndpoints } from 'payload'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { CV_SEED_ALT } from '@/endpoints/seed/cv-page'
+import { attachSeededCv, CV_SEED_ALT } from '@/endpoints/seed/cv-page'
 import { populateCvFile } from '@/utilities/cvPageFile'
 import type { Media } from '@/payload-types'
+
+const SEED_TEST_BLOB_TOKEN = 'vercel_blob_rw_seedtest_0123456789abcdef'
 
 const previousBlobToken = process.env.BLOB_READ_WRITE_TOKEN
 delete process.env.BLOB_READ_WRITE_TOKEN
@@ -35,6 +37,14 @@ const findCvPage = async (depth: number) => {
   })
 
   return result.docs[0]
+}
+
+const restoreBlobToken = () => {
+  if (previousBlobToken === undefined) {
+    delete process.env.BLOB_READ_WRITE_TOKEN
+  } else {
+    process.env.BLOB_READ_WRITE_TOKEN = previousBlobToken
+  }
 }
 
 describe('seeded CV page', () => {
@@ -89,5 +99,41 @@ describe('seeded CV page', () => {
     expect(response.status).toBe(200)
     const body = Buffer.from(await response.arrayBuffer())
     expect(body.byteLength).toBeGreaterThan(0)
+  })
+
+  it('links the sample only when the relation is empty and never replaces it later', async () => {
+    const page = await findCvPage(0)
+    expect(page).toBeDefined()
+
+    // Simulate a database seeded before the sample existed: the page has no
+    // upload of its own.
+    await payload.update({
+      collection: 'pages',
+      id: page.id,
+      data: { cvFile: null },
+      context: { disableRevalidate: true },
+    })
+    expect((await findCvPage(0)).cvFile).toBeFalsy()
+
+    process.env.BLOB_READ_WRITE_TOKEN = SEED_TEST_BLOB_TOKEN
+    try {
+      // A later startup must still seed and attach the sample even though
+      // uploads are handled by blob storage.
+      await payloadConfig.onInit?.(payload)
+
+      const reattached = await findCvPage(0)
+      expect(reattached.cvFile, 'the restart should link the sample document').toBeTruthy()
+      const attachedId = reattached.cvFile
+
+      // A further startup must leave the now-populated relation alone.
+      await payloadConfig.onInit?.(payload)
+      expect((await findCvPage(0)).cvFile).toBe(attachedId)
+
+      // An editor's document is never replaced either: the helper refuses a
+      // page that already points at a document.
+      expect(await attachSeededCv(payload, { id: page.id, cvFile: attachedId })).toBe(false)
+    } finally {
+      restoreBlobToken()
+    }
   })
 })
