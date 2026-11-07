@@ -117,8 +117,8 @@ h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(-
 
 /* Side by side, the host-stats card sizes the row and the topology card takes
    that height. Size containment lets the topology card ignore its very tall
-   content; opening either disclosure restores normal flow so the card can grow
-   to show the full diagram or the raw payload. */
+   content; opening the diagram disclosure restores normal flow so the card can
+   grow to show the full diagram. */
 @media (min-width: 993px){
   .architecture-layout > .architecture-diagram{contain:size}
   .architecture-layout > .architecture-diagram:has(details[open]){contain:none}

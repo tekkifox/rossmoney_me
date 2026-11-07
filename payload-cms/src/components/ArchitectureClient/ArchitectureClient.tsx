@@ -2,7 +2,6 @@
 import React, { useEffect, useRef } from 'react'
 import { buildFacts, buildHighlights, renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
-import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import {
   architectureMetricsFromPayload,
   type ArchitectureMetricValues,
@@ -160,7 +159,6 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
         const descEl = document.getElementById('architecture-description')
         const factsEl = document.getElementById('architecture-facts')
         const highlightsEl = document.getElementById('architecture-highlights')
-        const rawEl = document.getElementById('architecture-raw')
         const updatedEl = document.getElementById('architecture-updated')
 
         const arch: ArchitecturePayload = redactInternalEndpoints(payload || {})
@@ -217,8 +215,6 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
           el.textContent = diagramText
         })
 
-        // Image cards removed per UI update. The topology now lists images and descriptions
-        if (rawEl) rawEl.textContent = arch ? JSON.stringify(stripUptimesForRawDump(arch), null, 2) : 'No snapshot returned'
         if (updatedEl) {
           // Prefer server-provided timestamp when available
           const serverTs = arch?.updatedAt || arch?.telemetry?.metrics?.updatedAt || arch?.telemetry?.metrics?.loadSample

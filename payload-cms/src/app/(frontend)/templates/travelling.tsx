@@ -19,7 +19,6 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
-import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
@@ -185,7 +184,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
       <output aria-atomic="true" aria-live="polite" className="sr-only" id="architecture-status" />
 
       <div className="architecture-layout">
-        {/* Left column: topology and raw payload */}
+        {/* Left column: topology */}
         <article className="architecture-diagram card">
           <div className="panel-header">
             <div>
@@ -211,13 +210,6 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
               </details>
             </>
           )}
-
-          <div className="raw-json-wrap">
-            <details>
-              <summary>Raw snapshot</summary>
-              <pre aria-label="Raw architecture payload" className="raw-json" id="architecture-raw" role="region" tabIndex={0}>{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
-            </details>
-          </div>
         </article>
 
         {/* Right column: images */}
