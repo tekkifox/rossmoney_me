@@ -48,8 +48,9 @@ permissions:
 jobs:
   # Deliberately still on the fleet runner: this job copies a throwaway
   # database from the paseo VM's shared dev MongoDB (`DEV_MONGO_URI`) and
-  # installs the production media mirror at /opt/rossmoney-dev-sync/media,
-  # neither of which exists on a GitHub-hosted runner.
+  # prefers the nightly production media mirror kept on that VM, neither of
+  # which exists on a GitHub-hosted runner. The media step falls back to the
+  # public site when no local mirror is present.
   smoke:
     runs-on: [self-hosted, paseo]
     timeout-minutes: 45
@@ -198,26 +199,71 @@ jobs:
           echo "Copied rossmoney_dev into ${SHOTS_DB} (${COLLECTIONS} collections)"
 
       # The media documents in the copied database point at files that live on
-      # the production deployment. The nightly sync mirrors those files next to
-      # the runner, so link them into the build before the server starts. A
-      # missing mirror is fatal: without it the page images 404 and the CV seed
-      # hook waits five minutes on a fetch that cannot succeed.
+      # the production deployment. Prefer the nightly sync's local mirror, but
+      # the mirror's directory has moved between hosts, so try the configured
+      # location and both known hosts before falling back to the public site.
+      # The fallback reads the referenced filenames from the copied database,
+      # which is the only authoritative list.
       - name: Install mirrored production media
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        env:
+          MEDIA_MIRROR: ${{ vars.MEDIA_MIRROR }}
         run: |
           set -euo pipefail
-          MEDIA_SOURCE=/opt/rossmoney-dev-sync/media
-          if [ ! -d "$MEDIA_SOURCE" ]; then
-            echo "::error::media mirror is missing at ${MEDIA_SOURCE}"
+          MEDIA_DIR=payload-cms/public/media
+          FALLBACK_SOURCE=https://www.rossmoney.me/media
+
+          if [ -z "${SCREENSHOT_MONGODB_URI:-}" ]; then
+            echo "::error::SCREENSHOT_MONGODB_URI is not configured; cannot read referenced media"
             exit 1
           fi
 
-          rm -rf payload-cms/public/media
-          mkdir -p payload-cms/public/media
-          cp -a "$MEDIA_SOURCE"/. payload-cms/public/media/
+          REFERENCED_FILE=$(mktemp)
+          trap 'rm -f "$REFERENCED_FILE"' EXIT
+          if ! MONGO_URI="$SCREENSHOT_MONGODB_URI" \
+            node payload-cms/scripts/mongo-db.mjs media-filenames > "$REFERENCED_FILE"; then
+            echo "::error::could not read media filenames from the copied database"
+            exit 1
+          fi
 
-          FILES=$(find payload-cms/public/media -maxdepth 1 -type f | wc -l)
-          echo "Installed ${FILES} mirrored media files"
+          EXPECTED=$(grep -c . "$REFERENCED_FILE" || true)
+          if [ "$EXPECTED" -lt 1 ]; then
+            echo "::error::the copied database references no media files"
+            exit 1
+          fi
+
+          MEDIA_SOURCE=""
+          for CANDIDATE in "${MEDIA_MIRROR:-}" /home/ross/stacks/rosso-dev-sync/media /opt/rossmoney-dev-sync/media; do
+            if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
+              MEDIA_SOURCE="$CANDIDATE"
+              break
+            fi
+          done
+
+          rm -rf "$MEDIA_DIR"
+          mkdir -p "$MEDIA_DIR"
+
+          if [ -n "$MEDIA_SOURCE" ]; then
+            echo "Using media mirror at ${MEDIA_SOURCE}"
+            cp -a "$MEDIA_SOURCE"/. "$MEDIA_DIR"/
+          else
+            echo "No local media mirror found; downloading ${EXPECTED} referenced files from ${FALLBACK_SOURCE}"
+            while IFS= read -r NAME; do
+              [ -z "$NAME" ] && continue
+              if ! curl -fsS --retry 3 --retry-delay 2 \
+                -o "${MEDIA_DIR}/${NAME}" "${FALLBACK_SOURCE}/${NAME}"; then
+                echo "::error::could not download ${NAME} from ${FALLBACK_SOURCE}; no local media mirror was available either"
+                exit 1
+              fi
+            done < "$REFERENCED_FILE"
+          fi
+
+          FILES=$(find "$MEDIA_DIR" -maxdepth 1 -type f | wc -l)
+          if [ "$FILES" -ne "$EXPECTED" ]; then
+            echo "::error::installed ${FILES} media files but the copied database references ${EXPECTED}"
+            exit 1
+          fi
+          echo "Installed ${FILES} media files"
 
       # Playwright starts the production server itself (see webServer in
       # payload-cms/playwright.config.ts). `CI=true` selects the production
