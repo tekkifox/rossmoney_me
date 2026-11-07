@@ -176,6 +176,24 @@ To spin up this example locally, follow the [Quick Start](#quick-start). Then [S
 
 `pnpm test:int` needs a MongoDB server: set `MONGODB_URI` (or `DATABASE_URL`/`DEV_MONGO_URI`). The run uses a throwaway database on that server and drops it at the end, so the database named in the URI is never read or written.
 
+#### Live ArchView check
+
+`tests/int/architecture-live.int.spec.ts` is skipped unless `ARCHVIEW_LIVE_URL` is set to the root of a reachable ArchView instance. When it is set, the spec calls the same client path the architecture pages use and checks the shape a real instance returns: the expected top-level keys, a non-empty `nodes` and `services` array, and an `updatedAt` that parses.
+
+```bash
+ARCHVIEW_LIVE_URL=https://archview.example.net \
+ARCHVIEW_LIVE_CLIENT_ID=replace-with-client-id \
+ARCHVIEW_LIVE_CLIENT_SECRET=replace-with-client-secret \
+ARCHVIEW_LIVE_TOKEN_URL=https://tenant.example.com/oauth/token \
+ARCHVIEW_LIVE_AUDIENCE=https://archview.example.net/api \
+ARCHVIEW_LIVE_SCOPE=archview:read \
+pnpm --filter payload-cms run test:int architecture-live
+```
+
+The credential variables are optional and may be omitted for an instance that accepts anonymous reads; when any of `ARCHVIEW_LIVE_CLIENT_ID`, `ARCHVIEW_LIVE_CLIENT_SECRET` or `ARCHVIEW_LIVE_TOKEN_URL` is set, all three are required. `ARCHVIEW_LIVE_AUDIENCE` and `ARCHVIEW_LIVE_SCOPE` are optional overrides.
+
+This test needs network access and, for a protected deployment, machine credentials. Run it locally or on a schedule, never as part of the pull-request gate. It is skipped by default, so `pnpm test:int` and CI stay offline.
+
 ### Working with Postgres
 
 Postgres and other SQL-based databases follow a strict schema for managing your data. In comparison to our MongoDB adapter, this means that there's a few extra steps to working with Postgres.
