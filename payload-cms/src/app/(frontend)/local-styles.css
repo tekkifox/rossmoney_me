@@ -91,6 +91,24 @@ h1:not(.section-title){font-size:var(--primitive-font-size-240);margin:0 0 var(-
 .architecture-layout>*{min-width:0}
 .image-column{display:flex;flex-direction:column;gap:var(--primitive-space-3)}
 .diagram-view{white-space:pre;background:var(--diagram-bg);padding:var(--primitive-space-3);border-radius:var(--primitive-radius-8);font-family:var(--primitive-font-mono);color:var(--diagram-text);overflow:auto;font-size:var(--primitive-font-size-90)}
+
+/* Project page screenshot between the hero and the first content section. */
+.project-screenshot-frame{margin:0;padding:0;overflow:hidden}
+.project-screenshot-image{display:block;width:100%;height:auto}
+.project-screenshot-caption{padding:var(--primitive-space-25) var(--primitive-space-3);border-top:1px solid var(--border);color:var(--muted);font-size:var(--primitive-font-size-85)}
+
+/* The topology <pre> is also the Docker image list, so it is extremely tall.
+   Show a capped, scrollable preview; the disclosure reveals a full-height copy
+   of the same diagram (ArchitectureClient keeps both in sync). */
+.diagram-view-capped{max-height:420px}
+.diagram-toggle{margin-top:var(--primitive-space-2)}
+.diagram-toggle summary{cursor:pointer;width:fit-content;color:var(--primary);font-size:var(--primitive-font-size-90);font-weight:var(--primitive-font-weight-600)}
+.diagram-toggle summary:hover{color:var(--primary-hover)}
+.diagram-toggle .diagram-view{margin:var(--primitive-space-2) 0 0}
+.diagram-toggle-open{display:none}
+.diagram-toggle[open] .diagram-toggle-open{display:inline}
+.diagram-toggle[open] .diagram-toggle-closed{display:none}
+.architecture-diagram:has(.diagram-toggle[open]) .diagram-view-capped{display:none}
 .image-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--primitive-space-35)}
 .image-card{display:block;padding:var(--primitive-space-35);border-radius:var(--primitive-radius-10);background:var(--color-card);border:1px solid var(--color-border);box-shadow:var(--shadow-metric);color:var(--color-card-foreground)}
 .image-name{font-weight:var(--primitive-font-weight-600)}

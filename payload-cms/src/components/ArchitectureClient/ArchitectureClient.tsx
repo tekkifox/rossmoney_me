@@ -160,7 +160,6 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
         const descEl = document.getElementById('architecture-description')
         const factsEl = document.getElementById('architecture-facts')
         const highlightsEl = document.getElementById('architecture-highlights')
-        const diagramEl = document.getElementById('architecture-diagram')
         const rawEl = document.getElementById('architecture-raw')
         const updatedEl = document.getElementById('architecture-updated')
 
@@ -210,7 +209,13 @@ export const ArchitectureClient: React.FC<Props> = ({ project, initialMetrics })
           }
         }
 
-        if (diagramEl) diagramEl.textContent = renderDiagram(arch)
+        // The capped preview and the expanded copy in the disclosure must stay
+        // in sync after a refresh.
+        const diagramText = renderDiagram(arch)
+        const diagramEls = document.querySelectorAll('[data-architecture-diagram], #architecture-diagram')
+        diagramEls.forEach((el) => {
+          el.textContent = diagramText
+        })
 
         // Image cards removed per UI update. The topology now lists images and descriptions
         if (rawEl) rawEl.textContent = arch ? JSON.stringify(stripUptimesForRawDump(arch), null, 2) : 'No snapshot returned'
