@@ -2,6 +2,7 @@
 // The <pre> is the element that scrolls, so it owns tabIndex and the region role.
 /* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import {
   PageDoc,
@@ -130,6 +131,21 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
       </div>
     </section>
 
+    <section className="section container" aria-label="Screenshot of the live travelling site">
+      <figure className="project-screenshot-frame card">
+        <Image
+          alt="Screenshot of travelling.rossmoney.me: 'Asia Pacific 2016' over a dark blue hero with three summary panels."
+          className="project-screenshot-image"
+          height={1250}
+          sizes="(max-width: 1140px) 100vw, 1116px"
+          src="/projects/travelling.png"
+          unoptimized
+          width={2000}
+        />
+        <figcaption className="project-screenshot-caption">travelling.rossmoney.me — the live photo archive.</figcaption>
+      </figure>
+    </section>
+
     <section className="section container">
       <div className="section-heading">
         <p className="eyebrow">What it is</p>
@@ -184,7 +200,16 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           {archFailed ? (
             <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
           ) : (
-            <pre aria-label="Architecture diagram" className="diagram-view" id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+            <>
+              <pre aria-label="Architecture diagram" className="diagram-view diagram-view-capped" data-architecture-diagram id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+              <details className="diagram-toggle">
+                <summary>
+                  <span className="diagram-toggle-closed">View full diagram</span>
+                  <span className="diagram-toggle-open">Show less</span>
+                </summary>
+                <pre aria-label="Architecture diagram, full height" className="diagram-view diagram-view-full" data-architecture-diagram role="region" tabIndex={0}>{archDiagram}</pre>
+              </details>
+            </>
           )}
 
           <div className="raw-json-wrap">
