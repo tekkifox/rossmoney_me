@@ -248,6 +248,48 @@ The seed script will also create a demo user for demonstration purposes only:
 
 > NOTICE: seeding the database is destructive because it drops your current database to populate a fresh one from the seed template. Only run this command if you are starting a new project or can afford to lose your current data.
 
+## Media backfill after a database refresh
+
+A refreshed development database contains media rows whose files live on the
+production deployment. The Vercel Blob adapter rebuilds every media URL from the
+document's filename, so editing the stored `url` does nothing; the bytes have to
+exist in the blob store at that pathname.
+
+`POST /api/media/backfill` copies those files from the public site into the
+store. It is admin-only: anonymous callers receive `404`, a signed-in user from
+another auth collection receives `403`, and every response carries
+`Cache-Control: private, no-store`.
+
+- Body (optional): `{ "source": string, "dryRun": boolean }`.
+- `source` defaults to `MEDIA_SOURCE`, then to the public site's `/media`
+  prefix. It must be HTTPS and its host must be the public site; anything else
+  is rejected.
+- Without `BLOB_READ_WRITE_TOKEN` the route answers `503`. Local-disk
+  deployments do not need it.
+- Files already in the store are skipped. Missing originals are downloaded and
+  uploaded with the source's content type. Generated image-size variants are
+  attempted the same way and reported as `skipped` when the source does not
+  serve them, so an old upload without a size does not fail the run.
+- A dry run performs the store lookups and reports exactly what it would upload
+  without fetching or writing anything.
+- Calls are idempotent, use bounded concurrency and per-file timeouts, and are
+  safe to repeat while the site is serving.
+
+```bash
+curl -X POST https://www.example.com/api/media/backfill \
+  -H "Authorization: JWT $PAYLOAD_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": true}'
+```
+
+The response is
+`{ "ok": boolean, "uploaded": string[], "skipped": string[], "failed": [{ "filename": string, "error": string }] }`.
+`uploaded` lists the pathnames written (or, in a dry run, the ones that would
+be written).
+
+The nightly dev sync calls this endpoint with its import credentials after
+restoring the production dump, so the dev blob store matches the refreshed rows.
+
 ## Production
 
 To run Payload in production, you need to build and start the Admin panel. To do so, follow these steps:
