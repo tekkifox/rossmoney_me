@@ -5,6 +5,7 @@ import {
   buildContentSecurityPolicy,
   createNonce,
 } from '@/utilities/contentSecurityPolicy'
+import { evaluateDevGate } from '@/utilities/devGate'
 import { sanitizeOgParams } from '@/utilities/ogSanitize'
 import {
   clientAddress,
@@ -64,6 +65,19 @@ import {
  * `app/(frontend)/next/draft/`; everything else reaches the cached route. See
  * `utilities/publicPageCache.ts`.
  *
+ * 6. Keep the dev preview private.
+ *
+ * When `DEV_GATE=1` is set on the Vercel preview target, only a client whose
+ * address is the WireGuard endpoint's current address (or an address in
+ * `DEV_GATE_ALLOW`) may browse the site. Everyone else is redirected to the
+ * live home page. `DEV_GATE_ALLOW` also covers automation that cannot use the
+ * VPN. `/api`, `/_next`, `/media` and static files are deliberately exempt:
+ * the nightly dev sync authenticates against this site's API from another
+ * host whose address is not the VPN's, and gating the API would break the
+ * refresh and the media backfill. Do not "fix" that by gating everything.
+ * See `utilities/devGate.ts`.
+ *
+ * @see ../utilities/devGate.ts
  * @see ../utilities/publicPageCache.ts
  * @see ../utilities/adminOrigin.ts
  * @see ../utilities/contentSecurityPolicy.ts
@@ -75,6 +89,15 @@ export async function proxy(request: NextRequest) {
   const headers = new Headers(request.headers)
   const pathname = request.nextUrl.pathname
   let forwarded = false
+
+  // Preview gate, first so an unauthenticated visitor gets one cheap redirect
+  // and never reaches the router, the database or the rate limiters. The gate
+  // is a no-op unless DEV_GATE is exactly `1`; it also exempts the API, build
+  // assets and media internally. See utilities/devGate.ts.
+  const devGate = await evaluateDevGate({ headers: request.headers, pathname })
+  if (devGate.action === 'redirect') {
+    return NextResponse.redirect(devGate.location, devGate.status)
+  }
 
   // The host the browser asked for, after any proxy in front of the app.
   const robotsTag = getRobotsTag(headers.get('x-forwarded-host') ?? headers.get('host'))
