@@ -46,6 +46,10 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Deliberately still on the fleet runner: this job copies a throwaway
+  # database from the paseo VM's shared dev MongoDB (`DEV_MONGO_URI`) and
+  # installs the production media mirror at /opt/rossmoney-dev-sync/media,
+  # neither of which exists on a GitHub-hosted runner.
   smoke:
     runs-on: [self-hosted, paseo]
     timeout-minutes: 45
