@@ -28,7 +28,9 @@ import { seedBotSettings } from './endpoints/seed/bot-settings';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
+import { mapPage } from './endpoints/seed/map-page';
 import { attachSeededCv, cv } from './endpoints/seed/cv-page';
+import { seedAdminUser } from './endpoints/seed/admin-user';
 import { seedArchviewSources, type SeededArchviewSources } from './endpoints/seed/archview-sources';
 import { asRecord } from './utilities/json';
 import { DEFAULT_PAGE_TEMPLATE, templateFromSlug } from './utilities/pageTemplates';
@@ -162,6 +164,19 @@ export default buildConfig({
         console.warn('public media dir check failed', err)
       }
     }
+
+    // The optional dev admin is seeded here, outside the blob-storage guard:
+    // media storage and seeding are independent concerns. See
+    // `endpoints/seed/admin-user.ts` for the create-only contract.
+    try {
+      await seedAdminUser(payload)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      payload.logger.warn(`Dev admin seed note: ${message}`)
+    }
+
+    // Default documents are seeded regardless of how uploads are stored. The
+    // guard above only owns the local `public/media` directory.
     try {
       const pClient = payload;
 
@@ -241,6 +256,7 @@ export default buildConfig({
         travellingPage,
         servicesPage,
         gameservers,
+        mapPage,
         cv,
       ];
 

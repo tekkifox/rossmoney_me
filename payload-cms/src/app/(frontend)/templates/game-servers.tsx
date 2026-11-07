@@ -2,6 +2,7 @@
 // The <pre> is the element that scrolls, so it owns tabIndex and the region role.
 /* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import {
   PageDoc,
@@ -19,7 +20,6 @@ import { assembleSite } from '@/utilities/assembleSite'
 // Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
 import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
-import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
@@ -108,6 +108,21 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
         </div>
       </section>
 
+      <section className="section container" aria-label="Screenshot of the live Vortex Servers site">
+        <figure className="project-screenshot-frame card">
+          <Image
+            alt="Screenshot of vortexservers.co.uk: 'Welcome to Vortex Servers' over a dark hero with a live server list."
+            className="project-screenshot-image"
+            height={1250}
+            sizes="(max-width: 1140px) 100vw, 1116px"
+            src="/projects/vortexservers.png"
+            unoptimized
+            width={2000}
+          />
+          <figcaption className="project-screenshot-caption">vortexservers.co.uk — the live game server site.</figcaption>
+        </figure>
+      </section>
+
       <section id="architecture" className="section container">
         <div className="section-heading architecture-heading">
           <div>
@@ -132,9 +147,17 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
             {archFailed ? (
               <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
             ) : (
-              <pre aria-label="Architecture diagram" className="diagram-view" id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+              <>
+                <pre aria-label="Architecture diagram" className="diagram-view diagram-view-capped" data-architecture-diagram id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+                <details className="diagram-toggle">
+                  <summary>
+                    <span className="diagram-toggle-closed">View full diagram</span>
+                    <span className="diagram-toggle-open">Show less</span>
+                  </summary>
+                  <pre aria-label="Architecture diagram, full height" className="diagram-view diagram-view-full" data-architecture-diagram role="region" tabIndex={0}>{archDiagram}</pre>
+                </details>
+              </>
             )}
-            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre aria-label="Raw architecture payload" className="raw-json" id="architecture-raw" role="region" tabIndex={0}>{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre></details></div>
           </article>
 
           <aside className="image-column card">

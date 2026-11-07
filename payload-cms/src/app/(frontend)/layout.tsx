@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 // Only the mono face is used by the public site: Tailwind's preflight resolves
-// `<pre>`/`<code>` (including the `.raw-json` dumps) through `--font-mono`.
+// `<pre>`/`<code>` (the topology diagrams) through `--font-mono`.
 // Body, headings and buttons use the Inter token stack, so GeistSans was
 // preloading ~70 KB per page for text that never rendered in it.
 import { GeistMono } from 'geist/font/mono'
