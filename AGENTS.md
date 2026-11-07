@@ -62,11 +62,16 @@ to `payload-cms/.next-screenshots` *before* the smoke run; the screenshot server
 starts with `NEXT_DIST_DIR=.next-screenshots` (`SCREENSHOT_DIST_DIR` in
 `playwright.screenshots.ts`), so it reads and writes only its own copy.
 
-The workflow copies the nightly production media mirror at
-`/opt/rossmoney-dev-sync/media` into `payload-cms/public/media` before the
-screenshot server starts; the mirror is refreshed daily at 03:40 UTC and its
-absence fails the job. Without those files the copied pages point at missing
-images and the CV seed hook waits on a fetch that cannot succeed.
+Before the screenshot server starts, the workflow installs the production media
+the copied database references into `payload-cms/public/media`. It uses the
+first local directory mirror that exists: `MEDIA_MIRROR` (a repository variable,
+when set), then `/home/ross/stacks/rosso-dev-sync/media`, then the older
+`/opt/rossmoney-dev-sync/media`. If none exists, it reads the filenames from the
+`media` collection of the copied database and downloads them from
+`https://www.rossmoney.me/media/`. The installed file count must match the
+number of referenced files, so a partial mirror or download fails the job.
+Without those files the copied pages point at missing images and the CV seed
+hook waits on a fetch that cannot succeed.
 
 Screenshots are captured by `payload-cms/playwright.screenshots.ts` (separate
 from `pnpm test:e2e`) after the smoke suite, against the throwaway copy and the
