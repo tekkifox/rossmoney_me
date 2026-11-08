@@ -7,6 +7,12 @@ declare global {
       NEXT_PUBLIC_TURNSTILE_SITE_KEY: string
       TURNSTILE_SECRET_KEY: string
       VERCEL_PROJECT_PRODUCTION_URL: string
+      /** `1` on the Vercel preview target; anything else leaves the gate off. */
+      DEV_GATE?: string
+      /** Public DNS name of the WireGuard endpoint; required when the gate is on. */
+      DEV_GATE_HOST?: string
+      /** Comma-separated addresses or CIDRs allowed through the dev gate. */
+      DEV_GATE_ALLOW?: string
     }
   }
 }

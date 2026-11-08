@@ -290,6 +290,80 @@ be written).
 The nightly dev sync calls this endpoint with its import credentials after
 restoring the production dump, so the dev blob store matches the refreshed rows.
 
+## Dev preview gate
+
+The Vercel `dev` deployment is a public preview. `DEV_GATE=1` restricts the
+browsable site to clients that are on the fleet's WireGuard VPN. Set
+`DEV_GATE=1` and `DEV_GATE_HOST` (the WireGuard endpoint's public DNS name) on
+the Vercel preview target only; when they are unset (production, local
+development, tests) the gate does nothing. Neither value is committed, and any
+`DEV_GATE` other than exactly `1` leaves the gate off.
+
+The gate is Next.js middleware. Next 16 renamed the `middleware.ts` convention
+to `proxy.ts`, so the hook is `src/proxy.ts` and the logic lives in
+`src/utilities/devGate.ts`. Do not add a second `middleware.ts`: Next 16 treats
+the two files together as a build error.
+
+When enabled, a request is allowed if the client address is:
+
+- one of the addresses `DEV_GATE_HOST` currently resolves to (resolved
+  server-side, cached for a few minutes; the address is never hard-coded), or
+- an entry in `DEV_GATE_ALLOW`, an optional comma-separated list with no
+  quoting, for example `203.0.113.10,198.51.100.0/24`.
+
+`DEV_GATE_HOST` is required when the gate is on. Without it the gate fails
+closed and only `DEV_GATE_ALLOW` entries get through.
+
+`DEV_GATE_ALLOW` accepts a single IPv4 or IPv6 address (`203.0.113.10`,
+`2001:db8::1`) or a CIDR block (`198.51.100.0/24`, `2001:db8::/32`). Whitespace
+around each entry is trimmed and empty entries are ignored. A malformed entry
+matches nothing and is skipped, so it can neither grant access nor crash the
+middleware. Unset or empty means only the resolved VPN endpoint address is
+allowed. Use TEST-NET addresses in documentation, not real ones.
+
+Everyone else receives a `307` to the live home page. The target is the
+canonical public origin (`DEFAULT_SITE_URL` in `src/utilities/siteURL.ts`;
+`https://www.example.com` in these notes), not the preview host. The path is
+deliberately not preserved: most preview paths do not exist on the live site,
+and a 404 would be a worse landing than the home page.
+
+The client address is the **first** entry of `x-forwarded-for`, which Vercel
+sets after terminating TLS. Later entries are proxies. A missing or blank
+header is not allowed; the gate does not fall back to another header or to a
+shared proxy address. Spoofed headers are not a concern only when the gate is
+set on a platform that overwrites `x-forwarded-for`; do not enable it on a
+server where clients can set that header themselves.
+
+**A split-tunnel peer does not get through.** WireGuard only routes the
+tunnel's own subnets, so the outside world sees the peer's ordinary public
+address, not the VPN endpoint's. Only a full-tunnel peer presents the VPN
+address and passes the check. Give a split-tunnel device an entry in
+`DEV_GATE_ALLOW` if it needs access.
+
+### What it costs
+
+- One DNS lookup per warm function instance per three minutes (the resolved
+  addresses are cached; concurrent cold requests share one lookup).
+- A failed lookup is cached for 30 seconds and fails closed: only
+  `DEV_GATE_ALLOW` entries get through until resolution recovers.
+- A request-time address comparison. A visitor who is not allowed is redirected
+  before the router, database or rate limiters run.
+- No extra service, dependency or database read.
+
+### Paths that are never gated
+
+`/api/*`, `/_next/*`, `/media/*` and public files with an asset extension
+(images, fonts, the sitemap, `robots.txt`, `security.txt`, and so on) are
+exempt.
+
+This is intentional, not an oversight. The nightly dev sync authenticates
+against this site's API from another host whose address is not the VPN's, and
+gating `/api` would break that refresh. The media backfill also runs against
+the API and reads `/media`; gating either would leave the refreshed database
+pointing at files the dev store cannot fill. Do not "fix" the exemption by
+gating every path: it breaks automation. Only the browsable pages (including
+`/admin`) are gated.
+
 ## Production
 
 To run Payload in production, you need to build and start the Admin panel. To do so, follow these steps:
