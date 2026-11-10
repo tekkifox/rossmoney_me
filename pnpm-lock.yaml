@@ -163,7 +163,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@vercel/cli-config': 0.3.7
+  '@vercel/cli-config': 0.3.8
 
 importers:
 
@@ -2305,8 +2305,8 @@ packages:
     resolution: {integrity: sha512-ZUUWO2VA00r9ZTRtKgH4va7FGOUxUtge2FaRr9WZmeeX2s3C3qVe2tOTLTbv/tkcd+L+ijxaI2eP9S1/mGHc9Q==}
     engines: {node: '>=20.0.0'}
 
-  '@vercel/cli-config@0.3.7':
-    resolution: {integrity: sha512-bHFJcUF2sUsB/6XfS+BWAYjD7DIt1xyhz6oOAvGEBua0S4P+pKQ04O6vZ3jLw1HMX1ZNKP9lyGpoiqgToqI7GQ==}
+  '@vercel/cli-config@0.3.8':
+    resolution: {integrity: sha512-C6av1p4tN+rHIcD0rdlsx3y9SaosRUU67dbgrjbLG8KdAK8oNVzfKg0ckV+1qWh5VC/Ft1BN3Pg/PuXSKNFVOA==}
 
   '@vercel/cli-exec@1.0.1':
     resolution: {integrity: sha512-g9XerViJ/paZujufXYcu5XYI2vU2rtB4sgdpjUHde5RnOkdmpu0ngH46LCFGHoPXO/C+qDPSczIHIRN+8Q2YKQ==}
@@ -6088,7 +6088,7 @@ snapshots:
       throttleit: 2.1.0
       undici: 6.29.1
 
-  '@vercel/cli-config@0.3.7':
+  '@vercel/cli-config@0.3.8':
     dependencies:
       xdg-app-paths: 5.5.1
       zod: 4.6.7
@@ -6099,7 +6099,7 @@ snapshots:
 
   '@vercel/oidc@3.8.10':
     dependencies:
-      '@vercel/cli-config': 0.3.7
+      '@vercel/cli-config': 0.3.8
       '@vercel/cli-exec': 1.0.1
       jose: 5.10.0
 
