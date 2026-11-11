@@ -14,7 +14,7 @@ import {
   decryptArchviewSecret,
   encryptArchviewSecret,
 } from '../utilities/archviewSourceSecret'
-import { validateTailnet } from '../utilities/botSettings'
+import { validateHostCharts, validateTailnet } from '../utilities/botSettings'
 import { revalidateAllPublicPages } from '../utilities/revalidatePublicPages'
 
 /**
@@ -269,6 +269,18 @@ export const ArchviewSources: CollectionConfig = {
       admin: {
         description:
           'Optional tailnet address or tailnet DNS name for this host, for example 203.0.113.10 or host.example.ts.net. A name is preferred: it survives the node re-registering, where an address changes. Leave blank when the host has none; the notification agent then dials the hostname.',
+      },
+    },
+    {
+      name: 'charts',
+      type: 'checkbox',
+      defaultValue: false,
+      label: 'Host charts',
+      validate: (value, { siblingData }) =>
+        validateHostCharts(value, asRecord(siblingData).name),
+      admin: {
+        description:
+          'Attach the CPU and memory chart to the notification bot posts about this host. Off unless ticked.',
       },
     },
     {

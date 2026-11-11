@@ -78,6 +78,11 @@ export type BotSettingsHost = {
   name: string
   sshPort: number
   tailnet?: string
+  /**
+   * Attach the CPU and memory chart to the bot's posts about this host. Always
+   * emitted: absent in the source row means off, never undefined.
+   */
+  charts: boolean
 }
 
 export type BotSettingsResponse = {
@@ -196,6 +201,24 @@ export const validateTargetHostScope = (
   value: unknown,
   allHosts: boolean,
 ): string | true => (allHosts ? true : validateHostScope(value))
+
+/**
+ * `charts` is a switch an editor ticks per host. Payload's checkbox sanitises
+ * the string forms it understands, so anything reaching here that is still not
+ * a boolean was never a tick or a blank: refuse it instead of guessing. The
+ * message names the host — the source's `name` — and nothing else.
+ */
+export const validateHostCharts = (value: unknown, hostName: unknown): string | true => {
+  if (value === undefined || value === null) {
+    return true
+  }
+  if (typeof value !== 'boolean') {
+    const name = stringOrEmpty(hostName)
+    const subject = name ? `Host "${name}"` : 'This host'
+    return `${subject} must have "Host charts" either ticked or unticked.`
+  }
+  return true
+}
 
 /** Four dotted-decimal parts, each 0-255 and without a leading zero. */
 const isIPv4Address = (value: string): boolean => {
@@ -459,6 +482,8 @@ export const toBotSettingsResponse = (
  * than emitted with an empty name. `tailnet` is emitted only when it is a valid
  * IPv4 address or tailnet DNS name, and is then passed through unchanged: the
  * agent decides which form to dial. Absent means the agent dials the hostname.
+ * `charts` is always emitted as a boolean, and a source stored before the flag
+ * existed reads as off.
  */
 const toHosts = (rows: unknown): BotSettingsHost[] => {
   const hosts: BotSettingsHost[] = []
@@ -470,7 +495,11 @@ const toHosts = (rows: unknown): BotSettingsHost[] => {
       continue
     }
 
-    const entry: BotSettingsHost = { name, sshPort: toSshPort(source.sshPort) }
+    const entry: BotSettingsHost = {
+      name,
+      sshPort: toSshPort(source.sshPort),
+      charts: source.charts === true,
+    }
     const tailnet = stringOrEmpty(source.tailnet)
     if (tailnet && validateTailnet(tailnet) === true) {
       entry.tailnet = tailnet

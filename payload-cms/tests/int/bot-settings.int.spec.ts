@@ -18,6 +18,7 @@ import {
   validateChannelId,
   validateConnectedAccountId,
   validateCredentialName,
+  validateHostCharts,
   validateHostScope,
   validateRunbookAccess,
   validateSourceChannelMatchesTarget,
@@ -289,11 +290,16 @@ describe('GET /api/bot-settings hosts', () => {
     const names = body.hosts.map((host: { name: string }) => host.name)
     expect(names).toEqual([...names].sort())
 
-    expect(body.hosts).toContainEqual({ name: `${prefix}-alpha.example.test`, sshPort: 22 })
+    expect(body.hosts).toContainEqual({
+      name: `${prefix}-alpha.example.test`,
+      sshPort: 22,
+      charts: false,
+    })
     expect(body.hosts).toContainEqual({
       name: `${prefix}-mike.example.test`,
       sshPort: 2200,
       tailnet: '203.0.113.10',
+      charts: false,
     })
     expect(names).not.toContain(`${prefix}-zulu.example.test`)
 
@@ -302,11 +308,16 @@ describe('GET /api/bot-settings hosts', () => {
     )
     expect(alpha).not.toHaveProperty('tailnet')
 
+    for (const host of body.hosts) {
+      expect(typeof host.charts).toBe('boolean')
+    }
+
     for (const doc of enabled.docs) {
       expect(body.hosts).toContainEqual({
         name: doc.name,
         sshPort: doc.sshPort ?? 22,
         ...(doc.tailnet ? { tailnet: doc.tailnet } : {}),
+        charts: doc.charts === true,
       })
     }
   })
@@ -351,7 +362,58 @@ describe('GET /api/bot-settings hosts', () => {
       name: `${prefix}-tailnet-name.example.test`,
       sshPort: 22,
       tailnet: 'host.example.ts.net',
+      charts: false,
     })
+  })
+
+  it('carries the host charts switch per host, off unless ticked', async () => {
+    await createSource('charts-on', { charts: true })
+    await createSource('charts-off', { charts: false })
+    // No charts key at all: the collection default and the response shaping
+    // both read as off.
+    await createSource('charts-absent')
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+
+    const host = (suffix: string) =>
+      body.hosts.find(
+        (entry: { name: string }) => entry.name === `${prefix}-${suffix}.example.test`,
+      )
+
+    expect(host('charts-on')?.charts).toBe(true)
+    expect(host('charts-off')?.charts).toBe(false)
+    expect(host('charts-absent')?.charts).toBe(false)
+
+    // Every entry says what it means; an older row must not emit undefined.
+    for (const entry of body.hosts) {
+      expect(typeof entry.charts).toBe('boolean')
+    }
+  })
+
+  it('rejects a non-boolean host charts value and names the host', async () => {
+    const name = `${prefix}-charts-invalid.example.test`
+
+    const failure = await createSource('charts-invalid', {
+      charts: 'yes' as unknown as boolean,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    )
+
+    expect(failure).toMatchObject({ name: 'ValidationError' })
+    const messages = (
+      (failure as { data?: { errors?: Array<{ message?: string }> } }).data?.errors ?? []
+    )
+      .map((error) => error.message)
+      .join(' ')
+
+    expect(messages).toContain(name)
+    expect(messages).toContain('Host charts')
+    // The refusal names the host only, never its origin or credentials.
+    expect(messages).not.toContain('https://')
+    expect(messages).not.toContain('secret')
   })
 
   it('leaves targets and sources byte-identical when hosts are added', async () => {
@@ -750,6 +812,24 @@ describe('bot-settings validators', () => {
     expect(validateTargetHostScope(['example.com'], false)).toBe(true)
   })
 
+  it('accepts only a real boolean for the host charts switch', () => {
+    expect(validateHostCharts(true, 'host1.example.com')).toBe(true)
+    expect(validateHostCharts(false, 'host1.example.com')).toBe(true)
+    expect(validateHostCharts(undefined, 'host1.example.com')).toBe(true)
+    expect(validateHostCharts(null, 'host1.example.com')).toBe(true)
+
+    const message = validateHostCharts('yes', 'host1.example.com')
+    expect(message).not.toBe(true)
+    expect(String(message)).toContain('host1.example.com')
+    expect(String(message)).toContain('Host charts')
+
+    expect(validateHostCharts(1, 'host1.example.com')).not.toBe(true)
+    expect(validateHostCharts('', 'host1.example.com')).not.toBe(true)
+
+    // A nameless row still gets a usable refusal.
+    expect(String(validateHostCharts('yes', undefined))).toContain('This host')
+  })
+
   it('requires Discord snowflakes for channel ids', () => {
     expect(validateChannelId('1314326014318481458')).toBe(true)
     expect(validateChannelId('0')).toBe(true)
@@ -936,16 +1016,32 @@ describe('bot-settings validators', () => {
         // Defensive: the field rejects this, but a stored value that slips
         // through must not reach the agent as an address.
         { name: 'bravo.example.test', tailnet: '203.0.113.256' },
+        // The charts switch is always boolean: ticked, explicitly off, and a
+        // row stored before the field existed.
+        { name: 'charlie.example.test', charts: true },
+        { name: 'foxtrot.example.test', charts: false },
       ],
     )
 
     expect(shaped?.hosts).toEqual([
-      { name: 'alpha.example.test', sshPort: 22 },
-      { name: 'bravo.example.test', sshPort: 22 },
-      { name: 'delta.example.test', sshPort: 22, tailnet: '203.0.113.10' },
-      { name: 'echo.example.test', sshPort: 22, tailnet: 'host.example.ts.net' },
-      { name: 'mike.example.test', sshPort: 22 },
-      { name: 'zulu.example.test', sshPort: 2200 },
+      { name: 'alpha.example.test', sshPort: 22, charts: false },
+      { name: 'bravo.example.test', sshPort: 22, charts: false },
+      { name: 'charlie.example.test', sshPort: 22, charts: true },
+      {
+        name: 'delta.example.test',
+        sshPort: 22,
+        tailnet: '203.0.113.10',
+        charts: false,
+      },
+      {
+        name: 'echo.example.test',
+        sshPort: 22,
+        tailnet: 'host.example.ts.net',
+        charts: false,
+      },
+      { name: 'foxtrot.example.test', sshPort: 22, charts: false },
+      { name: 'mike.example.test', sshPort: 22, charts: false },
+      { name: 'zulu.example.test', sshPort: 2200, charts: false },
     ])
   })
 
