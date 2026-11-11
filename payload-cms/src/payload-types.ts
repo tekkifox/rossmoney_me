@@ -749,6 +749,10 @@ export interface ArchviewSource {
    */
   tailnet?: string | null;
   /**
+   * Attach the CPU and memory chart to the notification bot posts about this host. Off unless ticked.
+   */
+  charts?: boolean | null;
+  /**
    * The ArchView project label used when polling this instance, for example rossmoney_me, image-mosaic or vortexservers. Rows without a project are skipped by the host sampler.
    */
   project?: string | null;
@@ -1558,6 +1562,7 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   origin?: T;
   sshPort?: T;
   tailnet?: T;
+  charts?: T;
   project?: T;
   audience?: T;
   tokenUrl?: T;
