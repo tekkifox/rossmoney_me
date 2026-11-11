@@ -27,7 +27,7 @@ minimumReleaseAge: 720
 # once @vercel/blob accepts an @vercel/oidc 4.x release that already depends on
 # cli-config 0.3.7.
 overrides:
-  '@vercel/cli-config': 0.3.7
+  '@vercel/cli-config': 0.3.8
 
 # pnpm 12 no longer reads `pnpm.onlyBuiltDependencies` from package.json, and
 # refuses to run dependency build scripts unless they are allowed here. These
