@@ -35,7 +35,7 @@ minimumReleaseAge: 720
 # the adapter's own pin is >=8.24.7.
 overrides:
   '@vercel/cli-config': 0.3.8
-  mongoose: '>=8.24.7 <9'
+  mongoose: '>=8.24.7 <10'
 
 # pnpm 12 no longer reads `pnpm.onlyBuiltDependencies` from package.json, and
 # refuses to run dependency build scripts unless they are allowed here. These
