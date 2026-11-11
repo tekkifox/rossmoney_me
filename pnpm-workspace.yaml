@@ -26,8 +26,16 @@ minimumReleaseAge: 720
 # instead of forcing zod past cli-config 0.3.1's exact pin. Drop this override
 # once @vercel/blob accepts an @vercel/oidc 4.x release that already depends on
 # cli-config 0.3.7.
+#
+# @payloadcms/db-mongodb@3.93.0 (the latest stable adapter) pins mongoose to
+# exactly 8.24.1, which falls inside three advisories published 2026-11-10:
+# GHSA-pcrw-h46h-c93h (critical, patched 8.24.3), GHSA-gg4r-jv3p-qx3c and
+# GHSA-8332-j7wj-wjw4 (high, patched 8.24.7). Lift mongoose within its 8.x line
+# so the driver still matches what the adapter expects. Drop this override once
+# the adapter's own pin is >=8.24.7.
 overrides:
   '@vercel/cli-config': 0.3.8
+  mongoose: '>=8.24.7 <9'
 
 # pnpm 12 no longer reads `pnpm.onlyBuiltDependencies` from package.json, and
 # refuses to run dependency build scripts unless they are allowed here. These
