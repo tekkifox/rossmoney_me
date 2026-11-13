@@ -60,7 +60,7 @@
     "graphql": "^17.1.0",
     "lucide-react": "1.72.0",
     "mammoth": "^1.13.0",
-    "mongodb": "7.8.0",
+    "mongodb": "7.9.0",
     "next": "16.4.6",
     "next-sitemap": "^4.2.3",
     "payload": "3.93.0",
