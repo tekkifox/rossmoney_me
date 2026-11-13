@@ -5,7 +5,7 @@
 # pnpm workspace settings live there now.
 #   docker build -f payload-cms/Dockerfile .
 
-FROM node:26.13.0-alpine AS base
+FROM node:26.13.1-alpine AS base
 
 # Node 26 no longer bundles corepack, so install it from npm at a pinned version
 # before it is used. The pnpm version itself comes from `packageManager` in
