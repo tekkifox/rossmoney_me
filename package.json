@@ -9,6 +9,6 @@
     "test:int": "turbo run test:int"
   },
   "devDependencies": {
-    "turbo": "2.11.10"
+    "turbo": "2.11.11"
   }
 }
