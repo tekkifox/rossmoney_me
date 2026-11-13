@@ -8,6 +8,7 @@ import {
 } from './archviewAuth'
 import { toArchviewSourceRecord } from './archviewSources'
 import { decryptArchviewSecret } from './archviewSourceSecret'
+import { ArchviewTokenTimeoutError, DEFAULT_TOKEN_TIMEOUT_MS } from './archviewToken'
 
 function envLabel(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -187,6 +188,39 @@ export type SampleResult =
   | { status: 'skipped'; reason: string }
   | { status: 'failed'; reason: string }
 
+/**
+ * A slow or hung source must not hold the whole sweep: the sweep is
+ * sequential, so one stalled host would freeze every host after it. One
+ * ArchView request (mgmt alone takes 10–15 s) gets 20 seconds before it is
+ * abandoned, and the token exchange behind it gets the token client's 10.
+ */
+export const HOST_SAMPLE_TIMEOUT_MS = 20_000
+export const HOST_SAMPLE_TOKEN_TIMEOUT_MS = DEFAULT_TOKEN_TIMEOUT_MS
+
+export type HostSampleOptions = {
+  /** Hard budget for one source's ArchView request. */
+  timeoutMs?: number
+  /** Hard budget for the token exchange that request depends on. */
+  tokenTimeoutMs?: number
+  /** Test seam; production uses the global `fetch`. */
+  fetchImpl?: typeof fetch
+}
+
+/** A bad override must never make a request unbounded. */
+const timeoutOr = (value: number | undefined, fallback: number): number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+
+/**
+ * Recognises an abandoned request: `AbortSignal.timeout` rejects with a
+ * `TimeoutError`, an explicitly aborted signal with `AbortError`, and the token
+ * client reports its own timeout so the two cannot be confused.
+ */
+const isTimeoutError = (error: unknown): boolean => {
+  if (error instanceof ArchviewTokenTimeoutError) return true
+  const name = (error as { name?: unknown } | null)?.name
+  return name === 'TimeoutError' || name === 'AbortError'
+}
+
 export async function sampleOneSource(
   payload: Awaited<ReturnType<typeof getPayload>>,
   record: {
@@ -196,6 +230,7 @@ export async function sampleOneSource(
     project?: string
     credentials?: ArchviewSourceCredentials
   },
+  options: HostSampleOptions = {},
 ): Promise<SampleResult> {
   const log = (msg: string) => {
     if (payload.logger?.info) payload.logger.info(msg)
@@ -213,11 +248,19 @@ export async function sampleOneSource(
       headers: { Accept: 'application/json' },
       cache: 'no-store',
     }
+    // The sweep is sequential, so one stalled source would stop every source
+    // after it. Budgets are passed down and enforced around the request and
+    // the token exchange it depends on.
+    const requestOptions = {
+      requestTimeoutMs: timeoutOr(options.timeoutMs, HOST_SAMPLE_TIMEOUT_MS),
+      tokenTimeoutMs: timeoutOr(options.tokenTimeoutMs, HOST_SAMPLE_TOKEN_TIMEOUT_MS),
+    }
+    const fetchImpl = options.fetchImpl ?? fetch
     const base = `${record.origin.replace(/\/$/, '')}/api/architecture`
     const url = project ? `${base}?project=${encodeURIComponent(project)}` : base
     const res = record.credentials
-      ? await archviewSourceFetch(url, init, record.credentials)
-      : await archviewFetch(url, init, process.env)
+      ? await archviewSourceFetch(url, init, record.credentials, fetchImpl, requestOptions)
+      : await archviewFetch(url, init, process.env, fetchImpl, requestOptions)
     if (!res) {
       log(`host sample: ${record.name ?? record.origin} skipped (no response)`)
       return { status: 'skipped', reason: 'no response' }
@@ -254,13 +297,23 @@ export async function sampleOneSource(
     })
     return { status: 'written' }
   } catch (error) {
+    // A timeout is an upstream condition like any other: the sweep moves on
+    // and the summary counts it. It must never be reported as `failed`, which
+    // would suggest a bug in the sampler.
+    if (isTimeoutError(error)) {
+      log(`host sample: ${record.name ?? record.origin} skipped (timeout)`)
+      return { status: 'skipped', reason: 'timeout' }
+    }
     const reason = error instanceof Error ? error.message : String(error)
     console.warn('host sample write failed:', reason)
     return { status: 'failed', reason }
   }
 }
 
-export async function sampleAllEnabledHosts(payload?: Awaited<ReturnType<typeof getPayload>>): Promise<void> {
+export async function sampleAllEnabledHosts(
+  payload?: Awaited<ReturnType<typeof getPayload>>,
+  options: HostSampleOptions = {},
+): Promise<void> {
   const p = payload ?? (await getPayload({ config }))
   let written = 0
   let skipped = 0
@@ -301,7 +354,7 @@ export async function sampleAllEnabledHosts(payload?: Awaited<ReturnType<typeof 
         if (p.logger?.warn) p.logger.warn(`host sampling: skipping ${name}: no id`)
         continue
       }
-      const result = await sampleOneSource(p, record)
+      const result = await sampleOneSource(p, record, options)
       if (result.status === 'written') {
         written += 1
       } else if (result.status === 'skipped') {

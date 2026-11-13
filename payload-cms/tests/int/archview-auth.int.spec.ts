@@ -10,7 +10,11 @@ import {
   clearArchviewTokenCache,
   type ArchviewEnv,
 } from '@/utilities/archviewAuth'
-import { ArchviewTokenError, requestClientCredentialsToken } from '@/utilities/archviewToken'
+import {
+  ArchviewTokenError,
+  ArchviewTokenTimeoutError,
+  requestClientCredentialsToken,
+} from '@/utilities/archviewToken'
 
 type Handler = (request: IncomingMessage, body: string, response: ServerResponse) => void
 
@@ -366,5 +370,96 @@ describe('ArchView origin guard', () => {
     await archviewFetch(`${archviewUrl}/api/architecture`, {}, env)
 
     expect(seen).toEqual([undefined])
+  })
+})
+
+describe('ArchView request budgets', () => {
+  it('gives up on a token endpoint that never answers', async () => {
+    // Accepts the connection and never responds.
+    const tokenUrl = await startServer(() => {})
+
+    const error = await requestClientCredentialsToken({
+      audience: 'https://archview.example.test/api',
+      tokenUrl,
+      clientId: 'cms',
+      clientSecret: 'test-client-secret',
+      scope: 'archview:read',
+      timeoutMs: 100,
+    }).catch((reason: unknown) => reason)
+
+    expect(error).toBeInstanceOf(ArchviewTokenTimeoutError)
+    expect((error as ArchviewTokenError).message).toContain('did not answer within 100ms')
+    expect((error as ArchviewTokenError).message).not.toContain('test-client-secret')
+  })
+
+  it('does not cache a token exchange that timed out', async () => {
+    let tokenRequests = 0
+    let mode: 'hang' | 'answer' = 'hang'
+    const tokenUrl = await startServer((_request, _body, response) => {
+      tokenRequests += 1
+      if (mode === 'answer') {
+        sendJson(response, 200, { access_token: 'token-1', expires_in: 3600 })
+      }
+      // In `hang` mode the request is left open until the client aborts.
+    })
+    const archviewUrl = await startServer((_request, _body, response) => {
+      sendJson(response, 200, { ok: true })
+    })
+    const env = envFor(archviewUrl, tokenUrl)
+
+    const timedOut = await archviewFetch(
+      `${archviewUrl}/api/architecture`,
+      {},
+      env,
+      fetch,
+      { tokenTimeoutMs: 100 },
+    ).catch((reason: unknown) => reason)
+    expect(timedOut).toBeInstanceOf(ArchviewTokenTimeoutError)
+
+    // The rejected exchange must not stay in flight: the next call retries.
+    mode = 'answer'
+    const response = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env, fetch, {
+      tokenTimeoutMs: 5_000,
+    })
+
+    expect(response.status).toBe(200)
+    expect(tokenRequests).toBe(2)
+  })
+
+  it('bounds an ArchView request that never answers', async () => {
+    const archviewUrl = await startServer(() => {})
+    // No credentials: no token round trip, so only the request budget applies.
+    const env: ArchviewEnv = { ARCHVIEW_URL: archviewUrl }
+
+    const error = await archviewFetch(
+      `${archviewUrl}/api/architecture`,
+      { cache: 'no-store' },
+      env,
+      fetch,
+      { requestTimeoutMs: 100 },
+    ).catch((reason: unknown) => reason)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).name).toBe('TimeoutError')
+  })
+
+  it('leaves the healthy path untouched when no budget is given', async () => {
+    const tokenUrl = await startServer((_request, _body, response) => {
+      sendJson(response, 200, { access_token: 'token-1', expires_in: 3600 })
+    })
+    const seen: Array<string | undefined> = []
+    const archviewUrl = await startServer((request, _body, response) => {
+      seen.push(request.headers.authorization)
+      sendJson(response, 200, { ok: true })
+    })
+
+    const response = await archviewFetch(
+      `${archviewUrl}/api/architecture`,
+      {},
+      envFor(archviewUrl, tokenUrl),
+    )
+
+    expect(response.status).toBe(200)
+    expect(seen).toEqual(['Bearer token-1'])
   })
 })
