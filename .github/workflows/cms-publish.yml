@@ -168,122 +168,48 @@ jobs:
             "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/amd64/digest)" \
             "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/arm64/digest)"
 
-  # The deployment target is only reachable over the tailnet, so the job joins
-  # it with a reusable ephemeral auth key before calling Portainer.
+  # Stacks are files on the fleet's hosts, applied by Ansible, so the deploy is
+  # delegated to the fleet's deploy seat on mgmt: it pulls and recreates the
+  # named stacks on the named host, and refuses a stack its host does not
+  # declare. The image it pulls is the `latest` tag this workflow just
+  # published to ghcr.io.
+  #
+  # This job is deliberately self-contained rather than a call to the fleet's
+  # reusable deploy workflow. That workflow lives in a private repository, and
+  # GitHub refuses to load a workflow in a public repository that calls a
+  # reusable workflow in a private one, so the call would fail before any job
+  # ran. The tailnet join and the SSH invocation are therefore duplicated here;
+  # that duplication is the price of this repository being public. The seat
+  # validates host and stack itself, so this job is only transport.
+  #
+  # Requires the `DEPLOY_SSH_KEY` secret (the deploy-only key). It is not in
+  # this repository yet; the job fails at the key step until it is added. The
+  # seat's address comes from the `DEPLOY_SEAT_HOST` secret because this
+  # repository is public and must not publish a real hostname.
   deploy:
-    name: Deploy to Portainer
+    name: Deploy the CMS
+    needs: merge
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs:
-      - merge
-    if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - name: Join the tailnet
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
-          hostname: gh-rossmoney-me-${{ github.run_id }}
+          hostname: gh-cms-${{ github.run_id }}
 
-      - name: Redeploy Portainer stack
+      - name: Ask the fleet deploy seat to deploy
         env:
-          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
-          PORTAINER_API_KEY: ${{ secrets.PORTAINER_API_KEY }}
-          STACK_NAME: rossmoney_me
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SEAT_HOST: ${{ secrets.DEPLOY_SEAT_HOST }}
+          TARGET_HOST: rossmoney
+          TARGET_STACKS: rossmoney-cms
         run: |
           set -euo pipefail
-
-          PORTAINER_URL="${PORTAINER_URL%/}"
-
-          # Find the stack by name; never hardcode Id or EndpointId. Stacks are
-          # re-created when the hub's environments change, so both move.
-          stacks_status=$(curl -k -sS -o /tmp/stacks.json -w '%{http_code}' \
-            -H "X-API-Key: ${PORTAINER_API_KEY}" \
-            "${PORTAINER_URL}/api/stacks")
-          if [ "$stacks_status" -lt 200 ] || [ "$stacks_status" -ge 300 ]; then
-            echo "Portainer GET /api/stacks failed with HTTP ${stacks_status}"
-            cat /tmp/stacks.json
-            exit 1
-          fi
-
-          match_count=$(jq --arg name "$STACK_NAME" \
-            '[.[] | select(.Name == $name)] | length' /tmp/stacks.json)
-          if [ "$match_count" -eq 0 ]; then
-            echo "No Portainer stack named '${STACK_NAME}' in /api/stacks"
-            cat /tmp/stacks.json
-            exit 1
-          fi
-          if [ "$match_count" -gt 1 ]; then
-            echo "More than one Portainer stack named '${STACK_NAME}'; refusing to guess"
-            jq --arg name "$STACK_NAME" \
-              '[.[] | select(.Name == $name) | {Id, EndpointId}]' /tmp/stacks.json
-            exit 1
-          fi
-
-          stack_id=$(jq -r --arg name "$STACK_NAME" \
-            '.[] | select(.Name == $name) | .Id' /tmp/stacks.json)
-
-          # Read the stack itself to carry its existing environment forward.
-          get_status=$(curl -k -sS -o /tmp/stack.json -w '%{http_code}' \
-            -H "X-API-Key: ${PORTAINER_API_KEY}" \
-            "${PORTAINER_URL}/api/stacks/${stack_id}")
-          if [ "$get_status" -lt 200 ] || [ "$get_status" -ge 300 ]; then
-            echo "Portainer GET /api/stacks/${stack_id} failed with HTTP ${get_status}"
-            cat /tmp/stack.json
-            exit 1
-          fi
-
-          endpoint_id=$(jq -r '.EndpointId // empty' /tmp/stack.json)
-          if [ -z "$endpoint_id" ]; then
-            echo "Portainer stack '${STACK_NAME}' (Id=${stack_id}) has no EndpointId"
-            cat /tmp/stack.json
-            exit 1
-          fi
-
-          env_json=$(jq -c '.Env // []' /tmp/stack.json)
-          echo "Found stack '${STACK_NAME}': Id=${stack_id}, EndpointId=${endpoint_id}"
-
-          # Preserve the stack's current compose file; only pull the new image.
-          file_status=$(curl -k -sS -o /tmp/stack-file.json -w '%{http_code}' \
-            -H "X-API-Key: ${PORTAINER_API_KEY}" \
-            "${PORTAINER_URL}/api/stacks/${stack_id}/file")
-          if [ "$file_status" -lt 200 ] || [ "$file_status" -ge 300 ]; then
-            echo "Portainer GET /api/stacks/${stack_id}/file failed with HTTP ${file_status}"
-            cat /tmp/stack-file.json
-            exit 1
-          fi
-
-          stack_file_content=$(jq -j '.StackFileContent // empty' /tmp/stack-file.json)
-          if [ -z "$stack_file_content" ]; then
-            echo "Portainer /api/stacks/${stack_id}/file returned no StackFileContent"
-            cat /tmp/stack-file.json
-            exit 1
-          fi
-
-          # The stack must actually run the production image this workflow
-          # publishes, not the dev tag. A name collision must never restart
-          # the wrong environment.
-          if ! grep -q 'rossmoney_me-cms' <<< "$stack_file_content"; then
-            echo "Portainer stack '${STACK_NAME}' (Id=${stack_id}) does not reference rossmoney_me-cms; refusing to redeploy it"
-            exit 1
-          fi
-          if ! grep 'rossmoney_me-cms' <<< "$stack_file_content" | grep -qv 'rossmoney_me-cms:dev'; then
-            echo "Portainer stack '${STACK_NAME}' (Id=${stack_id}) references only rossmoney_me-cms:dev; refusing to redeploy it"
-            exit 1
-          fi
-
-          body=$(jq -n \
-            --arg compose "$stack_file_content" \
-            --argjson env "$env_json" \
-            '{StackFileContent: $compose, Env: $env, PullImage: true}')
-
-          put_status=$(curl -k -sS -o /tmp/put.json -w '%{http_code}' -X PUT \
-            -H "X-API-Key: ${PORTAINER_API_KEY}" \
-            -H "Content-Type: application/json" \
-            --data "$body" \
-            "${PORTAINER_URL}/api/stacks/${stack_id}?endpointId=${endpoint_id}")
-          if [ "$put_status" -lt 200 ] || [ "$put_status" -ge 300 ]; then
-            echo "Portainer PUT /api/stacks/${stack_id}?endpointId=${endpoint_id} failed with HTTP ${put_status}"
-            cat /tmp/put.json
-            exit 1
-          fi
-
-          echo "Portainer stack '${STACK_NAME}' redeployed (id=${stack_id}, endpointId=${endpoint_id})"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy"
+          chmod 0600 "$HOME/.ssh/deploy"
+          ssh -i "$HOME/.ssh/deploy" -p 32 \
+            -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            root@"$DEPLOY_SEAT_HOST" \
+            "fleet-deploy $TARGET_HOST $TARGET_STACKS deploy"

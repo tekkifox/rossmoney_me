@@ -146,18 +146,20 @@ Local (development) — exposes the CMS on port 8082:
 docker compose -f docker-compose.yml up --build
 ```
 
-Portainer stack (CI/production):
+Production (CI):
 
 ```bash
 docker compose -f docker-compose.deploy.yml config
 ```
 
-Note: `docker-compose.deploy.yml` is the file Portainer actually runs (deployed via the
-Portainer API from `cms-publish.yml`). `docker-compose.portainer.yml` is stale (it still
-defines a `mongo` service, `ports: 8082:8082` and a `mongo-data` volume) and must not be
-used for deployment.
+Note: `docker-compose.deploy.yml` mirrors the deployed stack and is kept here for review
+and `docker compose config` validation. The stack the host actually runs is declared in
+the fleet's `infrastructure-as-code` repository and applied by Ansible, not from this
+repository; `cms-publish.yml` only asks the fleet to pull and recreate it. The older
+`docker-compose.portainer.yml` is stale (it still defines a `mongo` service,
+`ports: 8082:8082` and a `mongo-data` volume) and must not be used for deployment.
 
-The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.example.com`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
+The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.example.com`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and deploy Compose files.
 
 ## Environment file
 
@@ -273,11 +275,30 @@ Media uploads are stored on the deployment's local filesystem by default. On Ver
 
 The variable is optional. When it is absent, the CMS keeps writing uploads to `payload-cms/public/media` and builds/tests do not need any Vercel credentials. The self-hosted Portainer stack (`www.example.com`) must leave it unset so it keeps using its `payload-media` volume.
 
-## Portainer webhook
+## Deploy
 
-Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing images.
+Publishing the production image does not deploy it by talking to Portainer. `cms-publish.yml`
+ends by joining the tailnet and running, over SSH, a single `fleet-deploy` command on the
+fleet's `mgmt` host. The deploy seat there pulls and recreates the named stack on the named
+host, and refuses a stack its host does not declare, so a stack has to exist in the fleet
+inventory before this job can deploy it.
 
-GitHub Actions only triggers the existing Portainer webhook; its HTTP response means the request was accepted, not that deployment completed. It rejects HTTP 409 and does not connect to the deployment host. Portainer's `Active` status confirms the deployment operation completed without error; it does not guarantee application-level health.
+The job does not call the fleet's reusable deploy workflow: that workflow lives in a private
+repository, and GitHub refuses to load a workflow in a public repository that calls a
+reusable workflow in a private one, so the call would fail before any job ran. The steps
+here are a small copy of it — a tailnet join and one SSH command — and the seat does the
+validation.
+
+The job needs three repository secrets:
+
+- `TS_AUTHKEY` — the ephemeral Tailscale auth key for the runner;
+- `DEPLOY_SSH_KEY` — the private half of the deploy-only key installed on `mgmt`;
+- `DEPLOY_SEAT_HOST` — the seat's address, kept out of this repository because it is
+  public and must not publish a real hostname.
+
+Until `DEPLOY_SSH_KEY` exists in this repository the deploy step fails; the image build and
+manifest publish still succeed. The job only runs on `main`, so the first push to `main`
+after the key is added is the real proof that the deploy works.
 
 Dangling image cleanup is handled by watchtower on the host, with
 `WATCHTOWER_CLEANUP=true` on a weekly schedule. Nothing in this repository prunes
