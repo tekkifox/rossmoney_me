@@ -282,6 +282,11 @@ The production image is built for `linux/arm64` only. Its only consumer is the
 build. `cms-publish.yml` runs that build on GitHub's hosted arm64 runner
 (`ubuntu-24.04-arm`), which needs neither QEMU nor a multi-platform cross-build.
 
+Only `latest` and the commit `sha` tags are published. `dev` publishes no image: the dev
+deployment is a Vercel preview of the same app, not a container, so the `dev` and `dev-<sha>`
+tags it used to push had no consumer. The workflow that built them and the Compose file that
+named the `dev` tag have both been removed.
+
 Publishing the production image does not deploy it by talking to Portainer. `cms-publish.yml`
 ends by joining the tailnet and running, over SSH, a single `fleet-deploy` command on the
 fleet's `mgmt` host. The deploy seat there pulls and recreates the named stack on the named
