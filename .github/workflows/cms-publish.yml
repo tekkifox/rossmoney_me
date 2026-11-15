@@ -24,59 +24,16 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/rossmoney_me-cms
 
 jobs:
+  # The image is built for linux/arm64 only. Its sole consumer is the
+  # rossmoney-cms stack on rossmoney, which is an aarch64 host, and nothing
+  # pulls an amd64 build of `latest`.
+  #
+  # The runner is GitHub's hosted arm64 machine, so the build is native: no
+  # QEMU setup action and no multi-`platforms:` cross-build, both of which were
+  # only there for the amd64 leg of the old multi-arch manifest.
   build:
-    name: Build linux/amd64
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
-
-      - name: Build and push linux/amd64 by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./payload-cms/Dockerfile
-          platforms: linux/amd64
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=payload-main-amd64
-          cache-to: type=gha,mode=max,scope=payload-main-amd64
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          echo "${{ steps.build.outputs.digest }}" > /tmp/digests/digest
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digest-amd64
-          path: /tmp/digests/digest
-          retention-days: 1
-
-  build-arm64:
     name: Build linux/arm64
-    runs-on: ubuntu-26.04-arm
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -100,7 +57,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
 
-      - name: Build and push linux/arm64 by digest
+      - name: Build and push linux/arm64
         id: build
         uses: docker/build-push-action@v7
         with:
@@ -108,65 +65,12 @@ jobs:
           file: ./payload-cms/Dockerfile
           platforms: linux/arm64
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          tags: ${{ steps.meta.outputs.tags }}
+          # `tags:` alone only names the image; without this the build stays in
+          # the local cache and nothing reaches ghcr.io.
+          push: true
           cache-from: type=gha,scope=payload-main-arm64
           cache-to: type=gha,mode=max,scope=payload-main-arm64
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          echo "${{ steps.build.outputs.digest }}" > /tmp/digests/digest
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v7
-        with:
-          name: digest-arm64
-          path: /tmp/digests/digest
-          retention-days: 1
-
-  merge:
-    name: Publish multi-arch manifest
-    runs-on: ubuntu-latest
-    needs:
-      - build
-      - build-arm64
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
-
-      - name: Download linux/amd64 digest
-        uses: actions/download-artifact@v8
-        with:
-          name: digest-amd64
-          path: /tmp/digests/amd64
-
-      - name: Download linux/arm64 digest
-        uses: actions/download-artifact@v8
-        with:
-          name: digest-arm64
-          path: /tmp/digests/arm64
-
-      - name: Publish multi-arch manifest
-        run: |
-          docker buildx imagetools create \
-            $(jq -r '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/amd64/digest)" \
-            "${{ env.IMAGE_NAME }}@$(cat /tmp/digests/arm64/digest)"
 
   # Stacks are files on the fleet's hosts, applied by Ansible, so the deploy is
   # delegated to the fleet's deploy seat on mgmt: it pulls and recreates the
@@ -188,7 +92,7 @@ jobs:
   # repository is public and must not publish a real hostname.
   deploy:
     name: Deploy the CMS
-    needs: merge
+    needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

@@ -277,6 +277,11 @@ The variable is optional. When it is absent, the CMS keeps writing uploads to `p
 
 ## Deploy
 
+The production image is built for `linux/arm64` only. Its only consumer is the
+`rossmoney-cms` stack on the rossmoney host, which is `aarch64`, so nothing pulls an amd64
+build. `cms-publish.yml` runs that build on GitHub's hosted arm64 runner
+(`ubuntu-24.04-arm`), which needs neither QEMU nor a multi-platform cross-build.
+
 Publishing the production image does not deploy it by talking to Portainer. `cms-publish.yml`
 ends by joining the tailnet and running, over SSH, a single `fleet-deploy` command on the
 fleet's `mgmt` host. The deploy seat there pulls and recreates the named stack on the named
@@ -297,7 +302,7 @@ The job needs three repository secrets:
   public and must not publish a real hostname.
 
 Until `DEPLOY_SSH_KEY` exists in this repository the deploy step fails; the image build and
-manifest publish still succeed. The job only runs on `main`, so the first push to `main`
+its publish to ghcr.io still succeed. The job only runs on `main`, so the first push to `main`
 after the key is added is the real proof that the deploy works.
 
 Dangling image cleanup is handled by watchtower on the host, with
