@@ -294,7 +294,7 @@ importers:
         specifier: 7.92.0
         version: 7.92.0(@types/react@19.3.0)(react@19.3.1)
       recharts:
-        specifier: ^3.10.1
+        specifier: ^3.11.0
         version: 3.11.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react-is@16.13.1)(react@19.3.1)(redux@5.0.1)
       sanitize-html:
         specifier: ^2.18.2
