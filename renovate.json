@@ -40,6 +40,12 @@
       "automerge": false
     },
     {
+      "description": "Only the workflow uses: pins are managed here. The runner labels in runs-on are chosen deliberately and stay with the captain.",
+      "matchManagers": ["github-actions"],
+      "matchDatasources": ["github-runners"],
+      "enabled": false
+    },
+    {
       "matchUpdateTypes": ["major"],
       "automerge": false,
       "labels": ["dependencies", "major"]

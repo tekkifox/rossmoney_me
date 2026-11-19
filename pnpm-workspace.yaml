@@ -36,7 +36,7 @@ minimumReleaseAge: 720
 # lockfile bottoms out below the patched releases. Drop this override once the
 # adapter's own dependency accepts 9.
 overrides:
-  '@vercel/cli-config': 0.3.8
+  '@vercel/cli-config': 0.4.0
   mongoose: '>=9.12.1 <10'
 
 # pnpm 12 no longer reads `pnpm.onlyBuiltDependencies` from package.json, and
