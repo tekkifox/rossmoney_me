@@ -1,10 +1,8 @@
 name: Dependency audit
 
+# Automatic triggers are disabled. The audit no longer runs on pull requests or
+# on its weekly schedule; run it by hand from the Actions tab when needed.
 on:
-  pull_request:
-  schedule:
-    # Catch advisories published after the last PR, even when nothing changed.
-    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 concurrency:

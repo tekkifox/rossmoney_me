@@ -151,10 +151,11 @@ settings live in `pnpm-workspace.yaml`:
 Workflow: [`.github/workflows/dependency-audit.yml`](./.github/workflows/dependency-audit.yml).
 Script: [`payload-cms/scripts/audit-production.mjs`](./payload-cms/scripts/audit-production.mjs).
 
-The workflow runs on every `pull_request`, on a weekly schedule
-(`0 6 * * 1`, Mondays 06:00 UTC), and on `workflow_dispatch`. It runs its
-installs and scripts inside `payload-cms`, so Corepack resolves pnpm from
-`packageManager` with no inline version, then runs:
+The workflow's automatic triggers are disabled: it no longer runs on
+`pull_request` or on its old weekly schedule (`0 6 * * 1`, Mondays 06:00 UTC).
+Only `workflow_dispatch` remains, so a maintainer can run it from the Actions
+tab. It runs its installs and scripts inside `payload-cms`, so Corepack resolves
+pnpm from `packageManager` with no inline version, then runs:
 
 ```bash
 cd payload-cms
