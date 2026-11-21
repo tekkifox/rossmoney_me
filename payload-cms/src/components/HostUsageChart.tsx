@@ -127,6 +127,17 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
     }
   }
 
+  const bucketMs =
+    data.length >= 2 ? new Date(data[1]!.key).getTime() - new Date(data[0]!.key).getTime() : 0
+  const timeTicks =
+    bucketMs === 3 * 60 * 1000
+      ? data.filter((point) => new Date(point.key).getUTCMinutes() % 10 === 0).map((point) => point.key)
+      : bucketMs === 15 * 60 * 1000
+        ? data.filter((point) => new Date(point.key).getUTCMinutes() === 0).map((point) => point.key)
+        : bucketMs === 60 * 60 * 1000 && data.length > 24
+          ? data.map((point) => point.key)
+          : undefined
+
   return (
     <div style={{ marginBottom: 12 }}>
       <h3 style={{ margin: '0 0 4px' }}>{panel.title}</h3>
@@ -145,7 +156,8 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <XAxis
               dataKey="key"
               stroke="var(--theme-border-color)"
-              interval="preserveStartEnd"
+              interval={timeTicks && timeTicks.length <= 96 ? 0 : 'preserveStartEnd'}
+              ticks={timeTicks}
               minTickGap={30}
               height={hasDays ? 28 : 30}
               tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
@@ -201,7 +213,8 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
               labelFormatter={(_value, payload) => {
                 const point = payload?.[0]?.payload as SeriesPoint | undefined
                 if (!point) return String(_value)
-                return point.day ? `${point.day} ${point.label}` : point.label
+                if (point.day) return `${point.day} ${point.label} UTC`
+                return point.label.includes(':') ? `${point.label} UTC` : point.label
               }}
               formatter={(value, name) => {
                 if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
