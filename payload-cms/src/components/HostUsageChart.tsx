@@ -156,9 +156,9 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <XAxis
               dataKey="key"
               stroke="var(--theme-border-color)"
-              interval={timeTicks ? 0 : 'preserveStartEnd'}
+              interval={timeTicks && timeTicks.length <= 96 ? 0 : 'preserveStartEnd'}
               ticks={timeTicks}
-              minTickGap={timeTicks ? undefined : 30}
+              minTickGap={30}
               height={hasDays ? 28 : 30}
               tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
                 const point = pointByKey.get(String(props.payload?.value ?? ''))
