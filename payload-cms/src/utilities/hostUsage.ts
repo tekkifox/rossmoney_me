@@ -173,9 +173,22 @@ export function bucketHostSamples(
   range: HostUsageRange,
   now: number = Date.now(),
 ): Map<string, HostUsageBucket[]> {
-  const cutoff = now - HOST_USAGE_RANGE_MS[range]
-  const grouped = new Map<string, HostSample[]>()
+  const bucketMs = HOST_USAGE_BUCKET_MS[range]
+  const dayMs = 24 * 60 * 60 * 1000
+  let start: number
+  let end: number
+  if (range === '30d') {
+    const nowDate = new Date(now)
+    start = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), 1)
+    end = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth() + 1, 0)
+  } else {
+    end = Math.floor(now / bucketMs) * bucketMs
+    const cutoff = now - HOST_USAGE_RANGE_MS[range]
+    start = range === '7d' ? Math.floor(now / dayMs) * dayMs - 6 * dayMs : Math.floor(cutoff / bucketMs) * bucketMs
+  }
+  const cutoff = start
 
+  const grouped = new Map<string, HostSample[]>()
   for (const sample of samples) {
     if (!sample.sampledAt) continue
     const time = new Date(sample.sampledAt).getTime()
@@ -186,15 +199,6 @@ export function bucketHostSamples(
   }
 
   const result = new Map<string, HostUsageBucket[]>()
-  const bucketMs = HOST_USAGE_BUCKET_MS[range]
-  const dayMs = 24 * 60 * 60 * 1000
-  const dayAlignedRanges: Partial<Record<HostUsageRange, number>> = { '7d': 7, '30d': 30 }
-  const dayCount = dayAlignedRanges[range]
-  const end = Math.floor(now / bucketMs) * bucketMs
-  const start =
-    dayCount !== undefined
-      ? Math.floor(now / dayMs) * dayMs - (dayCount - 1) * dayMs
-      : Math.floor(cutoff / bucketMs) * bucketMs
 
   for (const [label, items] of grouped) {
     const buckets = new Map<string, HostSample[]>()

@@ -133,6 +133,10 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
       }
       start = i
     }
+  } else if (data.length >= 28 && data.length <= 31) {
+    for (let i = 7; i < data.length; i += 7) {
+      dayBoundaries.push(data[i]!.key)
+    }
   }
 
   return (
@@ -200,6 +204,8 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <YAxis
               width={52}
               domain={seriesDomain(data, panel.dataKey, panel.percent)}
+              allowDecimals={!panel.percent}
+              tickFormatter={panel.percent ? (value: number) => `${Math.round(value)}` : undefined}
               unit={panel.percent ? '%' : undefined}
               stroke="var(--theme-border-color)"
             />
@@ -209,6 +215,10 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
                 if (!point) return String(_value)
                 return point.day ? `${point.day} ${point.label}` : point.label
               }}
+              formatter={((value: unknown, name: unknown) => {
+                if (typeof value !== 'number') return [value, name] as [unknown, unknown]
+                return [panel.percent ? `${Math.round(value)}%` : value, name] as [unknown, unknown]
+              }) as any}
             />
             <Line
               type="monotone"
