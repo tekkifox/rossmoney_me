@@ -201,6 +201,7 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
     key: b.key,
     label: b.label,
     day: b.day,
+    count: b.count,
     cpuAvg: b.cpuAvg,
     memoryPercent: b.memoryPercent,
     loadAvg: b.loadAvg,

@@ -7,6 +7,7 @@ export type SeriesPoint = {
   key: string
   label: string
   day?: string | null
+  count?: number
   cpuAvg: number | null
   memoryPercent: number | null
   loadAvg: number | null
@@ -116,8 +117,11 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
       const prevDay = data[start]?.day
       if (i < data.length && day === prevDay) continue
       if (typeof prevDay === 'string') {
-        const mid = start + Math.floor((i - 1 - start) / 2)
-        dayTicks.push(data[mid]!.key)
+        const hasSamples = data.slice(start, i).some((point) => (point.count ?? 0) > 0)
+        if (hasSamples) {
+          const mid = start + Math.floor((i - 1 - start) / 2)
+          dayTicks.push(data[mid]!.key)
+        }
       }
       start = i
     }
@@ -197,6 +201,7 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
               stroke={panel.stroke}
               strokeWidth={panel.strokeWidth}
               dot={dot}
+              connectNulls={false}
             />
           </LineChart>
         </ResponsiveContainer>
