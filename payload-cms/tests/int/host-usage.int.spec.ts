@@ -109,7 +109,9 @@ describe('last hour range', () => {
 
     expect(buckets).toHaveLength(96)
     expect(buckets[0].label).toBe('12:00')
+    expect(buckets[0].day).toBe('10/29')
     expect(buckets[95].label).toBe('11:45')
+    expect(buckets[95].day).toBe('10/30')
   })
 
   it('produces one bucket when the range holds a single sample', () => {

@@ -16,7 +16,7 @@
  * unchanged.
  */
 
-import { requestClientCredentialsToken } from './archviewToken'
+import { ArchviewTokenError, requestClientCredentialsToken } from './archviewToken'
 
 export type ArchviewEnv = {
   ARCHVIEW_AUDIENCE?: string
@@ -56,6 +56,7 @@ type CachedToken = {
 }
 
 type CacheEntry = {
+  failure?: { error: Error; retryAt: number }
   inFlight?: Promise<string>
   token?: CachedToken
 }
@@ -73,6 +74,44 @@ export class ArchviewAuthConfigError extends Error {
     super(message)
     this.name = 'ArchviewAuthConfigError'
   }
+}
+
+/**
+ * The token endpoint rejected the exchange recently and a cached backoff is in
+ * force. Callers should treat this as an upstream condition, not as a bug in
+ * the sampler, and must not hammer the token endpoint again until `retryAt`.
+ */
+export class ArchviewTokenBackoffError extends Error {
+  readonly retryAt: number
+  readonly cause: unknown
+
+  constructor(cause: unknown, retryAt: number) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(`ArchView token exchange backed off until ${new Date(retryAt).toISOString()}: ${reason}`)
+    this.name = 'ArchviewTokenBackoffError'
+    this.retryAt = retryAt
+    this.cause = cause
+  }
+}
+
+const QUOTA_OR_RATE_LIMIT_BACKOFF_MS = 30 * 60 * 1000
+const DEFAULT_TOKEN_FAILURE_BACKOFF_MS = 60 * 1000
+
+const tokenFailureBackoffMs = (error: unknown): number => {
+  if (error instanceof ArchviewTokenError) {
+    if (error.status === 429) return QUOTA_OR_RATE_LIMIT_BACKOFF_MS
+    const message = error.message.toLowerCase()
+    if (
+      error.status === 400 &&
+      (message.includes('quota') || message.includes('rate limit') || message.includes('too many requests'))
+    ) {
+      return QUOTA_OR_RATE_LIMIT_BACKOFF_MS
+    }
+    if (message.includes('quota') || message.includes('rate limit') || message.includes('too many requests')) {
+      return QUOTA_OR_RATE_LIMIT_BACKOFF_MS
+    }
+  }
+  return DEFAULT_TOKEN_FAILURE_BACKOFF_MS
 }
 
 const readString = (value: string | undefined): string =>
@@ -113,7 +152,7 @@ const readCredentials = (env: ArchviewEnv): ArchviewCredentials | null => {
 }
 
 const cacheKey = (credentials: ArchviewCredentials): string =>
-  `${credentials.tokenUrl}\n${credentials.clientId}\n${credentials.audience}\n${credentials.scope}`
+  `${credentials.tokenUrl}\n${credentials.clientId}\n${credentials.audience}\n${credentials.scope}\n${credentials.clientSecret}`
 
 const getCachedToken = async (
   credentials: ArchviewCredentials,
@@ -131,6 +170,16 @@ const getCachedToken = async (
   // A token that is still comfortably valid is reused without a round trip.
   if (entry.token && Date.now() < entry.token.refreshAt) {
     return entry.token.accessToken
+  }
+
+  // A recent token-endpoint failure is cached so a quota-exhausted or
+  // rate-limited identity provider is not hammered every sweep. The backoff
+  // window is cleared automatically once it has elapsed.
+  if (entry.failure) {
+    if (Date.now() < entry.failure.retryAt) {
+      throw new ArchviewTokenBackoffError(entry.failure.error, entry.failure.retryAt)
+    }
+    entry.failure = undefined
   }
 
   // Every caller that arrives while the exchange is running awaits that same
@@ -151,7 +200,14 @@ const getCachedToken = async (
         const lifetimeMs = Math.max(0, expiresInSeconds * 1000)
         const renewalSkewMs = Math.min(MAX_RENEWAL_SKEW_MS, lifetimeMs / 10)
         entry.token = { accessToken, refreshAt: Date.now() + lifetimeMs - renewalSkewMs }
+        entry.failure = undefined
         return accessToken
+      })
+      .catch((error: unknown) => {
+        const err = error instanceof Error ? error : new Error(String(error))
+        entry.token = undefined
+        entry.failure = { error: err, retryAt: Date.now() + tokenFailureBackoffMs(err) }
+        throw err
       })
       .finally(() => {
         entry.inFlight = undefined
@@ -221,6 +277,19 @@ export const clearArchviewTokenCache = (): void => {
   tokenCache.clear()
 }
 
+const invalidateCacheEntry = (key: string): void => {
+  const entry = tokenCache.get(key)
+  if (!entry) return
+  // Keep an active token-endpoint backoff: a 401 from ArchView does not mean
+  // the identity provider has recovered, and clearing the backoff would hammer
+  // it again.
+  if (entry.failure && Date.now() < entry.failure.retryAt) {
+    entry.token = undefined
+    return
+  }
+  tokenCache.delete(key)
+}
+
 const invalidateToken = (env: ArchviewEnv): void => {
   let credentials: ArchviewCredentials | null = null
   try {
@@ -229,7 +298,7 @@ const invalidateToken = (env: ArchviewEnv): void => {
     return
   }
   if (credentials) {
-    tokenCache.delete(cacheKey(credentials))
+    invalidateCacheEntry(cacheKey(credentials))
   }
 }
 
@@ -336,11 +405,13 @@ const sourceCredentials = (source: ArchviewSourceCredentials): ArchviewCredentia
 })
 
 /**
- * The cache key is the source itself. Two instances never share a token, even
- * when they happen to use the same identity provider and client.
+ * Sources with identical credentials share one cached token and one backoff
+ * window, so an M2M quota is not spent once per source. The token is still only
+ * ever sent to a request whose origin matches the source (see
+ * `archviewSourceAuthHeadersFor`), never to a different instance.
  */
 const sourceCacheKey = (source: ArchviewSourceCredentials): string =>
-  `source:${source.origin}\n${readString(source.tokenUrl)}\n${readString(source.clientId)}\n${readString(source.audience)}\n${readString(source.scope) || DEFAULT_SCOPE}`
+  `source:${cacheKey(sourceCredentials(source))}`
 
 /**
  * Headers for a request to one source's own origin. Like `archviewFetch`, a
@@ -382,7 +453,7 @@ export const archviewSourceFetch = async (
   const auth: MachineAuth = {
     headers: () => archviewSourceAuthHeadersFor(target, source, fetchImpl, options),
     invalidate: () => {
-      tokenCache.delete(sourceCacheKey(source))
+      invalidateCacheEntry(sourceCacheKey(source))
     },
   }
   return fetchWithRefresh(target, init, auth, fetchImpl, options)

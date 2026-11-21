@@ -5,10 +5,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ArchviewAuthConfigError,
+  ArchviewTokenBackoffError,
   archviewAuthHeadersFor,
   archviewFetch,
+  archviewSourceAuthHeadersFor,
+  archviewSourceFetch,
   clearArchviewTokenCache,
   type ArchviewEnv,
+  type ArchviewSourceCredentials,
 } from '@/utilities/archviewAuth'
 import {
   ArchviewTokenError,
@@ -392,7 +396,7 @@ describe('ArchView request budgets', () => {
     expect((error as ArchviewTokenError).message).not.toContain('test-client-secret')
   })
 
-  it('does not cache a token exchange that timed out', async () => {
+  it('backs off after a token exchange times out instead of retrying immediately', async () => {
     let tokenRequests = 0
     let mode: 'hang' | 'answer' = 'hang'
     const tokenUrl = await startServer((_request, _body, response) => {
@@ -416,8 +420,20 @@ describe('ArchView request budgets', () => {
     ).catch((reason: unknown) => reason)
     expect(timedOut).toBeInstanceOf(ArchviewTokenTimeoutError)
 
-    // The rejected exchange must not stay in flight: the next call retries.
+    // The failed exchange must not be retried immediately: quota/rate-limit and
+    // outage failures would otherwise hammer the token endpoint every sweep.
     mode = 'answer'
+    const backedOff = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env, fetch, {
+      tokenTimeoutMs: 5_000,
+    }).catch((reason: unknown) => reason)
+
+    expect(backedOff).toBeInstanceOf(ArchviewTokenBackoffError)
+    expect(tokenRequests).toBe(1)
+
+    // Once the backoff window has elapsed, the exchange is retried.
+    const backoffError = backedOff as ArchviewTokenBackoffError
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(backoffError.retryAt + 1))
     const response = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env, fetch, {
       tokenTimeoutMs: 5_000,
     })
@@ -461,5 +477,147 @@ describe('ArchView request budgets', () => {
 
     expect(response.status).toBe(200)
     expect(seen).toEqual(['Bearer token-1'])
+  })
+})
+
+describe('ArchView token exchange backoff and credential sharing', () => {
+  it('backs off after a quota-exhausted token exchange and does not retry immediately', async () => {
+    let tokenRequests = 0
+    const tokenUrl = await startServer((_request, _body, response) => {
+      tokenRequests += 1
+      sendJson(response, 400, {
+        error: 'invalid_request',
+        error_description: 'M2M quota has been fully utilized for this calendar month',
+      })
+    })
+    const archviewUrl = await startServer((_request, _body, response) => {
+      sendJson(response, 200, { ok: true })
+    })
+    const env = envFor(archviewUrl, tokenUrl)
+
+    const first = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env).catch(
+      (reason: unknown) => reason,
+    )
+    expect(first).toBeInstanceOf(ArchviewTokenError)
+    expect((first as ArchviewTokenError).message).toContain('M2M quota')
+
+    const second = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env).catch(
+      (reason: unknown) => reason,
+    )
+    expect(second).toBeInstanceOf(ArchviewTokenBackoffError)
+    expect(tokenRequests).toBe(1)
+  })
+
+  it('retries a quota-exhausted token exchange after the backoff window', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+
+    let tokenRequests = 0
+    let rejectQuota = true
+    const tokenUrl = await startServer((_request, _body, response) => {
+      tokenRequests += 1
+      if (rejectQuota) {
+        sendJson(response, 400, {
+          error: 'invalid_request',
+          error_description: 'M2M quota has been fully utilized for this calendar month',
+        })
+        return
+      }
+      sendJson(response, 200, { access_token: `token-${tokenRequests}`, expires_in: 3600 })
+    })
+    const archviewUrl = await startServer((_request, _body, response) => {
+      sendJson(response, 200, { ok: true })
+    })
+    const env = envFor(archviewUrl, tokenUrl)
+
+    await archviewFetch(`${archviewUrl}/api/architecture`, {}, env).catch(() => {})
+    const backedOff = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env).catch(
+      (reason: unknown) => reason,
+    )
+    expect(backedOff).toBeInstanceOf(ArchviewTokenBackoffError)
+    expect(tokenRequests).toBe(1)
+
+    rejectQuota = false
+    vi.setSystemTime(new Date((backedOff as ArchviewTokenBackoffError).retryAt + 1))
+    const response = await archviewFetch(`${archviewUrl}/api/architecture`, {}, env)
+    expect(response.status).toBe(200)
+    expect(tokenRequests).toBe(2)
+  })
+
+  it('shares a cached token across sources with identical credentials', async () => {
+    let tokenRequests = 0
+    const tokenUrl = await startServer((_request, _body, response) => {
+      tokenRequests += 1
+      sendJson(response, 200, { access_token: `token-${tokenRequests}`, expires_in: 3600 })
+    })
+
+    const seenA: Array<string | undefined> = []
+    const seenB: Array<string | undefined> = []
+    const originA = await startServer((request, _body, response) => {
+      seenA.push(request.headers.authorization)
+      sendJson(response, 200, { ok: 'a' })
+    })
+    const originB = await startServer((request, _body, response) => {
+      seenB.push(request.headers.authorization)
+      sendJson(response, 200, { ok: 'b' })
+    })
+
+    const baseCreds = {
+      audience: 'https://archview.example.test/api',
+      clientId: 'cms',
+      clientSecret: 'test-client-secret',
+      scope: 'archview:read',
+      tokenUrl,
+    }
+    const sourceA: ArchviewSourceCredentials = { ...baseCreds, origin: originA }
+    const sourceB: ArchviewSourceCredentials = { ...baseCreds, origin: originB }
+
+    const responseA = await archviewSourceFetch(`${originA}/api/architecture`, {}, sourceA)
+    const responseB = await archviewSourceFetch(`${originB}/api/architecture`, {}, sourceB)
+
+    expect(responseA.status).toBe(200)
+    expect(responseB.status).toBe(200)
+    expect(tokenRequests).toBe(1)
+    expect(seenA).toEqual(['Bearer token-1'])
+    expect(seenB).toEqual(['Bearer token-1'])
+  })
+
+  it('never sends a shared token to the wrong origin', async () => {
+    let tokenRequests = 0
+    const tokenUrl = await startServer((_request, _body, response) => {
+      tokenRequests += 1
+      sendJson(response, 200, { access_token: `token-${tokenRequests}`, expires_in: 3600 })
+    })
+
+    const seenOther: Array<string | undefined> = []
+    const originA = await startServer((_request, _body, response) => {
+      sendJson(response, 200, { ok: 'a' })
+    })
+    const otherOrigin = await startServer((request, _body, response) => {
+      seenOther.push(request.headers.authorization)
+      sendJson(response, 200, { ok: 'other' })
+    })
+
+    const sourceA: ArchviewSourceCredentials = {
+      audience: 'https://archview.example.test/api',
+      clientId: 'cms',
+      clientSecret: 'test-client-secret',
+      origin: originA,
+      scope: 'archview:read',
+      tokenUrl,
+    }
+
+    await archviewSourceFetch(`${originA}/api/architecture`, {}, sourceA)
+    expect(tokenRequests).toBe(1)
+
+    // A request to a different origin must not get the token even though an
+    // identical-credentials source has already cached one.
+    const headers = await archviewSourceAuthHeadersFor(`${otherOrigin}/api/architecture`, sourceA)
+    expect(headers).toEqual({})
+
+    const response = await archviewSourceFetch(`${otherOrigin}/api/architecture`, {}, sourceA)
+    expect(response.status).toBe(200)
+    expect(seenOther).toEqual([undefined])
+    expect(tokenRequests).toBe(1)
   })
 })
