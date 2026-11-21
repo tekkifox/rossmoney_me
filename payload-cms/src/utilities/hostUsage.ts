@@ -187,8 +187,14 @@ export function bucketHostSamples(
 
   const result = new Map<string, HostUsageBucket[]>()
   const bucketMs = HOST_USAGE_BUCKET_MS[range]
-  const start = Math.floor(cutoff / bucketMs) * bucketMs
+  const dayMs = 24 * 60 * 60 * 1000
+  const dayAlignedRanges: Partial<Record<HostUsageRange, number>> = { '7d': 7, '30d': 30 }
+  const dayCount = dayAlignedRanges[range]
   const end = Math.floor(now / bucketMs) * bucketMs
+  const start =
+    dayCount !== undefined
+      ? Math.floor(now / dayMs) * dayMs - (dayCount - 1) * dayMs
+      : Math.floor(cutoff / bucketMs) * bucketMs
 
   for (const [label, items] of grouped) {
     const buckets = new Map<string, HostSample[]>()

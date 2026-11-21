@@ -1,7 +1,16 @@
 'use client'
 
 import React from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts'
 
 export type SeriesPoint = {
   key: string
@@ -110,6 +119,7 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
   const hasDays = data.some((point) => typeof point.day === 'string')
   const pointByKey = new Map(data.map((point) => [point.key, point]))
   const dayTicks: string[] = []
+  const dayBoundaries: string[] = []
   if (hasDays) {
     let start = 0
     for (let i = 0; i <= data.length; i += 1) {
@@ -119,6 +129,7 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
       if (typeof prevDay === 'string') {
         const mid = start + Math.floor((i - 1 - start) / 2)
         dayTicks.push(data[mid]!.key)
+        if (start > 0) dayBoundaries.push(data[start]!.key)
       }
       start = i
     }
@@ -131,6 +142,14 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 12, bottom: hasDays ? 24 : 0, left: 0 }}>
             <CartesianGrid stroke="var(--theme-border-color)" />
+            {dayBoundaries.map((boundary) => (
+              <ReferenceLine
+                key={boundary}
+                x={boundary}
+                stroke="var(--theme-elevation-400)"
+                strokeDasharray="4 4"
+              />
+            ))}
             <XAxis
               dataKey="key"
               stroke="var(--theme-border-color)"
