@@ -23,6 +23,8 @@ export type HostUsageBucket = {
   label: string
   /** UTC calendar day as M/D for ranges that span multiple days, else null. */
   day: string | null
+  /** Full bucket date and time in UTC, for tooltips (e.g. 2026-10-30 12:33 UTC). */
+  tooltipLabel: string
   cpuAvg: number | null
   memoryPercent: number | null
   loadAvg: number | null
@@ -168,6 +170,12 @@ export function bucketLabelFor(key: string, range: HostUsageRange): string {
     : `${pad2(d.getUTCHours())}:00`
 }
 
+/** Full bucket date and time in UTC for chart tooltips, e.g. 2026-10-30 12:33 UTC. */
+export function bucketTooltipLabelFor(key: string): string {
+  const d = new Date(key)
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())} UTC`
+}
+
 export function bucketHostSamples(
   samples: HostSample[],
   range: HostUsageRange,
@@ -213,6 +221,7 @@ export function bucketHostSamples(
           key,
           label: bucketLabelFor(key, range),
           day: bucketDayFor(key, range),
+          tooltipLabel: bucketTooltipLabelFor(key),
           cpuAvg: average(bucketItems.map((s) => toNumber(s.cpuAvg))),
           memoryPercent: average(bucketItems.map((s) => toNumber(s.memoryPercent))),
           loadAvg: average(bucketItems.map((s) => toNumber(s.loadAvg))),
@@ -224,6 +233,7 @@ export function bucketHostSamples(
           key,
           label: bucketLabelFor(key, range),
           day: bucketDayFor(key, range),
+          tooltipLabel: bucketTooltipLabelFor(key),
           cpuAvg: null,
           memoryPercent: null,
           loadAvg: null,

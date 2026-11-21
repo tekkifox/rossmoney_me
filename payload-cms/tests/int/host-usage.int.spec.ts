@@ -9,6 +9,7 @@ import {
   bucketHostSamples,
   bucketKeyFor,
   bucketLabelFor,
+  bucketTooltipLabelFor,
   hostIdOf,
   recentHostSamples,
   selectHostUsageSource,
@@ -45,12 +46,18 @@ describe('last hour range', () => {
     const buckets = bucketHostSamples(fullHour(), '1h', now).get('host-a') ?? []
 
     expect(HOST_USAGE_RANGE_MS['1h']).toBe(60 * MINUTE)
-    expect(buckets).toHaveLength(20)
-    expect(buckets.every((bucket) => bucket.count === 1)).toBe(true)
+    // 21 slots cover the full hour window including the current boundary bucket;
+    // 20 carry a sample and the final boundary slot is empty.
+    expect(buckets).toHaveLength(21)
+    expect(buckets.filter((bucket) => bucket.count === 1)).toHaveLength(20)
+    expect(buckets[20].count).toBe(0)
     expect(buckets[0].label).toBe('12:00')
     expect(buckets[19].label).toBe('12:57')
+    expect(buckets[0].tooltipLabel).toBe('2026-10-30 12:00 UTC')
+    expect(buckets[19].tooltipLabel).toBe('2026-10-30 12:57 UTC')
+    expect(buckets[20].tooltipLabel).toBe('2026-10-30 13:00 UTC')
     // One sample per bucket: the value is carried through, not averaged.
-    expect(buckets.map((bucket) => bucket.cpuAvg)).toEqual(
+    expect(buckets.slice(0, 20).map((bucket) => bucket.cpuAvg)).toEqual(
       Array.from({ length: 20 }, (_, index) => 10 + index),
     )
   })
@@ -61,10 +68,11 @@ describe('last hour range', () => {
       [sample('2026-10-30T11:59:59.999Z'), sample('2026-10-30T12:00:00.000Z')],
       '1h',
       now,
-    ).get('host-a')
+    ).get('host-a') ?? []
 
-    expect(buckets).toHaveLength(1)
-    expect(buckets?.[0].key).toBe('2026-10-30T12:00:00.000Z')
+    const populated = buckets.filter((bucket) => bucket.count > 0)
+    expect(populated).toHaveLength(1)
+    expect(populated[0].key).toBe('2026-10-30T12:00:00.000Z')
   })
 
   it('labels buckets HH:MM in UTC', () => {
@@ -97,6 +105,11 @@ describe('last hour range', () => {
     expect(bucketLabelFor(bucketKeyFor(time, '24h'), '24h')).toBe('12:30')
     expect(bucketLabelFor(bucketKeyFor(time, '7d'), '7d')).toBe('12:00')
     expect(bucketLabelFor(bucketKeyFor(time, '30d'), '30d')).toBe('10/30')
+
+    expect(bucketTooltipLabelFor(bucketKeyFor(time, '1h'))).toBe('2026-10-30 12:33 UTC')
+    expect(bucketTooltipLabelFor(bucketKeyFor(time, '24h'))).toBe('2026-10-30 12:30 UTC')
+    expect(bucketTooltipLabelFor(bucketKeyFor(time, '7d'))).toBe('2026-10-30 12:00 UTC')
+    expect(bucketTooltipLabelFor(bucketKeyFor(time, '30d'))).toBe('2026-10-30 00:00 UTC')
   })
 
   it('yields 96 points across a full 24 hours at 15-minute buckets', () => {
@@ -107,21 +120,26 @@ describe('last hour range', () => {
     )
     const buckets = bucketHostSamples(samples, '24h', now).get('host-a') ?? []
 
-    expect(buckets).toHaveLength(96)
+    expect(buckets).toHaveLength(97)
+    expect(buckets.filter((bucket) => bucket.count === 1)).toHaveLength(96)
+    expect(buckets[96].count).toBe(0)
     expect(buckets[0].label).toBe('12:00')
     expect(buckets[0].day).toBe('10/29')
+    expect(buckets[0].tooltipLabel).toBe('2026-10-29 12:00 UTC')
     expect(buckets[95].label).toBe('11:45')
     expect(buckets[95].day).toBe('10/30')
+    expect(buckets[95].tooltipLabel).toBe('2026-10-30 11:45 UTC')
   })
 
-  it('produces one bucket when the range holds a single sample', () => {
+  it('produces one populated bucket when the range holds a single sample', () => {
     const now = Date.parse('2026-10-30T12:00:00.000Z')
     const one = [sample('2026-10-30T11:30:00.000Z')]
 
     for (const range of ['1h', '24h', '7d', '30d'] as const) {
       const buckets = bucketHostSamples(one, range, now).get('host-a') ?? []
-      expect(buckets).toHaveLength(1)
-      expect(buckets[0].count).toBe(1)
+      const populated = buckets.filter((bucket) => bucket.count > 0)
+      expect(populated).toHaveLength(1)
+      expect(populated[0].tooltipLabel).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/)
     }
   })
 })
@@ -149,7 +167,7 @@ describe('populated host relationships', () => {
     const rows = recentHostSamples([populated], { now, host: 'host-a' })
 
     expect([...buckets.keys()]).toEqual(['host-a'])
-    expect(buckets.get('host-a')).toHaveLength(1)
+    expect(buckets.get('host-a')?.filter((bucket) => bucket.count > 0)).toHaveLength(1)
     expect(rows).toHaveLength(1)
     expect(rows[0].host).toBe('host-a')
   })
