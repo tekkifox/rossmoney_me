@@ -84,29 +84,17 @@ const PANELS: Panel[] = [
  * exceed 0–100 and load never goes below zero.
  */
 export function seriesDomain(data: SeriesPoint[], dataKey: MetricKey, percent = false): [number, number] {
+  if (percent) return [0, 100]
+
   const values = data
     .map((point) => point[dataKey])
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
 
-  if (values.length === 0) return percent ? [0, 100] : [0, 1]
+  if (values.length === 0) return [0, 1]
 
-  const min = Math.min(...values)
   const max = Math.max(...values)
-  const span = max - min
-  // Averaging buckets can leave a "constant" series with a floating-point
-  // span of ~1e-14, which used to collapse the axis to two unreadable ticks.
-  // Treat anything below one unit of meaningful change as constant and give it
-  // a visible band around the value.
-  const minSpan = percent ? 1 : 0.1
-  const pad = span < minSpan ? minSpan : span * 0.15
-
-  let low = min - pad
-  let high = max + pad
-  low = Math.max(0, low)
-  if (percent) high = Math.min(100, high)
-  if (high - low < 0.2) high = low + 0.2
-
-  return [Number(low.toFixed(2)), Number(high.toFixed(2))]
+  const high = max <= 0 ? 1 : max * 1.1
+  return [0, Number(high.toFixed(2))]
 }
 
 const asNumber = (value: string | number | undefined): number =>
@@ -215,10 +203,10 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
                 if (!point) return String(_value)
                 return point.day ? `${point.day} ${point.label}` : point.label
               }}
-              formatter={((value: unknown, name: unknown) => {
-                if (typeof value !== 'number') return [value, name] as [unknown, unknown]
-                return [panel.percent ? `${Math.round(value)}%` : value, name] as [unknown, unknown]
-              }) as any}
+              formatter={(value, name) => {
+                if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
+                return [panel.percent ? `${Math.round(value)}%` : String(value), String(name ?? '')]
+              }}
             />
             <Line
               type="monotone"
