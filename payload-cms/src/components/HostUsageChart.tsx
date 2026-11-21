@@ -86,29 +86,17 @@ const PANELS: Panel[] = [
  * exceed 0–100 and load never goes below zero.
  */
 export function seriesDomain(data: SeriesPoint[], dataKey: MetricKey, percent = false): [number, number] {
+  if (percent) return [0, 100]
+
   const values = data
     .map((point) => point[dataKey])
     .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
 
-  if (values.length === 0) return percent ? [0, 100] : [0, 1]
+  if (values.length === 0) return [0, 1]
 
-  const min = Math.min(...values)
   const max = Math.max(...values)
-  const span = max - min
-  // Averaging buckets can leave a "constant" series with a floating-point
-  // span of ~1e-14, which used to collapse the axis to two unreadable ticks.
-  // Treat anything below one unit of meaningful change as constant and give it
-  // a visible band around the value.
-  const minSpan = percent ? 1 : 0.1
-  const pad = span < minSpan ? minSpan : span * 0.15
-
-  let low = min - pad
-  let high = max + pad
-  low = Math.max(0, low)
-  if (percent) high = Math.min(100, high)
-  if (high - low < 0.2) high = low + 0.2
-
-  return [Number(low.toFixed(2)), Number(high.toFixed(2))]
+  const high = max <= 0 ? 1 : max * 1.1
+  return [0, Number(high.toFixed(2))]
 }
 
 const asNumber = (value: string | number | undefined): number =>
@@ -135,7 +123,22 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
       }
       start = i
     }
+  } else if (data.length >= 28 && data.length <= 31) {
+    for (let i = 7; i < data.length; i += 7) {
+      dayBoundaries.push(data[i]!.key)
+    }
   }
+
+  const bucketMs =
+    data.length >= 2 ? new Date(data[1]!.key).getTime() - new Date(data[0]!.key).getTime() : 0
+  const timeTicks =
+    bucketMs === 3 * 60 * 1000
+      ? data.filter((point) => new Date(point.key).getUTCMinutes() % 10 === 0).map((point) => point.key)
+      : bucketMs === 15 * 60 * 1000
+        ? data.filter((point) => new Date(point.key).getUTCMinutes() === 0).map((point) => point.key)
+        : bucketMs === 60 * 60 * 1000 && data.length > 24
+          ? data.map((point) => point.key)
+          : undefined
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -155,7 +158,8 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <XAxis
               dataKey="key"
               stroke="var(--theme-border-color)"
-              interval="preserveStartEnd"
+              interval={timeTicks && timeTicks.length <= 96 ? 0 : 'preserveStartEnd'}
+              ticks={timeTicks}
               minTickGap={30}
               height={hasDays ? 28 : 30}
               tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
@@ -202,6 +206,8 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <YAxis
               width={52}
               domain={seriesDomain(data, panel.dataKey, panel.percent)}
+              allowDecimals={!panel.percent}
+              tickFormatter={panel.percent ? (value: number) => `${Math.round(value)}` : undefined}
               unit={panel.percent ? '%' : undefined}
               stroke="var(--theme-border-color)"
             />
@@ -209,7 +215,13 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
               labelFormatter={(_value, payload) => {
                 const point = payload?.[0]?.payload as SeriesPoint | undefined
                 if (!point) return String(_value)
-                return point.tooltipLabel ?? (point.day ? `${point.day} ${point.label}` : point.label)
+                if (point.tooltipLabel) return point.tooltipLabel
+                if (point.day) return `${point.day} ${point.label} UTC`
+                return point.label.includes(':') ? `${point.label} UTC` : point.label
+              }}
+              formatter={(value, name) => {
+                if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
+                return [panel.percent ? `${Math.round(value)}%` : String(value), String(name ?? '')]
               }}
             />
             <Line
