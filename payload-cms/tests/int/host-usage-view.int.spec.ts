@@ -91,22 +91,17 @@ const point = (overrides: Partial<SeriesPoint>): SeriesPoint => ({
 })
 
 describe('per-metric chart scales', () => {
-  it('pads a metric to its own range so small variation fills the panel', () => {
+  it('uses a fixed 0–100 scale for percent metrics', () => {
     expect(
       seriesDomain([point({ cpuAvg: 29 }), point({ cpuAvg: 53 })], 'cpuAvg', true),
-    ).toEqual([25.4, 56.6])
+    ).toEqual([0, 100])
+    expect(
+      seriesDomain([point({ diskPercent: 80.3 }), point({ diskPercent: 80.3 })], 'diskPercent', true),
+    ).toEqual([0, 100])
   })
 
-  it('gives a constant series a readable band instead of a degenerate axis', () => {
-    expect(
-      seriesDomain([point({ diskPercent: 80.3 }), point({ diskPercent: 80.29999999999998 })], 'diskPercent', true),
-    ).toEqual([79.3, 81.3])
-  })
-
-  it('keeps percent metrics inside 0–100', () => {
-    expect(
-      seriesDomain([point({ memoryPercent: 99 }), point({ memoryPercent: 100 })], 'memoryPercent', true),
-    ).toEqual([98.85, 100])
+  it('starts non-percent metrics at 0 and pads above the max', () => {
+    expect(seriesDomain([point({ loadAvg: 2 }), point({ loadAvg: 5 })], 'loadAvg')).toEqual([0, 5.5])
   })
 })
 
