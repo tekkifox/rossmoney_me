@@ -220,10 +220,10 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
                 if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
                 return [panel.percent ? `${Math.round(value)}%` : String(value), String(name ?? '')]
               }}
-              formatter={((value: unknown, name: unknown) => {
-                if (typeof value !== 'number') return [value, name] as [unknown, unknown]
-                return [panel.percent ? `${Math.round(value)}%` : value, name] as [unknown, unknown]
-              }) as any}
+              formatter={(value, name) => {
+                if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
+                return [panel.percent ? `${Math.round(value)}%` : String(value), String(name ?? '')]
+              }}
             />
             <Line
               type="monotone"
