@@ -134,7 +134,9 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
       ? data.filter((point) => new Date(point.key).getUTCMinutes() % 10 === 0).map((point) => point.key)
       : bucketMs === 15 * 60 * 1000
         ? data.filter((point) => new Date(point.key).getUTCMinutes() === 0).map((point) => point.key)
-        : undefined
+        : bucketMs === 60 * 60 * 1000 && data.length > 24
+          ? data.map((point) => point.key)
+          : undefined
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -154,9 +156,9 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <XAxis
               dataKey="key"
               stroke="var(--theme-border-color)"
-              interval={timeTicks ? 0 : 'preserveStartEnd'}
+              interval={timeTicks && timeTicks.length <= 96 ? 0 : 'preserveStartEnd'}
               ticks={timeTicks}
-              minTickGap={timeTicks ? undefined : 30}
+              minTickGap={30}
               height={hasDays ? 28 : 30}
               tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
                 const point = pointByKey.get(String(props.payload?.value ?? ''))
