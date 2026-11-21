@@ -19,7 +19,10 @@ export type HostSample = {
 
 export type HostUsageBucket = {
   key: string
+  /** Time label for intra-day ranges, or the day label for 30d. */
   label: string
+  /** UTC calendar day as M/D for ranges that span multiple days, else null. */
+  day: string | null
   cpuAvg: number | null
   memoryPercent: number | null
   loadAvg: number | null
@@ -149,15 +152,20 @@ export function bucketKeyFor(date: Date, range: HostUsageRange): string {
   return new Date(aligned).toISOString()
 }
 
+export function bucketDayFor(key: string, range: HostUsageRange): string | null {
+  if (range === '30d') return null
+  const d = new Date(key)
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+}
+
 export function bucketLabelFor(key: string, range: HostUsageRange): string {
   const d = new Date(key)
   if (range === '30d') {
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
   }
-  if (HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000) {
-    return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
-  }
-  return `${pad2(d.getUTCHours())}:00`
+  return HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000
+    ? `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
+    : `${pad2(d.getUTCHours())}:00`
 }
 
 export function bucketHostSamples(
@@ -190,6 +198,7 @@ export function bucketHostSamples(
       .map(([key, bucketItems]) => ({
         key,
         label: bucketLabelFor(key, range),
+        day: bucketDayFor(key, range),
         cpuAvg: average(bucketItems.map((s) => toNumber(s.cpuAvg))),
         memoryPercent: average(bucketItems.map((s) => toNumber(s.memoryPercent))),
         loadAvg: average(bucketItems.map((s) => toNumber(s.loadAvg))),

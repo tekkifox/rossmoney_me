@@ -129,9 +129,13 @@ describe('host usage bucketing', () => {
     const samples = [
       { hostLabel: 'host-a', sampledAt: new Date(now - 30 * 60 * 1000).toISOString(), cpuAvg: 10, memoryPercent: 20, loadAvg: 1, diskPercent: 30 },
     ]
-    expect(bucketHostSamples(samples, '24h', now).get('host-a')![0].label).toBe('11:30')
+    const day = bucketHostSamples(samples, '24h', now).get('host-a')![0]
+    expect(day.label).toBe('11:30')
+    expect(day.day).toBe('1/2')
     expect(bucketHostSamples(samples, '7d', now).get('host-a')![0].label).toBe('11:00')
+    expect(bucketHostSamples(samples, '7d', now).get('host-a')![0].day).toBe('1/2')
     expect(bucketHostSamples(samples, '30d', now).get('host-a')![0].label).toBe('1/2')
+    expect(bucketHostSamples(samples, '30d', now).get('host-a')![0].day).toBeNull()
   })
 
   it('drops samples outside the range', () => {

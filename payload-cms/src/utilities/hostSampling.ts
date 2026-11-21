@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 
 import {
+  ArchviewTokenBackoffError,
   archviewFetch,
   archviewSourceFetch,
   type ArchviewSourceCredentials,
@@ -49,6 +50,11 @@ export function describeHostSamplerDecision(env: Record<string, string | undefin
 }
 
 let lastPruneAt = 0
+
+/** Test seam: clears the once-per-day retention guard. */
+export function resetHostSampleRetentionForTests(): void {
+  lastPruneAt = 0
+}
 
 const toNumber = (v: unknown): number | null => {
   if (v === null || v === undefined) return null
@@ -304,6 +310,16 @@ export async function sampleOneSource(
       log(`host sample: ${record.name ?? record.origin} skipped (timeout)`)
       return { status: 'skipped', reason: 'timeout' }
     }
+    // A cached token-endpoint backoff means the identity provider recently
+    // rejected the exchange (quota, rate limit, outage). Skip without hammering
+    // it again; the backoff is logged once when it starts and the summary still
+    // counts it.
+    if (error instanceof ArchviewTokenBackoffError) {
+      log(
+        `host sample: ${record.name ?? record.origin} skipped (token backoff until ${new Date(error.retryAt).toISOString()})`,
+      )
+      return { status: 'skipped', reason: 'token backoff' }
+    }
     const reason = error instanceof Error ? error.message : String(error)
     console.warn('host sample write failed:', reason)
     return { status: 'failed', reason }
@@ -360,7 +376,11 @@ export async function sampleAllEnabledHosts(
       } else if (result.status === 'skipped') {
         skipped += 1
         reasons[result.reason] = (reasons[result.reason] ?? 0) + 1
-        if (p.logger?.warn) p.logger.warn(`host sampling: skipping ${name}: ${result.reason}`)
+        // Token backoff is expected during quota/rate-limit exhaustion; repeating
+        // a warning every sweep for every affected source is noisy.
+        if (result.reason !== 'token backoff' && p.logger?.warn) {
+          p.logger.warn(`host sampling: skipping ${name}: ${result.reason}`)
+        }
       } else {
         failed += 1
         reasons[result.reason] = (reasons[result.reason] ?? 0) + 1
@@ -376,10 +396,11 @@ export async function sampleAllEnabledHosts(
   if (p.logger?.info) p.logger.info(msg)
   else console.log(msg)
 
-  // Retention once per day.
+  // Retention once per day. Only mark the prune as done after a successful
+  // delete so a transient failure retries on the next sweep instead of leaving
+  // old samples around for another day.
   const now = Date.now()
   if (now - lastPruneAt < 24 * 60 * 60 * 1000) return
-  lastPruneAt = now
   try {
     const cutoff = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
     await p.delete({
@@ -387,6 +408,7 @@ export async function sampleAllEnabledHosts(
       where: { sampledAt: { less_than: cutoff } },
       overrideAccess: true,
     })
+    lastPruneAt = now
   } catch (error) {
     console.warn('host sample retention prune failed:', error instanceof Error ? error.message : error)
   }

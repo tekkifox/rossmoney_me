@@ -198,7 +198,9 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
   const rangeLabel = RANGE_OPTIONS.find((r) => r.value === range)?.label ?? range
   const buckets = selectedHost ? (byHost.get(selectedHost) ?? []) : []
   const data = buckets.map((b) => ({
+    key: b.key,
     label: b.label,
+    day: b.day,
     cpuAvg: b.cpuAvg,
     memoryPercent: b.memoryPercent,
     loadAvg: b.loadAvg,

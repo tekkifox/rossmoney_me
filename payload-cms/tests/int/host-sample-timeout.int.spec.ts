@@ -5,7 +5,12 @@ import type { getPayload } from 'payload'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { clearArchviewTokenCache, type ArchviewSourceCredentials } from '@/utilities/archviewAuth'
-import { sampleAllEnabledHosts, sampleOneSource } from '@/utilities/hostSampling'
+import { encryptArchviewSecret } from '@/utilities/archviewSourceSecret'
+import {
+  resetHostSampleRetentionForTests,
+  sampleAllEnabledHosts,
+  sampleOneSource,
+} from '@/utilities/hostSampling'
 
 type Handler = (request: IncomingMessage, body: string, response: ServerResponse) => void
 
@@ -182,5 +187,112 @@ describe('host sample request budgets', () => {
     expect(seenAuthorization).toEqual(['Bearer token-1'])
     expect(stub.writes).toHaveLength(1)
     expect(stub.writes[0]).toMatchObject({ host: 'healthy-id', hostLabel: 'healthy source', cpuAvg: 7 })
+  })
+
+  it('backs off a quota-exhausted token exchange and does not warn every source every sweep', async () => {
+    const prevSecretKey = process.env.ARCHVIEW_SECRET_KEY
+    process.env.ARCHVIEW_SECRET_KEY = Buffer.alloc(32, 7).toString('base64')
+    try {
+      let tokenRequests = 0
+      const tokenUrl = await startServer((_request, _body, response) => {
+        tokenRequests += 1
+        response.writeHead(400, { 'content-type': 'application/json' })
+        response.end(
+          JSON.stringify({
+            error: 'invalid_request',
+            error_description: 'M2M quota has been fully utilized for this calendar month',
+          }),
+        )
+      })
+      const originA = await startServer((_request, _body, response) => sendTelemetry(response))
+      const originB = await startServer((_request, _body, response) => sendTelemetry(response))
+      const sharedCreds = {
+        audience: 'https://archview.example.test/api',
+        clientId: 'cms',
+        clientSecret: 'test-client-secret',
+        scope: 'archview:read',
+        tokenUrl,
+      }
+      const encryptedSecret = encryptArchviewSecret(sharedCreds.clientSecret)
+      const stub = createPayloadStub([
+        {
+          id: 'quota-a',
+          name: 'quota source A',
+          origin: originA,
+          enabled: true,
+          clientId: sharedCreds.clientId,
+          clientSecret: encryptedSecret,
+          tokenUrl: sharedCreds.tokenUrl,
+          audience: sharedCreds.audience,
+          scope: sharedCreds.scope,
+        },
+        {
+          id: 'quota-b',
+          name: 'quota source B',
+          origin: originB,
+          enabled: true,
+          clientId: sharedCreds.clientId,
+          clientSecret: encryptedSecret,
+          tokenUrl: sharedCreds.tokenUrl,
+          audience: sharedCreds.audience,
+          scope: sharedCreds.scope,
+        },
+      ])
+
+      await sampleAllEnabledHosts(stub.payload)
+
+      // One exchange fails; identical-credentials sources share the backoff so
+      // the rest of the sweep does not hammer the token endpoint again.
+      expect(tokenRequests).toBe(1)
+      expect(stub.writes).toHaveLength(0)
+      expect(stub.logs.join('\n')).toContain('token backoff')
+      expect(stub.warnings.join('\n')).not.toContain('skipping quota source B: token backoff')
+      expect(stub.warnings.join('\n')).not.toContain('skipping quota source A: token backoff')
+    } finally {
+      if (prevSecretKey === undefined) delete process.env.ARCHVIEW_SECRET_KEY
+      else process.env.ARCHVIEW_SECRET_KEY = prevSecretKey
+    }
+  })
+
+  it('prunes host-samples older than 30 days once per day and retries after failure', async () => {
+    resetHostSampleRetentionForTests()
+    const now = Date.now()
+    const cutoffIso = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const deletes: Array<Record<string, unknown>> = []
+    let failDelete = true
+    const payload = {
+      db: { find: async () => ({ docs: [] }) },
+      create: async ({ data }: { data: Record<string, unknown> }) => data,
+      delete: async (args: Record<string, unknown>) => {
+        deletes.push(args)
+        if (failDelete) throw new Error('db unavailable')
+        return { docs: [] }
+      },
+      logger: { info: () => {}, warn: () => {} },
+    } as unknown as Awaited<ReturnType<typeof getPayload>>
+
+    const realNow = Date.now
+    Date.now = () => now
+    try {
+      await sampleAllEnabledHosts(payload)
+      expect(deletes).toHaveLength(1)
+      expect(deletes[0]).toMatchObject({
+        collection: 'host-samples',
+        where: { sampledAt: { less_than: cutoffIso } },
+        overrideAccess: true,
+      })
+
+      // A failed prune should retry on the next sweep, not wait a full day.
+      failDelete = false
+      await sampleAllEnabledHosts(payload)
+      expect(deletes).toHaveLength(2)
+
+      // A successful prune should not run again until the day has elapsed.
+      await sampleAllEnabledHosts(payload)
+      expect(deletes).toHaveLength(2)
+    } finally {
+      Date.now = realNow
+      resetHostSampleRetentionForTests()
+    }
   })
 })

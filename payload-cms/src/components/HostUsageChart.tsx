@@ -4,7 +4,9 @@ import React from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export type SeriesPoint = {
+  key: string
   label: string
+  day?: string | null
   cpuAvg: number | null
   memoryPercent: number | null
   loadAvg: number | null
@@ -97,26 +99,86 @@ export function seriesDomain(data: SeriesPoint[], dataKey: MetricKey, percent = 
   return [Number(low.toFixed(2)), Number(high.toFixed(2))]
 }
 
+const asNumber = (value: string | number | undefined): number =>
+  typeof value === 'number' ? value : Number(value ?? 0)
+
 function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
   // A single bucket cannot draw a line, and with `dot={false}` it draws nothing
   // at all. Show dots whenever points are few so sparse ranges stay visible.
   const dot = data.length <= 30 ? { r: 2 } : false
+  const hasDays = data.some((point) => typeof point.day === 'string')
+  const pointByKey = new Map(data.map((point) => [point.key, point]))
+  const dayBoundaries = data.filter(
+    (point, index) => typeof point.day === 'string' && (index === 0 || data[index - 1]?.day !== point.day),
+  )
 
   return (
     <div style={{ marginBottom: 12 }}>
       <h3 style={{ margin: '0 0 4px' }}>{panel.title}</h3>
-      <div style={{ width: '100%', height: panel.height }}>
+      <div style={{ width: '100%', height: panel.height + (hasDays ? 20 : 0) }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <LineChart data={data} margin={{ top: 4, right: 12, bottom: hasDays ? 24 : 0, left: 0 }}>
             <CartesianGrid stroke="var(--theme-border-color)" />
-            <XAxis dataKey="label" stroke="var(--theme-border-color)" />
+            <XAxis
+              dataKey="key"
+              stroke="var(--theme-border-color)"
+              interval="preserveStartEnd"
+              minTickGap={30}
+              height={hasDays ? 28 : 30}
+              tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
+                const point = pointByKey.get(String(props.payload?.value ?? ''))
+                return (
+                  <g transform={`translate(${asNumber(props.x)},${asNumber(props.y)})`}>
+                    <text x={0} y={0} dy={12} textAnchor="middle" fill="currentColor" fontSize={11}>
+                      {point?.label ?? ''}
+                    </text>
+                  </g>
+                )
+              }}
+            />
+            {hasDays && (
+              <XAxis
+                xAxisId="day"
+                dataKey="key"
+                orientation="bottom"
+                axisLine={false}
+                tickLine={false}
+                interval={0}
+                ticks={dayBoundaries.map((point) => point.key)}
+                height={20}
+                tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
+                  const point = pointByKey.get(String(props.payload?.value ?? ''))
+                  return (
+                    <g transform={`translate(${asNumber(props.x)},${asNumber(props.y)})`}>
+                      <text
+                        x={0}
+                        y={0}
+                        dy={12}
+                        textAnchor="middle"
+                        fill="var(--theme-elevation-500)"
+                        fontSize={11}
+                        fontWeight={600}
+                      >
+                        {point?.day ?? ''}
+                      </text>
+                    </g>
+                  )
+                }}
+              />
+            )}
             <YAxis
               width={52}
               domain={seriesDomain(data, panel.dataKey, panel.percent)}
               unit={panel.percent ? '%' : undefined}
               stroke="var(--theme-border-color)"
             />
-            <Tooltip />
+            <Tooltip
+              labelFormatter={(_value, payload) => {
+                const point = payload?.[0]?.payload as SeriesPoint | undefined
+                if (!point) return String(_value)
+                return point.day ? `${point.day} ${point.label}` : point.label
+              }}
+            />
             <Line
               type="monotone"
               dataKey={panel.dataKey}
