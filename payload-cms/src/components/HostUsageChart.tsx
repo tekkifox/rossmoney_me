@@ -108,9 +108,20 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
   const dot = data.length <= 30 ? { r: 2 } : false
   const hasDays = data.some((point) => typeof point.day === 'string')
   const pointByKey = new Map(data.map((point) => [point.key, point]))
-  const dayBoundaries = data.filter(
-    (point, index) => typeof point.day === 'string' && (index === 0 || data[index - 1]?.day !== point.day),
-  )
+  const dayTicks: string[] = []
+  if (hasDays) {
+    let start = 0
+    for (let i = 0; i <= data.length; i += 1) {
+      const day = data[i]?.day
+      const prevDay = data[start]?.day
+      if (i < data.length && day === prevDay) continue
+      if (typeof prevDay === 'string') {
+        const mid = start + Math.floor((i - 1 - start) / 2)
+        dayTicks.push(data[mid]!.key)
+      }
+      start = i
+    }
+  }
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -144,7 +155,7 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
                 axisLine={false}
                 tickLine={false}
                 interval={0}
-                ticks={dayBoundaries.map((point) => point.key)}
+                ticks={dayTicks}
                 height={20}
                 tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
                   const point = pointByKey.get(String(props.payload?.value ?? ''))
