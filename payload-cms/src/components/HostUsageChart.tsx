@@ -117,11 +117,8 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
       const prevDay = data[start]?.day
       if (i < data.length && day === prevDay) continue
       if (typeof prevDay === 'string') {
-        const hasSamples = data.slice(start, i).some((point) => (point.count ?? 0) > 0)
-        if (hasSamples) {
-          const mid = start + Math.floor((i - 1 - start) / 2)
-          dayTicks.push(data[mid]!.key)
-        }
+        const mid = start + Math.floor((i - 1 - start) / 2)
+        dayTicks.push(data[mid]!.key)
       }
       start = i
     }
