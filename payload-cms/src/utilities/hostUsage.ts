@@ -19,7 +19,10 @@ export type HostSample = {
 
 export type HostUsageBucket = {
   key: string
+  /** Time label for intra-day ranges, or the day label for 30d. */
   label: string
+  /** UTC calendar day as M/D for ranges that span multiple days, else null. */
+  day: string | null
   cpuAvg: number | null
   memoryPercent: number | null
   loadAvg: number | null
@@ -149,15 +152,20 @@ export function bucketKeyFor(date: Date, range: HostUsageRange): string {
   return new Date(aligned).toISOString()
 }
 
+export function bucketDayFor(key: string, range: HostUsageRange): string | null {
+  if (range === '30d') return null
+  const d = new Date(key)
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+}
+
 export function bucketLabelFor(key: string, range: HostUsageRange): string {
   const d = new Date(key)
   if (range === '30d') {
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
   }
-  if (HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000) {
-    return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
-  }
-  return `${pad2(d.getUTCHours())}:00`
+  return HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000
+    ? `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
+    : `${pad2(d.getUTCHours())}:00`
 }
 
 export function bucketHostSamples(
@@ -178,6 +186,16 @@ export function bucketHostSamples(
   }
 
   const result = new Map<string, HostUsageBucket[]>()
+  const bucketMs = HOST_USAGE_BUCKET_MS[range]
+  const dayMs = 24 * 60 * 60 * 1000
+  const dayAlignedRanges: Partial<Record<HostUsageRange, number>> = { '7d': 7, '30d': 30 }
+  const dayCount = dayAlignedRanges[range]
+  const end = Math.floor(now / bucketMs) * bucketMs
+  const start =
+    dayCount !== undefined
+      ? Math.floor(now / dayMs) * dayMs - (dayCount - 1) * dayMs
+      : Math.floor(cutoff / bucketMs) * bucketMs
+
   for (const [label, items] of grouped) {
     const buckets = new Map<string, HostSample[]>()
     for (const sample of items) {
@@ -185,17 +203,35 @@ export function bucketHostSamples(
       if (!buckets.has(key)) buckets.set(key, [])
       buckets.get(key)!.push(sample)
     }
-    const aggregated = Array.from(buckets.entries())
-      .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([key, bucketItems]) => ({
-        key,
-        label: bucketLabelFor(key, range),
-        cpuAvg: average(bucketItems.map((s) => toNumber(s.cpuAvg))),
-        memoryPercent: average(bucketItems.map((s) => toNumber(s.memoryPercent))),
-        loadAvg: average(bucketItems.map((s) => toNumber(s.loadAvg))),
-        diskPercent: average(bucketItems.map((s) => toNumber(s.diskPercent))),
-        count: bucketItems.length,
-      }))
+
+    const aggregated: HostUsageBucket[] = []
+    for (let t = start; t <= end; t += bucketMs) {
+      const key = new Date(t).toISOString()
+      const bucketItems = buckets.get(key)
+      if (bucketItems && bucketItems.length > 0) {
+        aggregated.push({
+          key,
+          label: bucketLabelFor(key, range),
+          day: bucketDayFor(key, range),
+          cpuAvg: average(bucketItems.map((s) => toNumber(s.cpuAvg))),
+          memoryPercent: average(bucketItems.map((s) => toNumber(s.memoryPercent))),
+          loadAvg: average(bucketItems.map((s) => toNumber(s.loadAvg))),
+          diskPercent: average(bucketItems.map((s) => toNumber(s.diskPercent))),
+          count: bucketItems.length,
+        })
+      } else {
+        aggregated.push({
+          key,
+          label: bucketLabelFor(key, range),
+          day: bucketDayFor(key, range),
+          cpuAvg: null,
+          memoryPercent: null,
+          loadAvg: null,
+          diskPercent: null,
+          count: 0,
+        })
+      }
+    }
     result.set(label, aggregated)
   }
 
