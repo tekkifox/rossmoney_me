@@ -156,9 +156,9 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
             <XAxis
               dataKey="key"
               stroke="var(--theme-border-color)"
-              interval={timeTicks && timeTicks.length <= 96 ? 0 : 'preserveStartEnd'}
+              interval={timeTicks ? 0 : 'preserveStartEnd'}
               ticks={timeTicks}
-              minTickGap={30}
+              minTickGap={timeTicks ? undefined : 30}
               height={hasDays ? 28 : 30}
               tick={(props: { x?: string | number; y?: string | number; payload?: { value?: unknown } }) => {
                 const point = pointByKey.get(String(props.payload?.value ?? ''))
@@ -215,10 +215,6 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
                 if (!point) return String(_value)
                 if (point.day) return `${point.day} ${point.label} UTC`
                 return point.label.includes(':') ? `${point.label} UTC` : point.label
-              }}
-              formatter={(value, name) => {
-                if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
-                return [panel.percent ? `${Math.round(value)}%` : String(value), String(name ?? '')]
               }}
               formatter={(value, name) => {
                 if (typeof value !== 'number') return [String(value ?? ''), String(name ?? '')]
