@@ -16,6 +16,8 @@ export type SeriesPoint = {
   key: string
   label: string
   day?: string | null
+  /** Full bucket date and time in UTC, for tooltips (e.g. 2026-10-30 12:33 UTC). */
+  tooltipLabel?: string
   count?: number
   cpuAvg: number | null
   memoryPercent: number | null
@@ -207,7 +209,7 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
               labelFormatter={(_value, payload) => {
                 const point = payload?.[0]?.payload as SeriesPoint | undefined
                 if (!point) return String(_value)
-                return point.day ? `${point.day} ${point.label}` : point.label
+                return point.tooltipLabel ?? (point.day ? `${point.day} ${point.label}` : point.label)
               }}
             />
             <Line
