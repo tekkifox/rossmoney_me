@@ -296,12 +296,11 @@ inventory before this job can deploy it.
 The job does not call the fleet's reusable deploy workflow: that workflow lives in a private
 repository, and GitHub refuses to load a workflow in a public repository that calls a
 reusable workflow in a private one, so the call would fail before any job ran. The steps
-here are a small copy of it — a tailnet join and one SSH command — and the seat does the
+here are a small copy of it — one SSH command — and the seat does the
 validation.
 
-The job needs three repository secrets:
+The job needs two repository secrets:
 
-- `TS_AUTHKEY` — the ephemeral Tailscale auth key for the runner;
 - `DEPLOY_SSH_KEY` — the private half of the deploy-only key installed on `mgmt`;
 - `DEPLOY_SEAT_HOST` — the seat's address, kept out of this repository because it is
   public and must not publish a real hostname.
