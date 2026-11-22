@@ -310,8 +310,11 @@ jobs:
       # finding is present it exits non-zero without contacting BookStack, so a
       # leak can never reach the gallery or the pull request. It then uploads
       # the images and updates one marker comment on the pull request.
+      #
+      # Disabled: re-enable by restoring the original `if` condition below.
+      # Original: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
       - name: Publish screenshots to BookStack
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        if: false
         env:
           BOOKSTACK_URL: ${{ secrets.BOOKSTACK_URL }}
           BOOKSTACK_TOKEN_ID: ${{ secrets.BOOKSTACK_TOKEN_ID }}
