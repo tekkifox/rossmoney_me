@@ -82,26 +82,22 @@ jobs:
   # reusable deploy workflow. That workflow lives in a private repository, and
   # GitHub refuses to load a workflow in a public repository that calls a
   # reusable workflow in a private one, so the call would fail before any job
-  # ran. The tailnet join and the SSH invocation are therefore duplicated here;
-  # that duplication is the price of this repository being public. The seat
-  # validates host and stack itself, so this job is only transport.
+  # ran. The SSH invocation is duplicated here; that duplication is the price
+  # of this repository being public. The seat validates host and stack itself,
+  # so this job is only transport.
   #
-  # Requires the `DEPLOY_SSH_KEY` secret (the deploy-only key). It is not in
-  # this repository yet; the job fails at the key step until it is added. The
-  # seat's address comes from the `DEPLOY_SEAT_HOST` secret because this
-  # repository is public and must not publish a real hostname.
+  # Runs on the self-hosted fleet runner (already on the tailnet), so no
+  # Tailscale join step is needed. The deploy SSH key is taken from a
+  # preinstalled file at `$HOME/.ssh/deploy` when present (as fleet deploy
+  # workflows do); otherwise the `DEPLOY_SSH_KEY` secret is written there as a
+  # fallback. The seat's address comes from the `DEPLOY_SEAT_HOST` secret
+  # because this repository is public and must not publish a real hostname.
   deploy:
     name: Deploy the CMS
     needs: build
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, paseo]
     steps:
-      - name: Join the tailnet
-        uses: tailscale/github-action@v4
-        with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
-          hostname: gh-cms-${{ github.run_id }}
-
       - name: Ask the fleet deploy seat to deploy
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -110,9 +106,17 @@ jobs:
           TARGET_STACKS: rossmoney-cms
         run: |
           set -euo pipefail
-          install -d -m 0700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy"
-          chmod 0600 "$HOME/.ssh/deploy"
+          if [ -f "$HOME/.ssh/deploy" ]; then
+            echo "Using preinstalled deploy key at $HOME/.ssh/deploy"
+          else
+            if [ -z "${DEPLOY_SSH_KEY:-}" ]; then
+              echo "::error::No preinstalled deploy key at $HOME/.ssh/deploy and DEPLOY_SSH_KEY secret is not set"
+              exit 1
+            fi
+            install -d -m 0700 "$HOME/.ssh"
+            printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy"
+            chmod 0600 "$HOME/.ssh/deploy"
+          fi
           ssh -i "$HOME/.ssh/deploy" -p 32 \
             -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             root@"$DEPLOY_SEAT_HOST" \
