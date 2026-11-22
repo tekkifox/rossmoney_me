@@ -216,6 +216,13 @@ function MetricPanel({ data, panel }: { data: SeriesPoint[]; panel: Panel }) {
                 const point = payload?.[0]?.payload as SeriesPoint | undefined
                 if (!point) return String(_value)
                 if (point.tooltipLabel) return point.tooltipLabel
+                if (point.key) {
+                  const d = new Date(point.key)
+                  if (Number.isFinite(d.getTime())) {
+                    const pad = (n: number) => String(n).padStart(2, '0')
+                    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`
+                  }
+                }
                 if (point.day) return `${point.day} ${point.label} UTC`
                 return point.label.includes(':') ? `${point.label} UTC` : point.label
               }}
