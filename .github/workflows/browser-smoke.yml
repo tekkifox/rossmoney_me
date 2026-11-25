@@ -21,23 +21,22 @@ on:
       - 'turbo.json'
       - '.github/workflows/browser-smoke.yml'
 
-concurrency:
-  # The mongo port is chosen per run, so the database no longer collides. The
-  # app under test still cannot move off port 3000 without a code change: the
-  # legacy e2e specs and tests/helpers/login.ts hardcode
-  # `http://localhost:3000`, so a second run would fail on a host port already
-  # in use. Not keyed by ref: queue runs from every branch instead of letting
-  # one start and fail.
-  group: browser-smoke
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
 jobs:
   smoke:
-    runs-on: [self-hosted, paseo]
-    timeout-minutes: 30
+    # Pull-request code must never run on the operator's own infrastructure: a
+    # malicious PR would execute as the self-hosted runner's user. This job
+    # therefore runs only on a GitHub-hosted runner, for pull requests and for
+    # `main`/`dev` pushes alike. The self-hosted `paseo` runner still serves the
+    # publish, lint and token-guard jobs; nothing here depends on it.
+    #
+    # Because each run gets a fresh VM, there is no shared host port 3000 to
+    # serialise on, so these runs may overlap and no concurrency group is
+    # needed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     env:
       CI: true
@@ -51,11 +50,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # The service container published a fixed host port (27017), so two smoke
-      # runs could never overlap on a shared runner. Start mongo ourselves on a
-      # port the kernel picks: `-p 127.0.0.1::27017` leaves the host port empty
-      # and `docker port` reads back the one that was assigned. Bound to
-      # 127.0.0.1 only, so the database is not reachable from the LAN.
+      # The mongo service container used to publish a fixed host port (27017),
+      # so two smoke runs could never overlap. Start mongo ourselves on a port
+      # the kernel picks instead: `-p 127.0.0.1::27017` leaves the host port
+      # empty and `docker port` reads back the one that was assigned. Bound to
+      # 127.0.0.1 only, so the database is not left reachable from anywhere
+      # else on the runner's network. Docker is preinstalled on ubuntu-latest.
       #
       # The production server and the Playwright worker must see the same
       # database: the worker seeds the admin account directly through Payload.
@@ -115,15 +115,15 @@ jobs:
       - name: Build production app
         run: corepack pnpm --filter payload-cms run build
 
-      # The runner hosts Chromium's system libraries already, so this only
-      # downloads the browsers the config's projects use (chromium and
-      # firefox) at the version pinned in payload-cms/package.json. No
-      # `--with-deps`: that shells out to sudo, which the runner user does
-      # not have.
+      # The hosted runner image carries build tools, not Playwright's browser
+      # dependencies. `--with-deps` installs the matching apt packages through
+      # the runner's passwordless sudo, then Playwright downloads the browsers
+      # the config's projects use (chromium and firefox) at the version pinned
+      # in payload-cms/package.json.
       - name: Install Playwright browsers
         run: >-
           corepack pnpm --filter payload-cms exec playwright install
-          chromium firefox
+          --with-deps chromium firefox
 
       # Playwright starts the production server itself (see webServer in
       # payload-cms/playwright.config.ts). `CI=true` selects `pnpm start` and
@@ -143,7 +143,7 @@ jobs:
           retention-days: 7
 
       # Always remove the container, so a failed, cancelled or aborted run
-      # leaves no mongo process behind on the shared runner.
+      # stops mongo before the job's VM is destroyed.
       - name: Remove MongoDB container
         if: always()
         run: |
