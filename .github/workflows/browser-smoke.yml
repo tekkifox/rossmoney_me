@@ -28,31 +28,28 @@ on:
         default: '/,/admin/collections/host-samples'
         type: string
 
-concurrency:
-  # The app under test cannot move off port 3000 without a code change: the
-  # legacy e2e specs and tests/helpers/login.ts hardcode
-  # `http://localhost:3000`, so a second run would fail on a host port already
-  # in use. Not keyed by ref: queue runs from every branch instead of letting
-  # one start and fail.
-  #
-  # The databases are already run-scoped (`rossmoney_ci_<run>_<attempt>` and
-  # `rossmoney_shots_<run>_<attempt>`), so only the port needs serialising.
-  group: browser-smoke
-  cancel-in-progress: false
-
 permissions:
   contents: read
   # The screenshot step updates one marker comment on the pull request.
   pull-requests: write
 
 jobs:
-  # Deliberately still on the fleet runner: this job copies a throwaway
-  # database from the paseo VM's shared dev MongoDB (`DEV_MONGO_URI`) and
-  # prefers the nightly production media mirror kept on that VM, neither of
-  # which exists on a GitHub-hosted runner. The media step falls back to the
-  # public site when no local mirror is present.
+  # Every trigger runs here, pull requests included, so pull-request code never
+  # executes on the operator's own infrastructure. A malicious PR must not get a
+  # shell on the self-hosted `paseo` runner, whose user is in the Docker group.
+  # The publish, lint, token-guard and dependency-audit jobs still use that
+  # runner; this job makes no use of it.
+  #
+  # The job is therefore self-contained: it starts its own disposable MongoDB
+  # container and lets the seed build the database from the repository. It does
+  # not read `DEV_MONGO_URI` (the paseo VM's shared dev MongoDB) or the media
+  # mirror kept on that VM.
+  #
+  # Each run gets a fresh VM, so the shared host port 3000 that used to force a
+  # repo-wide `browser-smoke` concurrency group no longer exists and runs may
+  # overlap.
   smoke:
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     timeout-minutes: 45
 
     env:
@@ -62,14 +59,19 @@ jobs:
       # Live Preview builds this into the iframe URL and checks it on the
       # preview route, so both processes need the same value.
       PREVIEW_SECRET: browser-smoke-preview-secret
-      # Force-refresh the default documents on every startup. The per-run
+      # Force-refresh the default documents on every startup. The container's
       # databases are disposable, so this is safe, and it is what makes a pull
       # request that changes a seeded page show that change in the screenshot.
-      # The screenshot server inherits this too, but force-seeding only merges
-      # page fields: it never replaces the CV media an editor uploaded.
+      # Force-seeding only merges page fields: it never replaces the CV media an
+      # editor uploaded, and these databases never hold one.
       PAYLOAD_SEED: 'true'
+      # The screenshot spec logs in as the dev admin, which a copy of
+      # `rossmoney_dev` used to supply. A database seeded from scratch gets it
+      # from the create-only seed hook instead.
+      PAYLOAD_SEED_ADMIN_EMAIL: dev@payloadcms.com
+      PAYLOAD_SEED_ADMIN_PASSWORD: test
       # CI must never write host samples. The production deployment owns
-      # sampling; the screenshot database is a throwaway copy.
+      # sampling; these databases are throwaway.
       HOST_SAMPLER: 'off'
       # The `/a` rewrite targets the `ackee` Docker service, which is not part
       # of this job. Rendering the tracker would leave one request hanging and
@@ -80,31 +82,54 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # The paseo VM already runs the shared dev MongoDB (`rosso-mongo-dev`,
-      # seeded from the nightly production dump), so CI must not start its own
-      # server. `DEV_MONGO_URI` is a base URI only (credentials, host and port);
-      # each run adds its own database name, which keeps concurrent runs
-      # isolated on the one shared server. The URI is never printed.
-      - name: Configure shared MongoDB database
-        env:
-          DEV_MONGO_URI: ${{ secrets.DEV_MONGO_URI }}
+      # Docker is preinstalled on ubuntu-latest. Start mongo on a port the
+      # kernel picks (`-p 127.0.0.1::27017` leaves the host port empty and
+      # `docker port` reads back the one that was assigned), bound to 127.0.0.1
+      # so the database is not reachable from the VM's network.
+      #
+      # Two databases share the one server: the smoke suite's own, and a second
+      # one for the screenshot server, so the screenshots can never read what
+      # the smoke suite edited. Both are created on first write and die with the
+      # container, so nothing has to be dropped or cleaned up by hand.
+      - name: Start MongoDB
         run: |
           set -euo pipefail
-          if [ -z "${DEV_MONGO_URI:-}" ]; then
-            echo "::error::DEV_MONGO_URI is not configured"
+          NAME="mongo-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run -d --name "$NAME" -p 127.0.0.1::27017 mongo:9
+
+          ADDR=$(docker port "$NAME" 27017/tcp)
+          PORT="${ADDR##*:}"
+          if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+            echo "::error::could not read a host port for $NAME (docker port said '$ADDR')"
             exit 1
           fi
 
-          BASE="${DEV_MONGO_URI%/}"
-          SMOKE_DB="rossmoney_ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-          SMOKE_URI="${BASE}/${SMOKE_DB}?authSource=admin"
-
           {
-            echo "SMOKE_DB=${SMOKE_DB}"
-            echo "MONGODB_URI=${SMOKE_URI}"
+            echo "MONGO_CONTAINER=${NAME}"
+            echo "MONGODB_URI=mongodb://127.0.0.1:${PORT}/rossmoney_ci"
+            echo "SCREENSHOT_MONGODB_URI=mongodb://127.0.0.1:${PORT}/rossmoney_shots"
           } >> "$GITHUB_ENV"
+          echo "MongoDB container ${NAME} listening on 127.0.0.1:${PORT}"
 
-          echo "Using shared MongoDB database ${SMOKE_DB}"
+          # Poll the container instead of assuming the first boot is ready, so
+          # the suites never race it and a dead container fails here with its
+          # logs rather than inside Playwright.
+          for attempt in $(seq 1 60); do
+            if OUT=$(docker exec "$NAME" mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null) && [ "$OUT" = "1" ]; then
+              echo "MongoDB ready after ${attempt} attempt(s)"
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "$NAME")" != "true" ]; then
+              echo "::error::MongoDB container exited during startup"
+              docker logs "$NAME" || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "::error::MongoDB did not answer a ping within 120s"
+          docker logs "$NAME" || true
+          exit 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -120,18 +145,6 @@ jobs:
       # from `packageManager` at the repository root.
       - name: Install dependencies
         run: corepack pnpm install --frozen-lockfile
-
-      # The runner has Node and the project's `mongodb` driver, but not
-      # `mongosh`, Docker or the MongoDB Database Tools. `mongo-db.mjs` is the
-      # client for every shared-server operation in this job.
-      - name: Check shared MongoDB
-        run: |
-          set -euo pipefail
-          PING=$(node payload-cms/scripts/mongo-db.mjs ping | tail -n 1)
-          if [ "$PING" != "1" ]; then
-            echo "::error::could not reach the shared MongoDB server"
-            exit 1
-          fi
 
       - name: Build production app
         run: corepack pnpm --filter payload-cms run build
@@ -149,121 +162,15 @@ jobs:
           cp -a payload-cms/.next payload-cms/.next-screenshots
           echo "Staged $(du -sh payload-cms/.next-screenshots | cut -f1) screenshot build"
 
-      # The runner hosts Chromium's system libraries already, so this only
-      # downloads the browsers the config's projects use (chromium and
-      # firefox) at the version pinned in payload-cms/package.json. No
-      # `--with-deps`: that shells out to sudo, which the runner user does
-      # not have.
+      # The hosted runner image carries build tools, not Playwright's browser
+      # dependencies. `--with-deps` installs the matching apt packages through
+      # the runner's passwordless sudo, then Playwright downloads the browsers
+      # the config's projects use (chromium and firefox) at the version pinned
+      # in payload-cms/package.json.
       - name: Install Playwright browsers
         run: >-
           corepack pnpm --filter payload-cms exec playwright install
-          chromium firefox
-
-      # Screenshots run on pull requests and manual dispatches. The database copy
-      # and media install happen before the smoke suite so the one production
-      # build has everything it needs. A push to main still smoke-tests but does
-      # not add gallery images.
-      #
-      # The screenshot server gets a throwaway copy of the seeded dev database,
-      # never `rossmoney_dev` itself. The runner has Node and the project's
-      # `mongodb` driver but neither `mongosh`, Docker nor the Database Tools,
-      # so `mongo-db.mjs copy` recreates collections, documents and indexes over
-      # the driver. It only reads the source and drops/recreates the run-scoped
-      # target.
-      - name: Copy seeded dev database for screenshots
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-        env:
-          DEV_MONGO_URI: ${{ secrets.DEV_MONGO_URI }}
-        run: |
-          set -euo pipefail
-          BASE="${DEV_MONGO_URI%/}"
-          SHOTS_DB="rossmoney_shots_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-          TARGET_URI="${BASE}/${SHOTS_DB}?authSource=admin"
-
-          {
-            echo "SHOTS_DB=${SHOTS_DB}"
-            echo "SCREENSHOT_MONGODB_URI=${TARGET_URI}"
-          } >> "$GITHUB_ENV"
-
-          MONGO_URI="$TARGET_URI" SOURCE_DB=rossmoney_dev TARGET_DB="$SHOTS_DB" \
-            node payload-cms/scripts/mongo-db.mjs copy
-
-          COLLECTIONS=$(MONGO_URI="$TARGET_URI" \
-            node payload-cms/scripts/mongo-db.mjs count | tail -n 1)
-
-          if ! [[ "$COLLECTIONS" =~ ^[0-9]+$ ]] || [ "$COLLECTIONS" -lt 1 ]; then
-            echo "::error::the screenshot database copy is empty"
-            exit 1
-          fi
-
-          echo "Copied rossmoney_dev into ${SHOTS_DB} (${COLLECTIONS} collections)"
-
-      # The media documents in the copied database point at files that live on
-      # the production deployment. Prefer the nightly sync's local mirror, but
-      # the mirror's directory has moved between hosts, so try the configured
-      # location and both known hosts before falling back to the public site.
-      # The fallback reads the referenced filenames from the copied database,
-      # which is the only authoritative list.
-      - name: Install mirrored production media
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-        env:
-          MEDIA_MIRROR: ${{ vars.MEDIA_MIRROR }}
-        run: |
-          set -euo pipefail
-          MEDIA_DIR=payload-cms/public/media
-          FALLBACK_SOURCE=https://www.rossmoney.me/media
-
-          if [ -z "${SCREENSHOT_MONGODB_URI:-}" ]; then
-            echo "::error::SCREENSHOT_MONGODB_URI is not configured; cannot read referenced media"
-            exit 1
-          fi
-
-          REFERENCED_FILE=$(mktemp)
-          trap 'rm -f "$REFERENCED_FILE"' EXIT
-          if ! MONGO_URI="$SCREENSHOT_MONGODB_URI" \
-            node payload-cms/scripts/mongo-db.mjs media-filenames > "$REFERENCED_FILE"; then
-            echo "::error::could not read media filenames from the copied database"
-            exit 1
-          fi
-
-          EXPECTED=$(grep -c . "$REFERENCED_FILE" || true)
-          if [ "$EXPECTED" -lt 1 ]; then
-            echo "::error::the copied database references no media files"
-            exit 1
-          fi
-
-          MEDIA_SOURCE=""
-          for CANDIDATE in "${MEDIA_MIRROR:-}" /home/ross/stacks/rosso-dev-sync/media /opt/rossmoney-dev-sync/media; do
-            if [ -n "$CANDIDATE" ] && [ -d "$CANDIDATE" ]; then
-              MEDIA_SOURCE="$CANDIDATE"
-              break
-            fi
-          done
-
-          rm -rf "$MEDIA_DIR"
-          mkdir -p "$MEDIA_DIR"
-
-          if [ -n "$MEDIA_SOURCE" ]; then
-            echo "Using media mirror at ${MEDIA_SOURCE}"
-            cp -a "$MEDIA_SOURCE"/. "$MEDIA_DIR"/
-          else
-            echo "No local media mirror found; downloading ${EXPECTED} referenced files from ${FALLBACK_SOURCE}"
-            while IFS= read -r NAME; do
-              [ -z "$NAME" ] && continue
-              if ! curl -fsS --retry 3 --retry-delay 2 \
-                -o "${MEDIA_DIR}/${NAME}" "${FALLBACK_SOURCE}/${NAME}"; then
-                echo "::error::could not download ${NAME} from ${FALLBACK_SOURCE}; no local media mirror was available either"
-                exit 1
-              fi
-            done < "$REFERENCED_FILE"
-          fi
-
-          FILES=$(find "$MEDIA_DIR" -maxdepth 1 -type f | wc -l)
-          if [ "$FILES" -ne "$EXPECTED" ]; then
-            echo "::error::installed ${FILES} media files but the copied database references ${EXPECTED}"
-            exit 1
-          fi
-          echo "Installed ${FILES} media files"
+          --with-deps chromium firefox
 
       # Playwright starts the production server itself (see webServer in
       # payload-cms/playwright.config.ts). `CI=true` selects the production
@@ -289,13 +196,15 @@ jobs:
           retention-days: 7
 
       # `payload-cms/playwright.screenshots.ts` starts the built app on port
-      # 3001 against the database copy and the isolated build, with
-      # HOST_SAMPLER=off. `SCREENSHOT_PATHS` comes from the workflow_dispatch
-      # input so a pull request can ask for its own page. When `/cv` is
-      # captured, the spec compares the download link with the filename this
-      # server's database holds and fails on a mismatch. The screenshots and the
-      # visible page text are written under test-results/screenshots for the
-      # publish step to inspect.
+      # 3001 against the second throwaway database and the isolated build, with
+      # HOST_SAMPLER=off. That server seeds the database from the repository on
+      # startup, exactly like the smoke server, so the pages show this branch's
+      # seed content and its sample CV. `SCREENSHOT_PATHS` comes from the
+      # workflow_dispatch input so a pull request can ask for its own page. When
+      # `/cv` is captured, the spec compares the download link with the filename
+      # this server's database holds and fails on a mismatch. The screenshots
+      # and the visible page text are written under test-results/screenshots for
+      # the publish step to inspect.
       - name: Capture screenshots
         if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         env:
@@ -320,35 +229,16 @@ jobs:
           BOOKSTACK_TOKEN_ID: ${{ secrets.BOOKSTACK_TOKEN_ID }}
           BOOKSTACK_TOKEN_SECRET: ${{ secrets.BOOKSTACK_TOKEN_SECRET }}
           BOOKSTACK_SCREENSHOT_PAGE_ID: ${{ secrets.BOOKSTACK_SCREENSHOT_PAGE_ID }}
-          DEV_MONGO_URI: ${{ secrets.DEV_MONGO_URI }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: corepack pnpm --filter payload-cms run screenshots:publish
 
-      # Best effort: the shared server is not disposable, so a run must not
-      # leave its databases behind even when an earlier step failed. Both the
-      # smoke database and the screenshot copy are dropped by name.
-      - name: Drop run databases
+      # Always remove the container, so a failed, cancelled or aborted run stops
+      # mongo before the job's VM is destroyed.
+      - name: Remove MongoDB container
         if: always()
-        env:
-          DEV_MONGO_URI: ${{ secrets.DEV_MONGO_URI }}
         run: |
-          set -euo pipefail
-          if [ -z "${DEV_MONGO_URI:-}" ]; then
-            echo "::warning::DEV_MONGO_URI is not configured; nothing to drop"
-            exit 0
-          fi
-
-          BASE="${DEV_MONGO_URI%/}"
-          DROP_URI="${BASE}?authSource=admin"
-          DROP_DBS="${SMOKE_DB:-},${SHOTS_DB:-}"
-
-          if [ -z "${SMOKE_DB:-}" ] && [ -z "${SHOTS_DB:-}" ]; then
-            echo "No run databases were created; nothing to drop"
-            exit 0
-          fi
-
-          if ! MONGO_URI="$DROP_URI" DROP_DBS="$DROP_DBS" \
-            node payload-cms/scripts/mongo-db.mjs drop; then
-            echo "::warning::could not drop the run databases; clean them up on the shared server"
+          NAME="${MONGO_CONTAINER:-mongo-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}}"
+          if docker inspect "$NAME" > /dev/null 2>&1; then
+            docker rm -f "$NAME"
           fi
