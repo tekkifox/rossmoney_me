@@ -10,6 +10,7 @@ import path from 'path'
 
 import { anyone } from '../access/anyone'
 import { authenticated } from '../access/authenticated'
+import { renderCvOnUpload, revalidateCvPages } from './Media/hooks/renderCv'
 
 // One absolute directory for both writing and serving. A bundler may rewrite
 // `import.meta.url`, so resolving from the process working directory (the
@@ -58,11 +59,39 @@ export const Media: CollectionConfig = {
     read: anyone,
     update: authenticated,
   },
+  hooks: {
+    beforeChange: [renderCvOnUpload],
+    afterChange: [revalidateCvPages],
+  },
   fields: [
     {
       name: 'alt',
       type: 'text',
       //required: true,
+    },
+    {
+      name: 'cvHtml',
+      label: 'CV HTML',
+      type: 'textarea',
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description:
+          'Generated once when a .docx or .pdf is uploaded. The /cv page renders this HTML; the original file stays as the download.',
+        condition: (data) =>
+          typeof data?.filename === 'string' && /\.(docx|pdf)$/i.test(data.filename),
+      },
+    },
+    {
+      name: 'cvRenderNote',
+      label: 'CV render note',
+      type: 'text',
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        condition: (data) =>
+          typeof data?.filename === 'string' && /\.(docx|pdf)$/i.test(data.filename),
+      },
     },
     {
       name: 'caption',

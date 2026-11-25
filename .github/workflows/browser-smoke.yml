@@ -20,21 +20,35 @@ on:
       - 'pnpm-workspace.yaml'
       - 'turbo.json'
       - '.github/workflows/browser-smoke.yml'
+  workflow_dispatch:
+    inputs:
+      paths:
+        description: 'Comma-separated paths to screenshot (default: /,/admin/collections/host-samples)'
+        required: false
+        default: '/,/admin/collections/host-samples'
+        type: string
 
 permissions:
   contents: read
+  # The screenshot step updates one marker comment on the pull request.
+  pull-requests: write
 
 jobs:
+  # Every trigger runs here, pull requests included, so pull-request code never
+  # executes on the operator's own infrastructure. A malicious PR must not get a
+  # shell on the self-hosted `paseo` runner, whose user is in the Docker group.
+  # The publish, lint, token-guard and dependency-audit jobs still use that
+  # runner; this job makes no use of it.
+  #
+  # The job is therefore self-contained: it starts its own disposable MongoDB
+  # container and lets the seed build the database from the repository. It does
+  # not read `DEV_MONGO_URI` (the paseo VM's shared dev MongoDB) or the media
+  # mirror kept on that VM.
+  #
+  # Each run gets a fresh VM, so the shared host port 3000 that used to force a
+  # repo-wide `browser-smoke` concurrency group no longer exists and runs may
+  # overlap.
   smoke:
-    # Pull-request code must never run on the operator's own infrastructure: a
-    # malicious PR would execute as the self-hosted runner's user. This job
-    # therefore runs only on a GitHub-hosted runner, for pull requests and for
-    # `main`/`dev` pushes alike. The self-hosted `paseo` runner still serves the
-    # publish, lint and token-guard jobs; nothing here depends on it.
-    #
-    # Because each run gets a fresh VM, there is no shared host port 3000 to
-    # serialise on, so these runs may overlap and no concurrency group is
-    # needed.
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -45,20 +59,38 @@ jobs:
       # Live Preview builds this into the iframe URL and checks it on the
       # preview route, so both processes need the same value.
       PREVIEW_SECRET: browser-smoke-preview-secret
+      # Force-refresh the default documents on every startup. The container's
+      # databases are disposable, so this is safe, and it is what makes a pull
+      # request that changes a seeded page show that change in the screenshot.
+      # Force-seeding only merges page fields: it never replaces the CV media an
+      # editor uploaded, and these databases never hold one.
+      PAYLOAD_SEED: 'true'
+      # The screenshot spec logs in as the dev admin, which a copy of
+      # `rossmoney_dev` used to supply. A database seeded from scratch gets it
+      # from the create-only seed hook instead.
+      PAYLOAD_SEED_ADMIN_EMAIL: dev@payloadcms.com
+      PAYLOAD_SEED_ADMIN_PASSWORD: test
+      # CI must never write host samples. The production deployment owns
+      # sampling; these databases are throwaway.
+      HOST_SAMPLER: 'off'
+      # The `/a` rewrite targets the `ackee` Docker service, which is not part
+      # of this job. Rendering the tracker would leave one request hanging and
+      # block the page's load event.
+      ACKEE_ENABLED: 'false'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # The mongo service container used to publish a fixed host port (27017),
-      # so two smoke runs could never overlap. Start mongo ourselves on a port
-      # the kernel picks instead: `-p 127.0.0.1::27017` leaves the host port
-      # empty and `docker port` reads back the one that was assigned. Bound to
-      # 127.0.0.1 only, so the database is not left reachable from anywhere
-      # else on the runner's network. Docker is preinstalled on ubuntu-latest.
+      # Docker is preinstalled on ubuntu-latest. Start mongo on a port the
+      # kernel picks (`-p 127.0.0.1::27017` leaves the host port empty and
+      # `docker port` reads back the one that was assigned), bound to 127.0.0.1
+      # so the database is not reachable from the VM's network.
       #
-      # The production server and the Playwright worker must see the same
-      # database: the worker seeds the admin account directly through Payload.
+      # Two databases share the one server: the smoke suite's own, and a second
+      # one for the screenshot server, so the screenshots can never read what
+      # the smoke suite edited. Both are created on first write and die with the
+      # container, so nothing has to be dropped or cleaned up by hand.
       - name: Start MongoDB
         run: |
           set -euo pipefail
@@ -72,14 +104,16 @@ jobs:
             exit 1
           fi
 
-          echo "MONGO_CONTAINER=$NAME" >> "$GITHUB_ENV"
-          echo "MONGODB_URI=mongodb://127.0.0.1:${PORT}/rossmoney_smoke" >> "$GITHUB_ENV"
-          echo "MongoDB container $NAME listening on 127.0.0.1:${PORT}"
+          {
+            echo "MONGO_CONTAINER=${NAME}"
+            echo "MONGODB_URI=mongodb://127.0.0.1:${PORT}/rossmoney_ci"
+            echo "SCREENSHOT_MONGODB_URI=mongodb://127.0.0.1:${PORT}/rossmoney_shots"
+          } >> "$GITHUB_ENV"
+          echo "MongoDB container ${NAME} listening on 127.0.0.1:${PORT}"
 
-          # The service container's health check used to cover readiness. Poll
-          # the container instead, bounded, so the suites never race the first
-          # boot and a dead container fails here with its logs rather than in
-          # Playwright.
+          # Poll the container instead of assuming the first boot is ready, so
+          # the suites never race it and a dead container fails here with its
+          # logs rather than inside Playwright.
           for attempt in $(seq 1 60); do
             if OUT=$(docker exec "$NAME" mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null) && [ "$OUT" = "1" ]; then
               echo "MongoDB ready after ${attempt} attempt(s)"
@@ -100,7 +134,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '26.13.0'
+          node-version: '26.13.1'
 
       # Node 26 no longer bundles corepack; install it explicitly, pinned.
       # The pnpm version comes from `packageManager` in package.json.
@@ -115,6 +149,19 @@ jobs:
       - name: Build production app
         run: corepack pnpm --filter payload-cms run build
 
+      # The smoke suite and the screenshot capture run two servers from this
+      # one checkout. Next.js keeps its full route cache inside the build
+      # directory, so a shared `.next` lets the screenshot server answer with a
+      # page the smoke server rendered against the smoke database. Copy the
+      # freshly built output before the smoke run; the screenshot server starts
+      # with NEXT_DIST_DIR pointing at the copy and writes its own cache there.
+      - name: Stage an isolated screenshot build
+        run: |
+          set -euo pipefail
+          rm -rf payload-cms/.next-screenshots
+          cp -a payload-cms/.next payload-cms/.next-screenshots
+          echo "Staged $(du -sh payload-cms/.next-screenshots | cut -f1) screenshot build"
+
       # The hosted runner image carries build tools, not Playwright's browser
       # dependencies. `--with-deps` installs the matching apt packages through
       # the runner's passwordless sudo, then Playwright downloads the browsers
@@ -126,9 +173,13 @@ jobs:
           --with-deps chromium firefox
 
       # Playwright starts the production server itself (see webServer in
-      # payload-cms/playwright.config.ts). `CI=true` selects `pnpm start` and
-      # disables reusing a stray dev server.
+      # payload-cms/playwright.config.ts). `CI=true` selects the production
+      # command and disables reusing a stray dev server. Bind loopback so the
+      # server banner does not print the runner's network address into a public
+      # CI log.
       - name: Run browser smoke suite
+        env:
+          PLAYWRIGHT_WEB_SERVER_COMMAND: pnpm start:loopback
         run: corepack pnpm --filter payload-cms run test:e2e
 
       - name: Upload Playwright report and traces
@@ -139,11 +190,51 @@ jobs:
           path: |
             payload-cms/playwright-report
             payload-cms/test-results
+            !payload-cms/test-results/screenshot-artifacts
+            !payload-cms/test-results/screenshots
           if-no-files-found: ignore
           retention-days: 7
 
-      # Always remove the container, so a failed, cancelled or aborted run
-      # stops mongo before the job's VM is destroyed.
+      # `payload-cms/playwright.screenshots.ts` starts the built app on port
+      # 3001 against the second throwaway database and the isolated build, with
+      # HOST_SAMPLER=off. That server seeds the database from the repository on
+      # startup, exactly like the smoke server, so the pages show this branch's
+      # seed content and its sample CV. `SCREENSHOT_PATHS` comes from the
+      # workflow_dispatch input so a pull request can ask for its own page. When
+      # `/cv` is captured, the spec compares the download link with the filename
+      # this server's database holds and fails on a mismatch. The screenshots
+      # and the visible page text are written under test-results/screenshots for
+      # the publish step to inspect.
+      - name: Capture screenshots
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        env:
+          SCREENSHOT_BASE_URL: http://localhost:3001
+          SCREENSHOT_PATHS: ${{ inputs.paths }}
+          # Start from the pre-smoke copy of the build, never from `.next`.
+          SCREENSHOT_DIST_DIR: .next-screenshots
+        run: corepack pnpm --filter payload-cms run screenshots
+
+      # This step checks every PNG and its captured page text for material that
+      # must not appear in a public repository before it uploads anything. If a
+      # finding is present it exits non-zero without contacting BookStack, so a
+      # leak can never reach the gallery or the pull request. It then uploads
+      # the images and updates one marker comment on the pull request.
+      #
+      # Disabled: re-enable by restoring the original `if` condition below.
+      # Original: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+      - name: Publish screenshots to BookStack
+        if: false
+        env:
+          BOOKSTACK_URL: ${{ secrets.BOOKSTACK_URL }}
+          BOOKSTACK_TOKEN_ID: ${{ secrets.BOOKSTACK_TOKEN_ID }}
+          BOOKSTACK_TOKEN_SECRET: ${{ secrets.BOOKSTACK_TOKEN_SECRET }}
+          BOOKSTACK_SCREENSHOT_PAGE_ID: ${{ secrets.BOOKSTACK_SCREENSHOT_PAGE_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: corepack pnpm --filter payload-cms run screenshots:publish
+
+      # Always remove the container, so a failed, cancelled or aborted run stops
+      # mongo before the job's VM is destroyed.
       - name: Remove MongoDB container
         if: always()
         run: |

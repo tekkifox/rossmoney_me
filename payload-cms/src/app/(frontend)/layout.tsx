@@ -2,9 +2,11 @@ import type { Metadata } from 'next'
 
 import { Analytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import { cn } from '@/utilities/ui'
+// Only the mono face is used by the public site: Tailwind's preflight resolves
+// `<pre>`/`<code>` (the topology diagrams) through `--font-mono`.
+// Body, headings and buttons use the Inter token stack, so GeistSans was
+// preloading ~70 KB per page for text that never rendered in it.
 import { GeistMono } from 'geist/font/mono'
-import { GeistSans } from 'geist/font/sans'
 import React from 'react'
 
 import { AdminBar } from '@/components/AdminBar'
@@ -14,18 +16,15 @@ import { Header } from '@/Header/Component'
 import { Providers } from '@/providers'
 import { InitTheme } from '@/providers/Theme/InitTheme'
 import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
-import { draftMode } from 'next/headers'
 
 import './globals.css'
 import '../../styles/tokens.css'
 import './local-styles.css'
 import { getServerSideURL } from '@/utilities/getURL'
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { isEnabled } = await draftMode()
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html className={cn(GeistSans.variable, GeistMono.variable)} lang="en" suppressHydrationWarning>
+    <html className={GeistMono.variable} lang="en" suppressHydrationWarning>
       <head>
         <InitTheme />
         <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
@@ -35,13 +34,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body>
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
         <ErrorReporter />
         <Providers>
-          <AdminBar
-            adminBarProps={{
-              preview: isEnabled,
-            }}
-          />
+          <AdminBar />
 
           <Header />
           {children}

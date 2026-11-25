@@ -65,6 +65,7 @@ export const seedArchviewSources = async (
 
   const createIfMissing = async (data: {
     audience: string
+    charts: boolean
     clientId?: string
     clientSecret?: string
     isDefault: boolean
@@ -122,6 +123,7 @@ export const seedArchviewSources = async (
       clientSecret: productionSecret,
       scope: read(env.ARCHVIEW_SCOPE) || 'archview:read',
       isDefault: true,
+      charts: false,
     })
   } else if (productionOrigin && productionClientId && productionSecret && !productionKey) {
     payload.logger.warn(
@@ -138,6 +140,7 @@ export const seedArchviewSources = async (
     tokenUrl,
     scope: 'archview:read',
     isDefault: false,
+    charts: false,
   })
 
   return { productionId, vortexserversId }

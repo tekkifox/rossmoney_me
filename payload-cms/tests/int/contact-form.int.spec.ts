@@ -1,13 +1,23 @@
 import { getPayload, Payload } from 'payload'
 import config from '@/payload.config'
 
-import { describe, it, beforeAll, afterAll, expect, vi } from 'vitest'
+import { describe, it, beforeAll, afterAll, beforeEach, expect, vi } from 'vitest'
 
-vi.mock('@/utilities/verifyRecaptcha', () => ({
-  verifyRecaptchaToken: vi.fn<() => Promise<boolean>>(async () => true),
-}))
+vi.mock('@/utilities/verifyTurnstile', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utilities/verifyTurnstile')>()
+  return {
+    ...actual,
+    verifyTurnstileToken: vi.fn<typeof actual.verifyTurnstileToken>(async () => ({
+      ok: true,
+      skipped: false,
+    })),
+  }
+})
 
 import { contactForm as contactFormData } from '@/endpoints/seed/contact-form'
+import { verifyTurnstileToken } from '@/utilities/verifyTurnstile'
+
+const verifyTurnstile = vi.mocked(verifyTurnstileToken)
 
 let payload: Payload
 let formID: string
@@ -16,6 +26,11 @@ let formID: string
 // Using the local API with overrideAccess: false exercises the same collection
 // operation and access control as the public REST endpoint.
 describe('Contact form', () => {
+  beforeEach(() => {
+    verifyTurnstile.mockReset()
+    verifyTurnstile.mockResolvedValue({ ok: true, skipped: false })
+  })
+
   beforeAll(async () => {
     const payloadConfig = await config
     payload = await getPayload({ config: payloadConfig })
@@ -77,7 +92,7 @@ describe('Contact form', () => {
           { field: 'phone', value: '01234567890' },
           { field: 'message', value: 'I would like to discuss a website build.' },
           { field: 'website', value: '' },
-          { field: 'recaptcha-token', value: 'verified-token' },
+          { field: 'turnstile-token', value: 'verified-token' },
         ],
       },
       depth: 0,
@@ -117,7 +132,7 @@ describe('Contact form', () => {
           { field: 'full-name', value: 'Grace Hopper' },
           { field: 'email', value: 'grace@example.com' },
           { field: 'message', value: 'Please send a day rate for a CMS integration.' },
-          { field: 'recaptcha-token', value: 'verified-token' },
+          { field: 'turnstile-token', value: 'verified-token' },
         ],
       },
       depth: 0,
@@ -142,7 +157,7 @@ describe('Contact form', () => {
             { field: 'email', value: 'not-an-email' },
             { field: 'phone', value: 'abc' },
             { field: 'message', value: 'Invalid data' },
-            { field: 'recaptcha-token', value: 'verified-token' },
+            { field: 'turnstile-token', value: 'verified-token' },
           ],
         },
         depth: 0,
@@ -160,7 +175,7 @@ describe('Contact form', () => {
             { field: 'email', value: 'valid@example.com' },
             { field: 'phone', value: 'abc' },
             { field: 'message', value: 'Invalid data' },
-            { field: 'recaptcha-token', value: 'verified-token' },
+            { field: 'turnstile-token', value: 'verified-token' },
           ],
         },
         depth: 0,
@@ -169,7 +184,7 @@ describe('Contact form', () => {
     ).rejects.toThrow('Please provide a valid phone number.')
   })
 
-  it('rejects a contact submission without a verified reCAPTCHA token', async () => {
+  it('rejects a contact submission without a Turnstile token', async () => {
     await expect(
       payload.create({
         collection: 'form-submissions',
@@ -184,7 +199,35 @@ describe('Contact form', () => {
         depth: 0,
         overrideAccess: false,
       }),
-    ).rejects.toThrow('reCAPTCHA verification failed.')
+    ).rejects.toThrow('Please complete the verification challenge before submitting.')
+
+    expect(verifyTurnstile).not.toHaveBeenCalled()
+  })
+
+  it('rejects a token the verifier refuses with a readable message', async () => {
+    verifyTurnstile.mockResolvedValueOnce({
+      ok: false,
+      message: 'Verification failed. Please complete the challenge and try again.',
+    })
+
+    await expect(
+      payload.create({
+        collection: 'form-submissions',
+        data: {
+          form: formID,
+          submissionData: [
+            { field: 'full-name', value: 'Rejected Token' },
+            { field: 'email', value: 'valid@example.com' },
+            { field: 'message', value: 'Rejected token' },
+            { field: 'turnstile-token', value: 'rejected-token' },
+          ],
+        },
+        depth: 0,
+        overrideAccess: false,
+      }),
+    ).rejects.toThrow('Verification failed. Please complete the challenge and try again.')
+
+    expect(verifyTurnstile).toHaveBeenCalledWith('rejected-token')
   })
 
   it('rejects a submission that fills the honeypot field', async () => {

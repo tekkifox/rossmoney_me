@@ -1,5 +1,5 @@
 import config from '@payload-config'
-import { getPayload } from 'payload'
+import { getPayload, type Payload } from 'payload'
 import { NextResponse } from 'next/server'
 
 import {
@@ -12,6 +12,14 @@ import {
   findEnabledArchviewSourceRecordByRef,
   type ArchviewSourceRecord,
 } from '@/utilities/archviewSources'
+import {
+  cacheKeyFor,
+  readCachedSnapshot,
+  writeCachedSnapshot,
+  type CachedSnapshotLookup,
+  type SnapshotCacheIdentity,
+} from '@/utilities/architectureStore'
+import { getSafePayload } from '@/utilities/getSafePayload'
 import { redactInternalEndpoints } from '@/utilities/redactInternalEndpoints'
 
 // ArchView runs as a separate stack (archview.rossmoney.me), so there is no
@@ -354,9 +362,9 @@ const fetchCandidate = async (
   }
 }
 
-// Shared across visitors, and shorter than the 10-second panel poll so a
-// cached entry never outlives the next poll by more than a few seconds.
-export const ARCHVIEW_CACHE_TTL_MS = 5000
+// Shared across visitors. The client polls every 45 seconds; a 60-second entry
+// means nearly every poll is served from this process instead of ArchView.
+export const ARCHVIEW_CACHE_TTL_MS = 60_000
 
 export type ArchitectureRouteDeps = {
   env?: ArchviewSourceEnv
@@ -364,6 +372,13 @@ export type ArchitectureRouteDeps = {
   lookupSource?: ArchviewSourceLookup
   lookupDefaultSource?: ArchviewDefaultSourceLookup
   timeoutMs?: number
+  /** Tests shorten this so they do not have to wait for the production TTL. */
+  cacheTtlMs?: number
+  /**
+   * Payload client for the database snapshot cache. Omit to resolve one lazily;
+   * pass `null` to disable the cache (tests that exercise only the fetch path).
+   */
+  payload?: Payload | null
 }
 
 type CachedArchitectureResponse = {
@@ -389,6 +404,23 @@ const degradedSnapshot = () =>
     { status: 200 },
   )
 
+const projectFromSearch = (search: string): string => {
+  try {
+    const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
+    return params.get('project')?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
+const snapshotOf = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+
+const cacheStateHeader = (cached: CachedSnapshotLookup): 'hit' | 'stale' =>
+  cached.stale ? 'stale' : 'hit'
+
 export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   const baseEnv = deps.env ?? process.env
   const env: ArchviewSourceEnv =
@@ -396,6 +428,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
       ? { ...baseEnv, ARCHVIEW_TIMEOUT_MS: String(deps.timeoutMs) }
       : { ...baseEnv }
   const fetchImpl = deps.fetchImpl ?? fetch
+  const cacheTtlMs = deps.cacheTtlMs ?? ARCHVIEW_CACHE_TTL_MS
   const lookupSource = deps.lookupSource ?? lookupFromDatabase
   const lookupDefaultSource = deps.lookupDefaultSource ?? lookupDefaultFromDatabase
 
@@ -416,18 +449,67 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
     cache.set(key, value)
   }
 
-  const cacheKeyFor = (resolved: ArchviewRequestSource | null, search: string): string => {
+  const payloadPromise: Promise<Payload | null> =
+    deps.payload !== undefined ? Promise.resolve(deps.payload) : getSafePayload()
+
+  const processCacheKey = (resolved: ArchviewRequestSource | null, search: string): string => {
     const sourcePart = resolved
       ? `${resolved.origin}|${resolved.credentials?.clientId ?? ''}|${resolved.credentials?.tokenUrl ?? ''}`
       : `env:${env.ARCHVIEW_URL ?? ''}`
     return `${sourcePart}|${search}`
   }
 
-  const reconstruct = (value: CachedArchitectureResponse): Response =>
-    new Response(value.body.slice(0), {
+  const reconstruct = (value: CachedArchitectureResponse): Response => {
+    const headers = new Headers(value.headers)
+    // Shared, redacted snapshots are safe for the edge. The short lifetime is
+    // aligned with the client poll; failures keep the same brief window.
+    if (value.status === 200 && !headers.has('cache-control')) {
+      headers.set('cache-control', 'public, s-maxage=30, stale-while-revalidate=120')
+    }
+    return new Response(value.body.slice(0), {
       status: value.status,
-      headers: new Headers(value.headers),
+      headers,
     })
+  }
+
+  const jsonSnapshotResponse = (
+    snapshot: Record<string, unknown>,
+    cacheState: 'hit' | 'stale' | 'miss',
+  ): CachedArchitectureResponse => {
+    const body = new TextEncoder().encode(JSON.stringify(snapshot))
+    return {
+      status: 200,
+      headers: [
+        ['content-type', 'application/json'],
+        ['x-archview-cache', cacheState],
+      ],
+      body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      expiresAt: Date.now() + cacheTtlMs,
+    }
+  }
+
+  const cachedSnapshotResponse = (cached: CachedSnapshotLookup): CachedArchitectureResponse =>
+    jsonSnapshotResponse(cached.snapshot, cacheStateHeader(cached))
+
+  /**
+   * A live response is usable only when it is a JSON object and is not the
+   * degraded marker the route itself can produce. Anything else is treated as
+   * a failure so the last known good row can be served instead.
+   */
+  const readLiveSnapshot = async (res: Response): Promise<Record<string, unknown>> => {
+    const contentType = res.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      throw new Error(`upstream returned ${contentType || 'no content type'}`)
+    }
+    const snapshot = snapshotOf(await res.json())
+    if (!snapshot) {
+      throw new Error('upstream returned an invalid snapshot')
+    }
+    if (snapshot.degraded === true) {
+      throw new Error('upstream returned a degraded snapshot')
+    }
+    return redactInternalEndpoints(snapshot)
+  }
 
   const resolveSource = async (raw: string | null): Promise<ArchviewRequestSource | null> => {
     try {
@@ -454,48 +536,49 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
   const build = async (
     resolved: ArchviewRequestSource | null,
     search: string,
+    requestedSource: string | null,
   ): Promise<CachedArchitectureResponse | null> => {
+    const payload = await payloadPromise
+    const project = projectFromSearch(search)
+
     // When a source is explicitly requested, honour only that source: a failure
     // must not be masked by falling through to another host.
     if (resolved) {
+      const identity: SnapshotCacheIdentity = {
+        sourceId: resolved.sourceId,
+        origin: resolved.origin,
+        project,
+      }
       const target = `${resolved.origin.replace(/\/$/, '')}/api/architecture${search}`
       let upstreamStatus: number | null = null
-      let networkError: string | null = null
+      let failureReason: string | null = null
       try {
         const res = await fetchCandidate(target, resolved.credentials, env, fetchImpl)
         if (res && res.ok) {
-          const contentType = res.headers.get('content-type') || ''
-          if (contentType.includes('application/json')) {
-            const data = await res.json()
-            const redacted = redactInternalEndpoints(data)
-            const body = new TextEncoder().encode(JSON.stringify(redacted))
-            return {
-              status: 200,
-              headers: [['content-type', 'application/json']],
-              body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-              expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
-            }
-          }
-          const text = await res.text()
-          const redactedText = redactInternalEndpoints(text)
-          const body = new TextEncoder().encode(redactedText)
-          return {
-            status: 200,
-            headers: [['content-type', contentType]],
-            body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-            expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
-          }
+          const snapshot = await readLiveSnapshot(res)
+          await writeCachedSnapshot(payload, identity, snapshot, {
+            sourceName: resolved.sourceLabel,
+          })
+          return jsonSnapshotResponse(snapshot, 'miss')
         }
         if (res) {
           upstreamStatus = res.status
         }
       } catch (e) {
-        networkError = e instanceof Error ? e.message : String(e)
+        failureReason = e instanceof Error ? e.message : String(e)
+      }
+
+      const cached = await readCachedSnapshot(payload, cacheKeyFor(identity), { env })
+      if (cached) {
+        console.warn(
+          `ArchView source "${resolved.sourceLabel ?? resolved.origin}" failed; serving the cached snapshot.`,
+        )
+        return cachedSnapshotResponse(cached)
       }
 
       const reason =
-        networkError !== null
-          ? networkError
+        failureReason !== null
+          ? failureReason
           : upstreamStatus !== null
             ? `upstream returned ${upstreamStatus}`
             : 'no response'
@@ -512,7 +595,22 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
         status: 502,
         headers: [['content-type', 'application/json']],
         body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-        expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
+        expiresAt: Date.now() + cacheTtlMs,
+      }
+    }
+
+    // A source was named but could not be resolved (disabled, deleted, malformed
+    // or a lookup failure). Serve its last known good row before falling back to
+    // the configured deployment; an empty cache keeps the old fallback intact.
+    const requestRef = readString(requestedSource)
+    if (requestRef) {
+      const requestedOrigin = /^https?:\/\//i.test(requestRef) ? requestRef : null
+      const identity: SnapshotCacheIdentity = requestedOrigin
+        ? { origin: requestedOrigin, project }
+        : { sourceId: requestRef, project }
+      const cached = await readCachedSnapshot(payload, cacheKeyFor(identity), { env })
+      if (cached) {
+        return cachedSnapshotResponse(cached)
       }
     }
 
@@ -538,37 +636,33 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
       const target = `${candidate.host.replace(/\/$/, '')}/api/architecture${search}`
       try {
         const res = await fetchCandidate(target, candidate.source, env, fetchImpl)
-        if (!res) continue
-
-        const contentType = res.headers.get('content-type') || ''
-        if (!res.ok) {
+        if (!res || !res.ok) {
           continue
         }
 
-        if (contentType.includes('application/json')) {
-          const data = await res.json()
-          const redacted = redactInternalEndpoints(data)
-          const body = new TextEncoder().encode(JSON.stringify(redacted))
-          return {
-            status: 200,
-            headers: [['content-type', 'application/json']],
-            body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-            expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
-          }
-        }
-
-        const text = await res.text()
-        const redactedText = redactInternalEndpoints(text)
-        const body = new TextEncoder().encode(redactedText)
-        return {
-          status: 200,
-          headers: [['content-type', contentType]],
-          body: body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-          expiresAt: Date.now() + ARCHVIEW_CACHE_TTL_MS,
-        }
+        const snapshot = await readLiveSnapshot(res)
+        await writeCachedSnapshot(
+          payload,
+          { origin: candidate.host, project },
+          snapshot,
+        )
+        return jsonSnapshotResponse(snapshot, 'miss')
       } catch (e) {
         console.warn('ArchView fetch attempt failed for', candidate.host, e instanceof Error ? e.message : e)
         continue
+      }
+    }
+
+    // Every live candidate failed. Serve the first cache row in the same order
+    // the live fallbacks were tried, so the page keeps a usable snapshot.
+    for (const candidate of hosts) {
+      const cached = await readCachedSnapshot(
+        payload,
+        cacheKeyFor({ origin: candidate.host, project }),
+        { env },
+      )
+      if (cached) {
+        return cachedSnapshotResponse(cached)
       }
     }
 
@@ -580,8 +674,9 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
     const search = stripSource(url.searchParams)
     const cacheable = cacheableSearch(url.searchParams)
 
-    const resolved = await resolveSource(url.searchParams.get('source'))
-    const key = cacheKeyFor(resolved, cacheable)
+    const requestedSource = url.searchParams.get('source')
+    const resolved = await resolveSource(requestedSource)
+    const key = processCacheKey(resolved, cacheable)
 
     // Cache hit
     const existing = cache.get(key)
@@ -598,7 +693,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
     // Single-flight coalescing
     let promise = inFlight.get(key)
     if (!promise) {
-      promise = build(resolved, search).finally(() => {
+      promise = build(resolved, search, requestedSource).finally(() => {
         inFlight.delete(key)
       })
       inFlight.set(key, promise)
@@ -606,7 +701,7 @@ export function createArchitectureGet(deps: ArchitectureRouteDeps = {}) {
 
     const value = await promise
     if (value) {
-      value.expiresAt = Date.now() + ARCHVIEW_CACHE_TTL_MS
+      value.expiresAt = Date.now() + cacheTtlMs
       if (!cache.has(key)) {
         setCache(key, value)
       }

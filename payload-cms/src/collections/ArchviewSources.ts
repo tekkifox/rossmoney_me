@@ -1,4 +1,6 @@
 import type {
+  CollectionAfterChangeHook,
+  CollectionAfterDeleteHook,
   CollectionAfterReadHook,
   CollectionBeforeChangeHook,
   CollectionConfig,
@@ -6,11 +8,14 @@ import type {
 } from 'payload'
 
 import { authenticated } from '../access/authenticated'
+import { revalidateArchitectureCache } from '../utilities/architectureCache'
 import { asRecord, asString } from '../utilities/json'
 import {
   decryptArchviewSecret,
   encryptArchviewSecret,
 } from '../utilities/archviewSourceSecret'
+import { validateHostCharts, validateTailnet } from '../utilities/botSettings'
+import { revalidateAllPublicPages } from '../utilities/revalidatePublicPages'
 
 /**
  * Keeps at most one default row. The bulk write bypasses document hooks so it
@@ -169,6 +174,25 @@ const isHttpsUrl = (value: unknown): string | true => {
  * this collection instead gives one extra instance its own credentials, so
  * adding an instance no longer means editing environment variables on the CMS.
  */
+/**
+ * The resolved source (origin, project and credentials) is part of every
+ * rendered snapshot, so any source edit must drop the cached snapshots as well
+ * as the page HTML that embeds them.
+ */
+const revalidateArchitectureAfterChange: CollectionAfterChangeHook = ({ context }) => {
+  if (!context.disableRevalidate) {
+    revalidateArchitectureCache()
+    revalidateAllPublicPages()
+  }
+}
+
+const revalidateArchitectureAfterDelete: CollectionAfterDeleteHook = ({ context }) => {
+  if (!context.disableRevalidate) {
+    revalidateArchitectureCache()
+    revalidateAllPublicPages()
+  }
+}
+
 export const ArchviewSources: CollectionConfig = {
   slug: 'archview-sources',
   labels: {
@@ -194,6 +218,8 @@ export const ArchviewSources: CollectionConfig = {
   hooks: {
     beforeChange: [enforceSingleDefault, encryptSubmittedSecret],
     afterRead: [decryptStoredSecret],
+    afterChange: [revalidateArchitectureAfterChange],
+    afterDelete: [revalidateArchitectureAfterDelete],
   },
   fields: [
     {
@@ -235,6 +261,27 @@ export const ArchviewSources: CollectionConfig = {
         (Number.isInteger(value) && value >= 1 && value <= 65535)
           ? true
           : 'Enter a whole port number between 1 and 65535.',
+    },
+    {
+      name: 'tailnet',
+      type: 'text',
+      validate: validateTailnet,
+      admin: {
+        description:
+          'Optional tailnet address or tailnet DNS name for this host, for example 203.0.113.10 or host.example.ts.net. A name is preferred: it survives the node re-registering, where an address changes. Leave blank when the host has none; the notification agent then dials the hostname.',
+      },
+    },
+    {
+      name: 'charts',
+      type: 'checkbox',
+      defaultValue: false,
+      label: 'Host charts',
+      validate: (value, { siblingData }) =>
+        validateHostCharts(value, asRecord(siblingData).name),
+      admin: {
+        description:
+          'Attach the CPU and memory chart to the notification bot posts about this host. Off unless ticked.',
+      },
     },
     {
       name: 'project',

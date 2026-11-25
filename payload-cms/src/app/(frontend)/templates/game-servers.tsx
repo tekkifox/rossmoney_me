@@ -1,4 +1,8 @@
+// Scrollable snapshot regions must be reachable and scrollable with the keyboard.
+// The <pre> is the element that scrolls, so it owns tabIndex and the region role.
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import {
   PageDoc,
@@ -15,7 +19,7 @@ import {
 import { assembleSite } from '@/utilities/assembleSite'
 // Note: the source is resolved from the page relation, legacy URL text, the default row, then env.
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
-import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
+import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 import { getGithubCommits } from '@/utilities/getGithubCommits'
@@ -51,6 +55,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
   const archTitle = archFailed ? 'Architecture source unavailable' : titleFromPayload(archPayload)
   const archDesc = archFailed ? archFailureMessage : descriptionFromPayload(archPayload)
   const archDiagram = archFailed ? '' : renderDiagram(archPayload)
+  const archMetrics = architectureMetricsFromPayload(archFailed ? null : archPayload)
 
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
   try {
@@ -69,7 +74,7 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
   const heroMetrics = readMetrics(projectPayload.metrics || [])
 
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <PageMeta page={page} />
       {/* Reuse travelling-like layout but for Vortex project */}
       <section className="hero container">
@@ -103,6 +108,21 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
         </div>
       </section>
 
+      <section className="section container" aria-label="Screenshot of the live Vortex Servers site">
+        <figure className="project-screenshot-frame card">
+          <Image
+            alt="Screenshot of vortexservers.co.uk: 'Welcome to Vortex Servers' over a dark hero with a live server list."
+            className="project-screenshot-image"
+            height={1250}
+            sizes="(max-width: 1140px) 100vw, 1116px"
+            src="/projects/vortexservers.png"
+            unoptimized
+            width={2000}
+          />
+          <figcaption className="project-screenshot-caption">vortexservers.co.uk — the live game server site.</figcaption>
+        </figure>
+      </section>
+
       <section id="architecture" className="section container">
         <div className="section-heading architecture-heading">
           <div>
@@ -111,6 +131,8 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
           </div>
           <button className="btn btn-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
         </div>
+
+        <output aria-atomic="true" aria-live="polite" className="sr-only" id="architecture-status" />
 
         <div className="architecture-layout">
           <article className="architecture-diagram card">
@@ -125,33 +147,44 @@ export default async function GameServersTemplate({ page }: { page: PageDoc }) {
             {archFailed ? (
               <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
             ) : (
-              <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+              <>
+                <pre aria-label="Architecture diagram" className="diagram-view diagram-view-capped" data-architecture-diagram id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+                <details className="diagram-toggle">
+                  <summary>
+                    <span className="diagram-toggle-closed">View full diagram</span>
+                    <span className="diagram-toggle-open">Show less</span>
+                  </summary>
+                  <pre aria-label="Architecture diagram, full height" className="diagram-view diagram-view-full" data-architecture-diagram role="region" tabIndex={0}>{archDiagram}</pre>
+                </details>
+              </>
             )}
-            <div className="raw-json-wrap"><details><summary>Raw snapshot</summary><pre className="raw-json" id="architecture-raw">{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre></details></div>
           </article>
 
           <aside className="image-column card">
             <div className="panel-header image-panel-header"><div><p className="panel-kicker">Host stats</p></div></div>
             <div className="metrics-cards" id="architecture-metrics">
-              <article className="metric-card"><div className="metric-card-label">CPU (avg)</div><div id="architecture-metric-cpu" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Memory</div><div id="architecture-metric-memory" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Load</div><div id="architecture-metric-load" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Disk</div><div id="architecture-metric-disk" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Swap</div><div id="architecture-metric-swap" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Network</div><div id="architecture-metric-network" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">Hosts</div><div id="architecture-metric-hosts" className="metric-card-value">0</div></article>
-              <article className="metric-card"><div className="metric-card-label">Processes</div><div id="architecture-metric-processes" className="metric-card-value">N/A</div></article>
-              <article className="metric-card"><div className="metric-card-label">OS</div><div id="architecture-metric-os" className="metric-card-value">N/A</div></article>
+              <article className="metric-card"><div className="metric-card-label">CPU (avg)</div><div id="architecture-metric-cpu" className="metric-card-value">{archMetrics.cpu}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Memory</div><div id="architecture-metric-memory" className="metric-card-value">{archMetrics.memory}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Load</div><div id="architecture-metric-load" className="metric-card-value">{archMetrics.load}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Disk</div><div id="architecture-metric-disk" className="metric-card-value">{archMetrics.disk}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Swap</div><div id="architecture-metric-swap" className="metric-card-value">{archMetrics.swap}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Network</div><div id="architecture-metric-network" className="metric-card-value">{archMetrics.network}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Hosts</div><div id="architecture-metric-hosts" className="metric-card-value">{archMetrics.hosts}</div></article>
+              <article className="metric-card"><div className="metric-card-label">Processes</div><div id="architecture-metric-processes" className="metric-card-value">{archMetrics.processes}</div></article>
+              <article className="metric-card"><div className="metric-card-label">OS</div><div id="architecture-metric-os" className="metric-card-value">{archMetrics.os}</div></article>
             </div>
           </aside>
         </div>
 
-        <ArchitectureClient project="vortexservers_co_uk" />
+        <ArchitectureClient
+          project="vortexservers_co_uk"
+          initialMetrics={archFailed ? null : archMetrics}
+        />
       </section>
 
       <section className="section container">
         <div className="section-heading"><p className="eyebrow">Recent commits</p><h2>Recent changes</h2></div>
-        <div className="card architecture-summary"><pre className="diagram-view" id="github-commits">{commitsText}</pre></div>
+        <div className="card architecture-summary"><pre aria-label="Recent commits" className="diagram-view" id="github-commits" role="region" tabIndex={0}>{commitsText}</pre></div>
       </section>
 
       <ContactPanel contact={sitePayload?.contact || readPageContact(page) || page.data || null} />

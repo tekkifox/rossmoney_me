@@ -10,7 +10,6 @@ import { Header } from './Header/config'
 import { plugins } from './plugins'
 import { getServerSideURL } from './utilities/getURL'
 import { resolveServerURL } from './utilities/serverURL'
-import { SAMPLER_INTERVAL_MS } from './utilities/hostUsage'
 import { resendAdapter } from '@payloadcms/email-resend'
 import { contact as contactPageData } from './endpoints/seed/contact-page';
 import { contactForm as contactFormData } from './endpoints/seed/contact-form';
@@ -20,17 +19,18 @@ import { Users } from './collections/Users';
 import { Projects } from './collections/Projects';
 import { Experience } from './collections/Experience';
 import { Media } from './collections/Media';
-import { Posts } from './collections/Posts';
-import { Categories } from './collections/Categories';
 import { ErrorLogs } from './collections/ErrorLogs';
 import { ArchviewSources } from './collections/ArchviewSources';
+import { ArchviewSnapshots } from './collections/ArchviewSnapshots';
 import { HostSamples } from './collections/HostSamples';
 import { BotSettings } from './BotSettings/config';
 import { seedBotSettings } from './endpoints/seed/bot-settings';
 import { travelling as travellingPage } from './endpoints/seed/travelling-page';
 import { services as servicesPage } from './endpoints/seed/services-page';
 import { gameservers } from './endpoints/seed/game-servers-page';
-import { cv } from './endpoints/seed/cv-page';
+import { mapPage } from './endpoints/seed/map-page';
+import { attachSeededCv, cv } from './endpoints/seed/cv-page';
+import { seedAdminUser } from './endpoints/seed/admin-user';
 import { seedArchviewSources, type SeededArchviewSources } from './endpoints/seed/archview-sources';
 import { asRecord } from './utilities/json';
 import { DEFAULT_PAGE_TEMPLATE, templateFromSlug } from './utilities/pageTemplates';
@@ -122,7 +122,7 @@ export default buildConfig({
       ],
     },
   },
-  collections: [Users, Pages, Posts, Categories, Projects, Experience, Media, ErrorLogs, ArchviewSources, HostSamples],
+  collections: [Users, Pages, Projects, Experience, Media, ErrorLogs, ArchviewSources, ArchviewSnapshots, HostSamples],
   cors: [getServerSideURL()].filter(Boolean),
   csrf: [getServerSideURL()].filter(Boolean),      // Crucial for cookie auth
   email: emailAdapter,
@@ -164,6 +164,19 @@ export default buildConfig({
         console.warn('public media dir check failed', err)
       }
     }
+
+    // The optional dev admin is seeded here, outside the blob-storage guard:
+    // media storage and seeding are independent concerns. See
+    // `endpoints/seed/admin-user.ts` for the create-only contract.
+    try {
+      await seedAdminUser(payload)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      payload.logger.warn(`Dev admin seed note: ${message}`)
+    }
+
+    // Default documents are seeded regardless of how uploads are stored. The
+    // guard above only owns the local `public/media` directory.
     try {
       const pClient = payload;
 
@@ -243,6 +256,7 @@ export default buildConfig({
         travellingPage,
         servicesPage,
         gameservers,
+        mapPage,
         cv,
       ];
 
@@ -309,6 +323,28 @@ export default buildConfig({
         }
       }
 
+      // The CV page is the one default page whose content lives in a media
+      // document. A database created by the seed has no upload, so the page
+      // renders the "not available" card in dev and CI. Link the seeded sample
+      // document when the field is empty; an editor's upload is never replaced.
+      try {
+        const cvPages = await pClient.find({
+          collection: 'pages',
+          where: { slug: { equals: 'cv' } },
+          depth: 0,
+          limit: 1,
+          pagination: false,
+          overrideAccess: true,
+        })
+        const cvPage = cvPages.docs[0]
+        if (cvPage && (await attachSeededCv(pClient, cvPage))) {
+          payload.logger.info('Linked the seeded CV document to the CV page')
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        payload.logger.error(`Failed to seed the CV document: ${message}`)
+      }
+
       // Older databases predate `pages.template`. Fill it in from the slug
       // mapping the route used before templates were stored, so their rendering
       // is unchanged. Never overwrite a template an editor has already set.
@@ -326,6 +362,38 @@ export default buildConfig({
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           payload.logger.error(`Failed to backfill template for page "${page.slug}": ${message}`)
+        }
+      }
+
+      // The contact page used to rely on the generic site title and had no
+      // description. New databases get both from the seed; an older database is
+      // filled in here only while both metadata fields are still empty, so an
+      // editor's own wording is never replaced.
+      const existingContact = existingPages.docs.find(
+        (page) => page.slug === contactPageData.slug,
+      )
+      if (
+        existingContact &&
+        !existingContact.meta?.title?.trim() &&
+        !existingContact.meta?.description?.trim()
+      ) {
+        try {
+          await pClient.update({
+            collection: 'pages',
+            id: existingContact.id,
+            data: {
+              meta: {
+                ...existingContact.meta,
+                title: contactPageData.meta?.title,
+                description: contactPageData.meta?.description,
+              },
+            },
+            context: seedContext,
+          })
+          payload.logger.info('Backfilled contact page metadata')
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          payload.logger.error(`Failed to backfill contact page metadata: ${message}`)
         }
       }
 
@@ -418,27 +486,6 @@ export default buildConfig({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       payload.logger.error(`Error seeding default documents: ${message}`);
-    }
-
-    // Independent host sampler: the only writer of host samples. It covers
-    // every enabled source, including hosts nobody browses, and runs in the
-    // long-lived Node process (disabled on Vercel/serverless where an interval
-    // cannot survive). Retention (30 days) happens in the same sweep, daily.
-    // Cadence lives in utilities/hostUsage.ts next to the "last hour" bucket
-    // width; the two are deliberately equal (one sample per bucket).
-    const { describeHostSamplerDecision, sampleAllEnabledHosts, shouldRunHostSampler } =
-      await import('./utilities/hostSampling')
-    const runsHostSampler = shouldRunHostSampler(process.env)
-    payload.logger.info(describeHostSamplerDecision(process.env))
-    if (process.env.NODE_ENV === 'production' && runsHostSampler) {
-      try {
-        const interval = setInterval(() => {
-          void sampleAllEnabledHosts(payload)
-        }, SAMPLER_INTERVAL_MS)
-        interval.unref?.()
-      } catch (err) {
-        console.warn('host sampler schedule failed:', err)
-      }
     }
   },
 });

@@ -8,10 +8,10 @@ import {
   bucketHostSamples,
   hostIdOf,
   recentHostSamples,
+  selectHostUsageSource,
   type HostUsageRange,
   type HostSample,
   type HostRef,
-  type RecentHostSample,
 } from '@/utilities/hostUsage'
 import { HostUsageChart } from './HostUsageChart'
 
@@ -34,6 +34,11 @@ type SampleRow = {
   diskPercent?: number | null
 }
 
+type Source = {
+  id: string
+  name: string
+}
+
 function firstParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0]
   return value
@@ -43,9 +48,12 @@ function isRange(value: string | undefined): value is HostUsageRange {
   return value === '1h' || value === '24h' || value === '7d' || value === '30d'
 }
 
-async function loadSamples(host: string | undefined, range: HostUsageRange) {
+function hostHref(host: string, range: HostUsageRange): string {
+  return `?${new URLSearchParams({ host, range }).toString()}`
+}
+
+async function loadSamples(host: string | undefined, range: HostUsageRange, now: number) {
   const payload = await getPayload({ config })
-  const now = Date.now()
   const cutoff = new Date(now - HOST_USAGE_RANGE_MS[range]).toISOString()
   const where: Record<string, unknown> = {
     sampledAt: { greater_than_equal: cutoff },
@@ -69,11 +77,37 @@ async function loadSamples(host: string | undefined, range: HostUsageRange) {
     if (!result.hasNextPage) break
     page += 1
   }
-  return { payload, docs: all, now }
+  return all
 }
 
 /**
- * The table below the graphs is always the last 15 minutes, whatever the range
+ * The sources that have at least one sample in the selected range.
+ *
+ * One grouped query, not one per source: the default tab must not cost the page
+ * a fan-out. The result is only used when the request does not already name an
+ * existing source.
+ */
+async function loadHostsWithSamples(range: HostUsageRange, now: number): Promise<Set<string>> {
+  const payload = await getPayload({ config })
+  const cutoff = new Date(now - HOST_USAGE_RANGE_MS[range]).toISOString()
+  const result = await payload.findDistinct({
+    collection: 'host-samples',
+    field: 'host',
+    where: { sampledAt: { greater_than_equal: cutoff } },
+    depth: 0,
+    overrideAccess: true,
+  })
+
+  const hosts = new Set<string>()
+  for (const row of result.values as Array<{ host?: HostRef }>) {
+    const id = hostIdOf(row.host)
+    if (id) hosts.add(id)
+  }
+  return hosts
+}
+
+/**
+ * The table below the graph is always the last 15 minutes, whatever the range
  * selector says, so it queries separately and caps the result.
  */
 async function loadRecentSamples(host: string | undefined, now: number) {
@@ -109,16 +143,36 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
 
   const rangeInput = firstParam(actual.range)
   const range: HostUsageRange = isRange(rangeInput) ? rangeInput : '24h'
-  const host = firstParam(actual.host)
+  const requestedHost = firstParam(actual.host)
 
-  const { payload, docs, now } = await loadSamples(host, range)
-  const recentDocs = await loadRecentSamples(host, now)
+  const payload = await getPayload({ config })
   const sourcesResult = await payload.find({
     collection: 'archview-sources',
     limit: 100,
     overrideAccess: true,
   })
-  const sources = (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
+  const sources: Source[] = (
+    (sourcesResult.docs ?? []) as Array<{ id?: string | number; name?: string }>
+  )
+    .filter((source) => source.id !== undefined && source.id !== null)
+    .map((source) => ({ id: String(source.id), name: source.name ?? String(source.id) }))
+
+  const now = Date.now()
+
+  // An explicit host that still exists always wins. Otherwise open on the first
+  // source with samples in this range, so the newest configured source cannot
+  // leave the page blank just because it has never reported. There is
+  // deliberately no "all hosts" selection: one host at a time keeps the page
+  // short. The grouped query only runs when the fallback is actually needed.
+  let selectedSource = sources.find((source) => source.id === requestedHost)
+  if (!selectedSource && sources.length > 0) {
+    const hostsWithSamples = await loadHostsWithSamples(range, now)
+    selectedSource = selectHostUsageSource(sources, undefined, hostsWithSamples)
+  }
+  const selectedHost = selectedSource?.id
+
+  const docs = selectedHost ? await loadSamples(selectedHost, range, now) : []
+  const recentDocs = selectedHost ? await loadRecentSamples(selectedHost, now) : []
 
   const samples = docs.map((d) => ({
     host: hostIdOf(d.host),
@@ -132,48 +186,64 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
 
   const byHost = bucketHostSamples(samples, range, now)
 
-  const hostLabels = host
-    ? [host]
-    : sources.map((s) => String(s.id)).filter(Boolean)
-
   // Always the last 15 minutes, independent of the range selector. The helper
   // drops stale rows, applies the host filter, sorts newest first and caps the
   // list so a bad sampler cadence cannot render an unbounded table.
   const recent = recentHostSamples(recentDocs as unknown as HostSample[], {
     now,
-    host,
+    host: selectedHost,
     limit: RECENT_SAMPLES_LIMIT,
   })
 
-  const sourceName = (rowHost: string | null, hostLabel: string): string =>
-    (rowHost ? sources.find((s) => String(s.id) === rowHost)?.name : undefined) ?? hostLabel
-
-  // The selector is already newest-first, so each group keeps that order.
-  const recentByHost = new Map<string, RecentHostSample[]>()
-  for (const row of recent) {
-    const key = hostIdOf(row.host) ?? row.hostLabel
-    const rows = recentByHost.get(key)
-    if (rows) rows.push(row)
-    else recentByHost.set(key, [row])
-  }
-
   const rangeLabel = RANGE_OPTIONS.find((r) => r.value === range)?.label ?? range
+  const buckets = selectedHost ? (byHost.get(selectedHost) ?? []) : []
+  const data = buckets.map((b) => ({
+    key: b.key,
+    label: b.label,
+    day: b.day,
+    tooltipLabel: b.tooltipLabel,
+    count: b.count,
+    cpuAvg: b.cpuAvg,
+    memoryPercent: b.memoryPercent,
+    loadAvg: b.loadAvg,
+    diskPercent: b.diskPercent,
+  }))
 
   return (
     <div className="host-usage" style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
       <h1>Host usage</h1>
+
+      {sources.length > 0 && (
+        <nav
+          aria-label="Hosts"
+          style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}
+        >
+          {sources.map((source) => {
+            const selected = source.id === selectedHost
+            return (
+              <a
+                key={source.id}
+                href={hostHref(source.id, range)}
+                aria-current={selected ? 'page' : undefined}
+                className="btn btn--style-tab btn--size-medium"
+                style={
+                  selected
+                    ? {
+                        backgroundColor: 'var(--theme-elevation-100)',
+                        fontWeight: 600,
+                      }
+                    : undefined
+                }
+              >
+                {source.name}
+              </a>
+            )
+          })}
+        </nav>
+      )}
+
       <form method="get" style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <label>
-          Host:{' '}
-          <select name="host" defaultValue={host ?? ''}>
-            <option value="">All hosts</option>
-            {sources.map((s) => (
-              <option key={String(s.id)} value={String(s.id)}>
-                {s.name ?? s.id}
-              </option>
-            ))}
-          </select>
-        </label>
+        {selectedHost && <input type="hidden" name="host" value={selectedHost} />}
         <label>
           Range:{' '}
           <select name="range" defaultValue={range}>
@@ -187,71 +257,56 @@ export default async function HostUsage(props: { searchParams?: SearchParams }) 
         <button type="submit">Apply</button>
       </form>
 
-      {hostLabels.length === 0 && <p>No hosts configured.</p>}
+      {sources.length === 0 && <p>No hosts configured.</p>}
 
-      {hostLabels.map((label) => {
-        const buckets = byHost.get(label) ?? []
-        const name = sources.find((s) => String(s.id) === label)?.name ?? label
-        const data = buckets.map((b) => ({
-          label: b.label,
-          cpuAvg: b.cpuAvg,
-          memoryPercent: b.memoryPercent,
-          loadAvg: b.loadAvg,
-          diskPercent: b.diskPercent,
-        }))
-        return (
-          <section key={label} style={{ marginBottom: 32 }}>
-            <h2>{name}</h2>
-            {buckets.length === 0 ? (
-              <p>No samples in the selected range ({rangeLabel}).</p>
-            ) : (
-              <HostUsageChart data={data} />
-            )}
-          </section>
-        )
-      })}
+      {selectedSource && (
+        <section style={{ marginBottom: 32 }}>
+          <h2>{selectedSource.name}</h2>
+          {buckets.length === 0 ? (
+            <p>No samples in the selected range ({rangeLabel}).</p>
+          ) : (
+            <HostUsageChart data={data} />
+          )}
+        </section>
+      )}
 
-      <section style={{ marginTop: 32 }}>
-        <h2>Last 15 minutes</h2>
-        <p style={{ color: 'var(--theme-elevation-600)', marginBottom: 8 }}>
-          Grouped by host, newest first; times are UTC. Capped at the {RECENT_SAMPLES_LIMIT}{' '}
-          most recent samples in total across hosts so a bad sampler cadence cannot render
-          an unbounded list.
-        </p>
-        {recentByHost.size === 0 ? (
-          <p>No samples in the last 15 minutes.</p>
-        ) : (
-          Array.from(recentByHost.entries()).map(([key, rows]) => (
-            <div key={key} style={{ marginTop: 16 }}>
-              <h3>{sourceName(rows[0].host, rows[0].hostLabel)}</h3>
-              <div className="table table--appearance-condensed">
-                <table>
-                  <thead>
-                    <tr>
-                      <th scope="col">Time (UTC)</th>
-                      <th scope="col">CPU %</th>
-                      <th scope="col">Memory %</th>
-                      <th scope="col">Load</th>
-                      <th scope="col">Disk %</th>
+      {selectedSource && (
+        <section>
+          <h2>Last 15 minutes</h2>
+          <p style={{ color: 'var(--theme-elevation-600)', marginBottom: 8 }}>
+            Newest first; times are UTC. Capped at the {RECENT_SAMPLES_LIMIT} most recent samples so
+            a bad sampler cadence cannot render an unbounded list.
+          </p>
+          {recent.length === 0 ? (
+            <p>No samples in the last 15 minutes.</p>
+          ) : (
+            <div className="table table--appearance-condensed">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Time (UTC)</th>
+                    <th scope="col">CPU %</th>
+                    <th scope="col">Memory %</th>
+                    <th scope="col">Load</th>
+                    <th scope="col">Disk %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((row, index) => (
+                    <tr key={`${row.time}-${index}`}>
+                      <td>{row.time}</td>
+                      <td>{formatMetric(row.cpuAvg)}</td>
+                      <td>{formatMetric(row.memoryPercent)}</td>
+                      <td>{formatMetric(row.loadAvg)}</td>
+                      <td>{formatMetric(row.diskPercent)}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, index) => (
-                      <tr key={`${row.time}-${index}`}>
-                        <td>{row.time}</td>
-                        <td>{formatMetric(row.cpuAvg)}</td>
-                        <td>{formatMetric(row.memoryPercent)}</td>
-                        <td>{formatMetric(row.loadAvg)}</td>
-                        <td>{formatMetric(row.diskPercent)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))
-        )}
-      </section>
+          )}
+        </section>
+      )}
     </div>
   )
 }

@@ -28,8 +28,13 @@ export default async function ContactTemplate({ page }: { page: PageDoc }) {
   }
 
   return (
-    <>
-      <Section eyebrow={page.eyebrow || 'Contact'} title={page.title || 'Open to platform, DevOps, and development work.'} lead={page.lead || 'I am available for contract and full-time work.'}>
+    <main id="main-content" tabIndex={-1}>
+      <Section
+        eyebrow={page.eyebrow || 'Contact'}
+        title={page.title || 'Open to platform, DevOps, and development work.'}
+        lead={page.lead || 'I am available for contract and full-time work.'}
+        headingLevel="h1"
+      >
         <div className="grid gap-4 md:grid-cols-3 mb-8">
           {links.map((link) => (
             <a key={link.href} className="rounded-3xl border border-border bg-card p-6 transition-colors hover:bg-secondary" href={link.href}>
@@ -49,6 +54,6 @@ export default async function ContactTemplate({ page }: { page: PageDoc }) {
         )}
       </Section>
       <RenderLayout page={page} />
-    </>
+    </main>
   )
 }

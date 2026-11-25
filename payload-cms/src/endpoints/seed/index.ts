@@ -9,11 +9,10 @@ import { imageHero1 } from './image-hero-1'
 import { travelling } from './travelling-page'
 import { gameservers } from './game-servers-page'
 import { services } from './services-page'
-import { cv } from './cv-page'
+import { cv, ensureSeededCvMedia } from './cv-page'
 import { seedArchviewSources } from './archview-sources'
 
 const collections: CollectionSlug[] = [
-  'categories',
   'media',
   'pages',
   'forms',
@@ -24,8 +23,6 @@ const collections: CollectionSlug[] = [
 // bot's targets. Its initial value comes from `endpoints/seed/bot-settings.ts`
 // on an empty database instead.
 const globals: Array<'footer' | 'header'> = ['header', 'footer']
-
-const categories = ['Technology', 'News', 'Finance', 'Design', 'Software', 'Engineering']
 
 // Next.js revalidation errors are normal when seeding the database without a server running
 // i.e. running `yarn seed` locally instead of using the admin UI within an active app
@@ -133,18 +130,7 @@ export const seed = async ({
       data: imageHero1,
       file: hero1Buffer,
     }),
-    categories.map((category) =>
-      payload.create({
-        collection: 'categories',
-        data: {
-          title: category,
-          slug: category,
-        },
-      }),
-    ),
   ])
-
-  // posts are no longer seeded by default
 
   payload.logger.info(`— Seeding contact form...`)
 
@@ -155,6 +141,8 @@ export const seed = async ({
   })
 
   payload.logger.info(`— Seeding pages...`)
+
+  const seededCvMedia = await ensureSeededCvMedia(payload)
 
     const [, contactPage, servicesPage] = await Promise.all([
     payload.create({
@@ -188,7 +176,7 @@ export const seed = async ({
     payload.create({
       collection: 'pages',
       depth: 0,
-      data: cv,
+      data: { ...cv, cvFile: seededCvMedia },
     }),
   ])
 

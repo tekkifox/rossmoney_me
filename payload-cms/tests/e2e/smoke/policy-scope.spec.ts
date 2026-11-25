@@ -41,7 +41,7 @@ test('production public CSP does not grant the Vercel Toolbar sources', async ({
     'This suite must run against a build with no Vercel environment',
   ).toBeUndefined()
 
-  const response = await page.goto('/')
+  const response = await page.goto('/', { waitUntil: 'domcontentloaded' })
   const csp = expectCspHeader(response)
 
   for (const source of VERCEL_TOOLBAR_SOURCES) {

@@ -80,7 +80,9 @@ afterAll(async () => {
 afterEach(cleanup)
 
 const point = (overrides: Partial<SeriesPoint>): SeriesPoint => ({
+  key: '2026-01-01T00:00:00.000Z',
   label: '00:00',
+  day: null,
   cpuAvg: null,
   memoryPercent: null,
   loadAvg: null,
@@ -89,22 +91,17 @@ const point = (overrides: Partial<SeriesPoint>): SeriesPoint => ({
 })
 
 describe('per-metric chart scales', () => {
-  it('pads a metric to its own range so small variation fills the panel', () => {
+  it('uses a fixed 0–100 scale for percent metrics', () => {
     expect(
       seriesDomain([point({ cpuAvg: 29 }), point({ cpuAvg: 53 })], 'cpuAvg', true),
-    ).toEqual([25.4, 56.6])
+    ).toEqual([0, 100])
+    expect(
+      seriesDomain([point({ diskPercent: 80.3 }), point({ diskPercent: 80.3 })], 'diskPercent', true),
+    ).toEqual([0, 100])
   })
 
-  it('gives a constant series a readable band instead of a degenerate axis', () => {
-    expect(
-      seriesDomain([point({ diskPercent: 80.3 }), point({ diskPercent: 80.29999999999998 })], 'diskPercent', true),
-    ).toEqual([79.3, 81.3])
-  })
-
-  it('keeps percent metrics inside 0–100', () => {
-    expect(
-      seriesDomain([point({ memoryPercent: 99 }), point({ memoryPercent: 100 })], 'memoryPercent', true),
-    ).toEqual([98.85, 100])
+  it('starts non-percent metrics at 0 and pads above the max', () => {
+    expect(seriesDomain([point({ loadAvg: 2 }), point({ loadAvg: 5 })], 'loadAvg')).toEqual([0, 5.5])
   })
 })
 
@@ -148,36 +145,135 @@ describe('host usage with populated relationships', () => {
   })
 })
 
-describe('host usage view with three hosts', () => {
-  it('renders a chart and a grouped table for every host', async () => {
+/** Mirrors the page's own source query so "first" means the same thing. */
+async function firstSourceInViewOrder(): Promise<Source> {
+  const result = await payload.find({
+    collection: 'archview-sources',
+    limit: 100,
+    overrideAccess: true,
+  })
+  const first = result.docs[0] as unknown as { id: string; name: string }
+  return { id: String(first.id), name: String(first.name) }
+}
+
+function currentTab(nav: HTMLElement): HTMLElement {
+  const tabs = within(nav)
+    .getAllByRole('link')
+    .filter((link) => link.getAttribute('aria-current') === 'page')
+  expect(tabs).toHaveLength(1)
+  return tabs[0]
+}
+
+describe('host usage tabs', () => {
+  it('renders only the host in the host query, with its chart and recent table', async () => {
+    const selected = sources[1]
+    const ui = await HostUsage({ searchParams: { range: '1h', host: selected.id } })
+    render(ui)
+
+    const chartHeading = screen.getByRole('heading', { level: 2, name: selected.name })
+    const section = chartHeading.closest('section')
+
+    expect(section).not.toBeNull()
+    expect(
+      within(section as HTMLElement).queryByText(/No samples in the selected range/),
+    ).toBeNull()
+
+    // Stacked small multiples: one chart panel per metric, each with its own
+    // ResponsiveContainer and Y-axis rather than one shared percent axis.
+    expect(section?.querySelectorAll('.recharts-responsive-container')).toHaveLength(4)
+    const panelTitles = Array.from(section?.querySelectorAll('h3') ?? []).map(
+      (heading) => heading.textContent,
+    )
+    expect(panelTitles).toEqual(['CPU %', 'Memory %', 'Load', 'Disk %'])
+
+    for (const other of sources.filter((source) => source.id !== selected.id)) {
+      expect(screen.queryByRole('heading', { level: 2, name: other.name })).toBeNull()
+    }
+
+    // One table for the selected host only: a header row plus its one sample.
+    const table = screen.getByRole('table')
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((cell) => cell.textContent),
+    ).toEqual(['Time (UTC)', 'CPU %', 'Memory %', 'Load', 'Disk %'])
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
+  })
+
+  it('selects the first source when no host is given', async () => {
+    const first = await firstSourceInViewOrder()
     const ui = await HostUsage({ searchParams: { range: '1h' } })
     render(ui)
 
+    const nav = screen.getByRole('navigation', { name: 'Hosts' })
+    expect(currentTab(nav).textContent).toBe(first.name)
+    expect(screen.getByRole('heading', { level: 2, name: first.name })).not.toBeNull()
+  })
+
+  it('falls back to the first source with samples when the host is unknown', async () => {
+    const first = await firstSourceInViewOrder()
+    const ui = await HostUsage({
+      searchParams: { range: '1h', host: `unknown-${runId}` },
+    })
+    render(ui)
+
+    const nav = screen.getByRole('navigation', { name: 'Hosts' })
+    expect(currentTab(nav).textContent).toBe(first.name)
+    expect(screen.getByRole('heading', { level: 2, name: first.name })).not.toBeNull()
+  })
+
+  it('skips a newer source that has no samples in the selected range', async () => {
+    const withSamples = await firstSourceInViewOrder()
+    const empty = await payload.create({
+      collection: 'archview-sources',
+      data: {
+        name: `usage-view-empty-${runId}`,
+        origin: `https://empty-${runId}.example.test`,
+        audience: `https://empty-${runId}.example.test/api`,
+        tokenUrl: 'https://identity.example.test/oauth/token',
+        enabled: true,
+      } as RequiredDataFromCollectionSlug<'archview-sources'>,
+      overrideAccess: true,
+    })
+
+    try {
+      const ui = await HostUsage({ searchParams: { range: '1h' } })
+      render(ui)
+
+      const nav = screen.getByRole('navigation', { name: 'Hosts' })
+      // The empty row is newest, so it sorts first; the default must move past
+      // it to the first source that actually has a graph.
+      expect(currentTab(nav).textContent).toBe(withSamples.name)
+      expect(currentTab(nav).textContent).not.toBe(String(empty.name))
+      expect(screen.queryByText(/No samples in the selected range/)).toBeNull()
+    } finally {
+      await payload.delete({
+        collection: 'archview-sources',
+        id: empty.id,
+        overrideAccess: true,
+      })
+    }
+  })
+
+  it('keeps the selected range on every tab link', async () => {
+    const ui = await HostUsage({ searchParams: { range: '7d', host: sources[2].id } })
+    render(ui)
+
+    const nav = screen.getByRole('navigation', { name: 'Hosts' })
     for (const source of sources) {
-      const chartHeading = screen.getByRole('heading', { level: 2, name: source.name })
-      const section = chartHeading.closest('section')
+      const href = within(nav).getByRole('link', { name: source.name }).getAttribute('href')
+      expect(href).not.toBeNull()
+      const params = new URLSearchParams((href as string).replace(/^\?/, ''))
+      expect(params.get('host')).toBe(source.id)
+      expect(params.get('range')).toBe('7d')
+    }
 
-      expect(section).not.toBeNull()
-      expect(within(section as HTMLElement).queryByText(/No samples in the selected range/)).toBeNull()
-
-      // Stacked small multiples: one chart panel per metric, each with its own
-      // ResponsiveContainer and Y-axis rather than one shared percent axis.
-      expect(section?.querySelectorAll('.recharts-responsive-container')).toHaveLength(4)
-      const panelTitles = Array.from(section?.querySelectorAll('h3') ?? []).map(
-        (heading) => heading.textContent,
-      )
-      expect(panelTitles).toEqual(['CPU %', 'Memory %', 'Load', 'Disk %'])
-
-      const tableHeading = screen.getByRole('heading', { level: 3, name: source.name })
-      const group = tableHeading.parentElement as HTMLElement
-      expect(within(group).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
-        'Time (UTC)',
-        'CPU %',
-        'Memory %',
-        'Load',
-        'Disk %',
-      ])
-      expect(within(group).getAllByRole('row')).toHaveLength(2)
+    // `aria-current` marks exactly the selected tab; the rest do not claim it.
+    expect(currentTab(nav).textContent).toBe(sources[2].name)
+    for (const other of sources.filter((source) => source.id !== sources[2].id)) {
+      expect(
+        within(nav).getByRole('link', { name: other.name }).getAttribute('aria-current'),
+      ).toBeNull()
     }
   })
 })

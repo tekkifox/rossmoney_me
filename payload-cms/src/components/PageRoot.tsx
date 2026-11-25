@@ -17,7 +17,7 @@ export function PageRoot({
   children?: React.ReactNode
 }) {
   return (
-    <article
+    <div
       id="page-root"
       className="pt-16 pb-24"
       data-architecture-api={architectureApi}
@@ -25,7 +25,7 @@ export function PageRoot({
       data-architecture-unavailable={architectureUnavailable ? 'true' : undefined}
     >
       {children}
-    </article>
+    </div>
   )
 }
 

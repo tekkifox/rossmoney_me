@@ -3,15 +3,16 @@ import type { Form as FormType } from '@payloadcms/plugin-form-builder/types'
 import type { Form as PayloadForm } from '@/payload-types'
 
 import { useRouter } from 'next/navigation'
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm, FormProvider, type FieldValues } from 'react-hook-form'
 import RichText from '@/components/RichText'
 import { Button } from '@/components/ui/button'
 import type { DefaultTypedEditorState } from '@payloadcms/richtext-lexical'
 
 import { fields } from './fields'
+import { TurnstileChallenge, type TurnstileStatus } from './Turnstile'
 import { getClientSideURL } from '@/utilities/getURL'
-import { getRecaptchaToken } from '@/utilities/getRecaptchaToken'
+import { TURNSTILE_CLIENT_MESSAGES } from '@/utilities/turnstile'
 
 const honeypotFieldName = 'website'
 
@@ -48,19 +49,53 @@ export const FormBlock: React.FC<
   const [isLoading, setIsLoading] = useState(false)
   const [hasSubmitted, setHasSubmitted] = useState<boolean>()
   const [error, setError] = useState<{ message: string; status?: string } | undefined>()
+  const [turnstileToken, setTurnstileToken] = useState<string>()
+  const [turnstileStatus, setTurnstileStatus] = useState<TurnstileStatus>({ state: 'loading' })
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0)
+  const confirmationRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  const errorMessage = error ? `${error.status ? `${error.status}: ` : ''}${error.message || ''}` : ''
+  const statusMessage =
+    isLoading && !hasSubmitted
+      ? 'Sending your message, please wait.'
+      : hasSubmitted && confirmationType === 'message'
+        ? 'Your message was sent successfully.'
+        : ''
+
+  // The submit button unmounts when the confirmation replaces the form, so move
+  // focus to the confirmation instead of letting it fall back to <body>.
+  useEffect(() => {
+    if (hasSubmitted && confirmationType === 'message') {
+      confirmationRef.current?.focus()
+    }
+  }, [hasSubmitted, confirmationType])
 
   const onSubmit = useCallback(
     (data: FieldValues) => {
-      let loadingTimerID: ReturnType<typeof setTimeout>
       const submitForm = async () => {
+        let loadingTimerID: ReturnType<typeof setTimeout> | undefined
         setError(undefined)
 
+        if (turnstileStatus.state === 'unavailable') {
+          setError({ message: turnstileStatus.message })
+          return
+        }
+        if (turnstileStatus.state === 'loading') {
+          setError({ message: TURNSTILE_CLIENT_MESSAGES.loading })
+          return
+        }
+        if (turnstileStatus.state === 'ready' && !turnstileToken) {
+          setError({ message: TURNSTILE_CLIENT_MESSAGES.missingToken })
+          return
+        }
+
         try {
-          const recaptchaToken = await getRecaptchaToken()
           const dataToSend = [
             ...Object.entries(data).map(([name, value]) => ({ field: name, value })),
-            { field: 'recaptcha-token', value: recaptchaToken },
+            ...(turnstileToken
+              ? [{ field: 'turnstile-token', value: turnstileToken }]
+              : []),
           ]
 
           // delay loading indicator by 1s
@@ -85,6 +120,7 @@ export const FormBlock: React.FC<
 
           if (req.status >= 400) {
             setIsLoading(false)
+            setTurnstileResetKey((key) => key + 1)
 
             setError({
               message: res.errors?.[0]?.message || 'Internal Server Error',
@@ -108,6 +144,7 @@ export const FormBlock: React.FC<
           console.warn(err)
           if (loadingTimerID) clearTimeout(loadingTimerID)
           setIsLoading(false)
+          setTurnstileResetKey((key) => key + 1)
           setError({
             message: err instanceof Error ? err.message : 'Something went wrong.',
           })
@@ -116,7 +153,7 @@ export const FormBlock: React.FC<
 
       void submitForm()
     },
-    [router, formID, redirect, confirmationType],
+    [router, formID, redirect, confirmationType, turnstileStatus, turnstileToken],
   )
 
   return (
@@ -126,13 +163,22 @@ export const FormBlock: React.FC<
       )}
       <div className="p-4 lg:p-6 border border-border rounded-[0.8rem]">
         <FormProvider {...formMethods}>
+          {/* One live region per message: polite progress/success, assertive error. */}
+          <output aria-atomic="true" aria-live="polite" className="sr-only">
+            {statusMessage}
+          </output>
+          <div aria-atomic="true" className="sr-only" role="alert">
+            {errorMessage}
+          </div>
           {!isLoading && hasSubmitted && confirmationType === 'message' && (
-            <RichText data={confirmationMessage} />
+            <div className="focus:outline-none" ref={confirmationRef} tabIndex={-1}>
+              <RichText data={confirmationMessage} />
+            </div>
           )}
           {isLoading && !hasSubmitted && <p>Loading, please wait...</p>}
-          {error && <div>{`${error.status ? `${error.status}: ` : ''}${error.message || ''}`}</div>}
+          {error && <div>{errorMessage}</div>}
           {!hasSubmitted && (
-            <form id={formID} onSubmit={handleSubmit(onSubmit)}>
+            <form aria-busy={isLoading} id={formID} onSubmit={handleSubmit(onSubmit)}>
               <div className="mb-4 last:mb-0">
                 {formFromProps &&
                   formFromProps.fields &&
@@ -167,6 +213,13 @@ export const FormBlock: React.FC<
                   type="text"
                 />
               </div>
+
+              <TurnstileChallenge
+                action="contact_form"
+                onState={setTurnstileStatus}
+                onToken={setTurnstileToken}
+                resetKey={turnstileResetKey}
+              />
 
               <Button form={formID} type="submit" variant="default">
                 {submitButtonLabel}

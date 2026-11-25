@@ -29,6 +29,9 @@ export type ArchviewSourceFailure = {
 export type ResolvedArchviewSource = {
   kind: ArchviewResolutionKind
   origin: string
+  /** Collection row identity, used to key the database snapshot cache. */
+  id?: string
+  name?: string
   project?: string
   credentials?: ArchviewSourceCredentials
 }
@@ -91,6 +94,8 @@ const resolveRelation = async (
         return {
           kind: 'relation',
           origin: record.origin,
+          ...(record.id ? { id: record.id } : {}),
+          ...(record.name ? { name: record.name } : {}),
           ...(record.project ? { project: record.project } : {}),
           credentials: record.credentials,
         }
@@ -203,6 +208,8 @@ export const resolvePageArchviewSource = async (
       return {
         kind: 'default',
         origin: record.origin,
+        ...(record.id ? { id: record.id } : {}),
+        ...(record.name ? { name: record.name } : {}),
         ...(record.project ? { project: record.project } : {}),
         credentials: record.credentials,
       }

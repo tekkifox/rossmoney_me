@@ -1,15 +1,11 @@
 /**
- * Input limits for Payload's built-in `/api/og` endpoint.
+ * Input limits for the public `/api/og` card.
  *
- * The route lives in `@payloadcms/next` and is generated for every Payload app.
- * It slices `title`/`leader` to 100 characters but passes `description` through
- * untouched, then hands all three to `next/og`'s Node `ImageResponse`. Social
- * preview crawlers never need megabyte-sized strings, so the proxy rewrites the
- * query with these caps before the generator sees it.
- *
- * The real fix for the `next/og` advisory is the dependency upgrade; this is
- * defence in depth so the public route cannot be fed oversized input in the
- * meantime.
+ * `app/api/og/route.tsx` renders `title` and `description`; `leader` remains
+ * capped because the proxy applies the same sanitiser to the query before the
+ * route runs. Social preview crawlers never need megabyte-sized strings, so the
+ * proxy rewrites the query with these caps and the route applies them again
+ * before the values reach `next/og`'s `ImageResponse`.
  */
 
 export const OG_INPUT_LIMITS = {

@@ -1,6 +1,10 @@
 import type { Payload, Where } from 'payload'
 
 import type { ArchviewSourceCredentials } from './archviewAuth'
+import {
+  ArchviewSecretError,
+  canDecryptArchviewSecrets,
+} from './archviewSourceSecret'
 import { asString } from './json'
 
 type SourceRow = Record<string, unknown>
@@ -78,6 +82,37 @@ export const toArchviewSourceRecord = (row: unknown): ArchviewSourceRecord | nul
   return credentials ? { ...base, credentials } : base
 }
 
+let warnedMissingSecretKey = false
+
+const warnCredentialsUnavailable = (reason: string): void => {
+  if (warnedMissingSecretKey) {
+    return
+  }
+  warnedMissingSecretKey = true
+  console.warn(
+    `ArchView source credentials are unavailable (${reason}); reading sources without stored secrets.`,
+  )
+}
+
+const isSecretError = (error: unknown): boolean => {
+  let current: unknown = error
+  for (let depth = 0; depth < 3 && current; depth += 1) {
+    if (current instanceof ArchviewSecretError) {
+      return true
+    }
+    const record = current as { name?: unknown; message?: unknown; cause?: unknown }
+    if (record.name === 'ArchviewSecretError') {
+      return true
+    }
+    const message = typeof record.message === 'string' ? record.message : ''
+    if (message.includes('ARCHVIEW_SECRET_KEY') || message.includes('client secret')) {
+      return true
+    }
+    current = record.cause
+  }
+  return false
+}
+
 /**
  * Looks up one enabled row.
  *
@@ -85,21 +120,47 @@ export const toArchviewSourceRecord = (row: unknown): ArchviewSourceRecord | nul
  * needed server-side, while `afterRead` keeps the secret out of every response
  * that does not ask for it. Disabled rows are filtered in the query so a stale
  * credential is never used.
+ *
+ * A missing or invalid `ARCHVIEW_SECRET_KEY` must not make the source look
+ * disabled, deleted or malformed: the origin, project and id are enough to
+ * fetch anonymously or to key the cached snapshot. Only the credentials are
+ * dropped, with a warning, when they cannot be decrypted.
  */
 const findEnabledSourceRecord = async (
   payload: Payload,
   where: Where,
 ): Promise<ArchviewSourceRecord | null> => {
-  const result = await payload.find({
-    collection: 'archview-sources',
-    context: { revealArchviewSourceSecret: true },
-    depth: 0,
-    limit: 1,
-    overrideAccess: true,
-    where: {
-      and: [where, { enabled: { equals: true } }],
-    },
-  })
+  const query = (revealSecret: boolean) =>
+    payload.find({
+      collection: 'archview-sources',
+      ...(revealSecret ? { context: { revealArchviewSourceSecret: true } } : {}),
+      depth: 0,
+      limit: 1,
+      overrideAccess: true,
+      where: {
+        and: [where, { enabled: { equals: true } }],
+      },
+    })
+
+  const canReveal = canDecryptArchviewSecrets()
+  if (!canReveal) {
+    warnCredentialsUnavailable('ARCHVIEW_SECRET_KEY is not set or is not valid')
+  }
+
+  let result
+  try {
+    result = await query(canReveal)
+  } catch (error) {
+    // A valid key with an unreadable stored value also fails closed. The row
+    // itself is still usable, so retry without asking `afterRead` to decrypt.
+    if (!isSecretError(error)) {
+      throw error
+    }
+    warnCredentialsUnavailable(
+      error instanceof Error ? error.message : 'stored secret could not be decrypted',
+    )
+    result = await query(false)
+  }
 
   return toArchviewSourceRecord(result.docs[0])
 }

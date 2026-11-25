@@ -9,6 +9,11 @@
  * module) without touching the cache, origin guard or callers in
  * `archviewAuth.ts`.
  *
+ * Every exchange is bounded by `DEFAULT_TOKEN_TIMEOUT_MS` (or the caller's
+ * `timeoutMs`), and a timeout is reported as `ArchviewTokenTimeoutError` so a
+ * caller can skip the source instead of stalling on a silent identity
+ * provider.
+ *
  * It deliberately knows nothing about ArchView's URL or the token cache.
  */
 
@@ -19,6 +24,12 @@ export type ClientCredentialsTokenRequest = {
   clientSecret: string
   scope: string
   fetchImpl?: typeof fetch
+  /**
+   * Hard budget for the exchange. Defaults to `DEFAULT_TOKEN_TIMEOUT_MS`; a
+   * missing, non-finite or non-positive value also falls back to it, so the
+   * request can never be left unbounded.
+   */
+  timeoutMs?: number
 }
 
 export type AccessToken = {
@@ -36,7 +47,33 @@ export class ArchviewTokenError extends Error {
   }
 }
 
+/**
+ * The token endpoint accepted the connection but did not answer in time. It is
+ * a distinct class so callers such as the host sampler can treat it as a
+ * timeout (skip and move on) rather than a generic failure.
+ */
+export class ArchviewTokenTimeoutError extends ArchviewTokenError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ArchviewTokenTimeoutError'
+  }
+}
+
+/**
+ * A token exchange hangs like any other request: a stalled identity provider
+ * would otherwise hold the caller forever. Ten seconds is far longer than a
+ * healthy Auth0 exchange and still short enough to keep a sweep moving.
+ */
+export const DEFAULT_TOKEN_TIMEOUT_MS = 10_000
+
 const DEFAULT_EXPIRES_IN_SECONDS = 3600
+
+const resolveTimeoutMs = (value: number | undefined): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_TOKEN_TIMEOUT_MS
+  }
+  return value
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -64,6 +101,7 @@ export const requestClientCredentialsToken = async ({
   clientSecret,
   scope,
   fetchImpl = fetch,
+  timeoutMs,
 }: ClientCredentialsTokenRequest): Promise<AccessToken> => {
   const body = new URLSearchParams({ grant_type: 'client_credentials' })
   if (audience) {
@@ -74,23 +112,39 @@ export const requestClientCredentialsToken = async ({
   }
 
   const credentials = Buffer.from(`${clientId}:${clientSecret}`, 'utf8').toString('base64')
+  const budgetMs = resolveTimeoutMs(timeoutMs)
+  const signal = AbortSignal.timeout(budgetMs)
+  const timeoutError = () =>
+    new ArchviewTokenTimeoutError(`ArchView token endpoint did not answer within ${budgetMs}ms`)
 
-  const response = await fetchImpl(tokenUrl, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      authorization: `Basic ${credentials}`,
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body,
-    cache: 'no-store',
-  })
+  let response: Response
+  try {
+    response = await fetchImpl(tokenUrl, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Basic ${credentials}`,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body,
+      cache: 'no-store',
+      signal,
+    })
+  } catch (error) {
+    // A stalled endpoint surfaces as the abort reason, not as a network error
+    // the caller could interpret: say plainly that this was a timeout.
+    if (signal.aborted) throw timeoutError()
+    throw error
+  }
 
   let payload: unknown = null
   try {
     payload = await response.json()
   } catch {
     payload = null
+    // The signal also covers the body read, so a half-answered response that
+    // aborted mid-body is still a timeout rather than a malformed body.
+    if (signal.aborted) throw timeoutError()
   }
 
   if (!response.ok) {

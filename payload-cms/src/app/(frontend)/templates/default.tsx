@@ -10,11 +10,12 @@ import { PageDoc, RenderLayout, Section } from './shared'
  */
 export default function DefaultTemplate({ page }: { page: PageDoc }) {
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <Section
         eyebrow={page.eyebrow || undefined}
         title={page.title}
         lead={page.lead || undefined}
+        headingLevel="h1"
       >
         <RenderLayout page={page} />
       </Section>

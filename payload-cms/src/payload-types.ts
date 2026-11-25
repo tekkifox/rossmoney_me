@@ -69,13 +69,12 @@ export interface Config {
   collections: {
     users: User;
     pages: Page;
-    posts: Post;
-    categories: Category;
     projects: Project;
     experience: Experience;
     media: Media;
     'error-logs': ErrorLog;
     'archview-sources': ArchviewSource;
+    'archview-snapshots': ArchviewSnapshot;
     'host-samples': HostSample;
     redirects: Redirect;
     forms: Form;
@@ -95,13 +94,12 @@ export interface Config {
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     pages: PagesSelect<false> | PagesSelect<true>;
-    posts: PostsSelect<false> | PostsSelect<true>;
-    categories: CategoriesSelect<false> | CategoriesSelect<true>;
     projects: ProjectsSelect<false> | ProjectsSelect<true>;
     experience: ExperienceSelect<false> | ExperienceSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     'error-logs': ErrorLogsSelect<false> | ErrorLogsSelect<true>;
     'archview-sources': ArchviewSourcesSelect<false> | ArchviewSourcesSelect<true>;
+    'archview-snapshots': ArchviewSnapshotsSelect<false> | ArchviewSnapshotsSelect<true>;
     'host-samples': HostSamplesSelect<false> | HostSamplesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
@@ -249,15 +247,10 @@ export interface Page {
           link: {
             type?: ('reference' | 'custom') | null;
             newTab?: boolean | null;
-            reference?:
-              | ({
-                  relationTo: 'pages';
-                  value: string | Page;
-                } | null)
-              | ({
-                  relationTo: 'posts';
-                  value: string | Post;
-                } | null);
+            reference?: {
+              relationTo: 'pages';
+              value: string | Page;
+            } | null;
             url?: string | null;
             label: string;
             /**
@@ -293,7 +286,7 @@ export interface Page {
     description?: string | null;
   };
   /**
-   * Upload a .docx CV file here
+   * Upload a .docx or .pdf CV here. The HTML preview is generated once at upload and served by /cv; the original file stays as the download.
    */
   cvFile?: (string | null) | Media;
   /**
@@ -320,40 +313,16 @@ export interface Page {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "posts".
- */
-export interface Post {
-  id: string;
-  title: string;
-  slug?: string | null;
-  meta?: {
-    title?: string | null;
-    description?: string | null;
-    image?: (string | null) | Media;
-  };
-  categories?: (string | Category)[] | null;
-  heroImage?: (string | null) | Media;
-  populatedAuthors?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  publishedAt?: string | null;
-  relatedPosts?: (string | Post)[] | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "media".
  */
 export interface Media {
   id: string;
   alt?: string | null;
+  /**
+   * Generated once when a .docx or .pdf is uploaded. The /cv page renders this HTML; the original file stays as the download.
+   */
+  cvHtml?: string | null;
+  cvRenderNote?: string | null;
   caption?: {
     root: {
       type: string;
@@ -468,26 +437,6 @@ export interface FolderInterface {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: string;
-  title: string;
-  slug?: string | null;
-  parent?: (string | null) | Category;
-  breadcrumbs?:
-    | {
-        doc?: (string | null) | Category;
-        url?: string | null;
-        label?: string | null;
-        id?: string | null;
-      }[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "CallToActionBlock".
  */
 export interface CallToActionBlock {
@@ -511,15 +460,10 @@ export interface CallToActionBlock {
         link: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
           /**
@@ -561,15 +505,10 @@ export interface ContentBlock {
         link?: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
           /**
@@ -806,6 +745,14 @@ export interface ArchviewSource {
    */
   sshPort?: number | null;
   /**
+   * Optional tailnet address or tailnet DNS name for this host, for example 203.0.113.10 or host.example.ts.net. A name is preferred: it survives the node re-registering, where an address changes. Leave blank when the host has none; the notification agent then dials the hostname.
+   */
+  tailnet?: string | null;
+  /**
+   * Attach the CPU and memory chart to the notification bot posts about this host. Off unless ticked.
+   */
+  charts?: boolean | null;
+  /**
    * The ArchView project label used when polling this instance, for example rossmoney_me, image-mosaic or vortexservers. Rows without a project are skipped by the host sampler.
    */
   project?: string | null;
@@ -846,6 +793,10 @@ export interface Project {
   title: string;
   role?: string | null;
   summary?: string | null;
+  /**
+   * Optional. Absolute http:// or https:// address the "Selected work" card links to, such as a live project or case study. Leave empty to show the card without a link.
+   */
+  url?: string | null;
   tags?:
     | {
         tag?: string | null;
@@ -915,6 +866,43 @@ export interface ErrorLog {
    * Most recent occurrence.
    */
   lastSeen: string;
+}
+/**
+ * Last known good ArchView response per source and project. The CMS writes this automatically after a successful live fetch and serves it when ArchView is unreachable.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-snapshots".
+ */
+export interface ArchviewSnapshot {
+  id: string;
+  /**
+   * Resolved source (id, otherwise origin) plus the project.
+   */
+  key: string;
+  /**
+   * The archview-sources id, when the snapshot came from a collection row.
+   */
+  sourceId?: string | null;
+  sourceName?: string | null;
+  origin?: string | null;
+  project?: string | null;
+  /**
+   * The complete redacted /api/architecture body, including images, hosts, services, regions, endpoints and telemetry.
+   */
+  snapshot:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  fetchedAt: string;
+  /**
+   * Size of the stored snapshot in bytes, for operational visibility.
+   */
+  byteSize?: number | null;
 }
 /**
  * Sampled ArchView host metrics, one row per source per sampler sweep.
@@ -999,15 +987,10 @@ export interface Redirect {
   from: string;
   to?: {
     type?: ('reference' | 'custom') | null;
-    reference?:
-      | ({
-          relationTo: 'pages';
-          value: string | Page;
-        } | null)
-      | ({
-          relationTo: 'posts';
-          value: string | Post;
-        } | null);
+    reference?: {
+      relationTo: 'pages';
+      value: string | Page;
+    } | null;
     url?: string | null;
   };
   updatedAt: string;
@@ -1155,14 +1138,6 @@ export interface PayloadLockedDocument {
         value: string | Page;
       } | null)
     | ({
-        relationTo: 'posts';
-        value: string | Post;
-      } | null)
-    | ({
-        relationTo: 'categories';
-        value: string | Category;
-      } | null)
-    | ({
         relationTo: 'projects';
         value: string | Project;
       } | null)
@@ -1181,6 +1156,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'archview-sources';
         value: string | ArchviewSource;
+      } | null)
+    | ({
+        relationTo: 'archview-snapshots';
+        value: string | ArchviewSnapshot;
       } | null)
     | ({
         relationTo: 'host-samples';
@@ -1423,53 +1402,13 @@ export interface FormBlockSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "posts_select".
- */
-export interface PostsSelect<T extends boolean = true> {
-  title?: T;
-  slug?: T;
-  meta?:
-    | T
-    | {
-        title?: T;
-        description?: T;
-        image?: T;
-      };
-  categories?: T;
-  heroImage?: T;
-  populatedAuthors?: T;
-  publishedAt?: T;
-  relatedPosts?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories_select".
- */
-export interface CategoriesSelect<T extends boolean = true> {
-  title?: T;
-  slug?: T;
-  parent?: T;
-  breadcrumbs?:
-    | T
-    | {
-        doc?: T;
-        url?: T;
-        label?: T;
-        id?: T;
-      };
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "projects_select".
  */
 export interface ProjectsSelect<T extends boolean = true> {
   title?: T;
   role?: T;
   summary?: T;
+  url?: T;
   tags?:
     | T
     | {
@@ -1505,6 +1444,8 @@ export interface ExperienceSelect<T extends boolean = true> {
  */
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
+  cvHtml?: T;
+  cvRenderNote?: T;
   caption?: T;
   folder?: T;
   updatedAt?: T;
@@ -1620,6 +1561,8 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   name?: T;
   origin?: T;
   sshPort?: T;
+  tailnet?: T;
+  charts?: T;
   project?: T;
   audience?: T;
   tokenUrl?: T;
@@ -1630,6 +1573,20 @@ export interface ArchviewSourcesSelect<T extends boolean = true> {
   isDefault?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "archview-snapshots_select".
+ */
+export interface ArchviewSnapshotsSelect<T extends boolean = true> {
+  key?: T;
+  sourceId?: T;
+  sourceName?: T;
+  origin?: T;
+  project?: T;
+  snapshot?: T;
+  fetchedAt?: T;
+  byteSize?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1937,15 +1894,10 @@ export interface Header {
         link: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
         };
@@ -1966,15 +1918,10 @@ export interface Footer {
         link: {
           type?: ('reference' | 'custom') | null;
           newTab?: boolean | null;
-          reference?:
-            | ({
-                relationTo: 'pages';
-                value: string | Page;
-              } | null)
-            | ({
-                relationTo: 'posts';
-                value: string | Post;
-              } | null);
+          reference?: {
+            relationTo: 'pages';
+            value: string | Page;
+          } | null;
           url?: string | null;
           label: string;
         };

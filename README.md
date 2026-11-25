@@ -101,6 +101,10 @@ The CMS API exposes:
 
 Open `/admin/` to manage the home page, projects, experience entries, and contact block.
 
+Each project has an optional **URL** field. Set it to an absolute `http://` or
+`https://` address to make the whole **Selected work** card on the homepage link
+there (opening in a new tab); leave it empty and the card renders without a link.
+
 ### Bot settings
 
 The `bot-settings` global (Operations → Bot settings) configures the notification
@@ -142,18 +146,20 @@ Local (development) — exposes the CMS on port 8082:
 docker compose -f docker-compose.yml up --build
 ```
 
-Portainer stack (CI/production):
+Production (CI):
 
 ```bash
 docker compose -f docker-compose.deploy.yml config
 ```
 
-Note: `docker-compose.deploy.yml` is the file Portainer actually runs (deployed via the
-Portainer API from `cms-publish.yml`). `docker-compose.portainer.yml` is stale (it still
-defines a `mongo` service, `ports: 8082:8082` and a `mongo-data` volume) and must not be
-used for deployment.
+Note: `docker-compose.deploy.yml` mirrors the deployed stack and is kept here for review
+and `docker compose config` validation. The stack the host actually runs is declared in
+the fleet's `infrastructure-as-code` repository and applied by Ansible, not from this
+repository; `cms-publish.yml` only asks the fleet to pull and recreate it. The older
+`docker-compose.portainer.yml` is stale (it still defines a `mongo` service,
+`ports: 8082:8082` and a `mongo-data` volume) and must not be used for deployment.
 
-The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.example.com`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and Portainer Compose files.
+The CMS (Payload Next app) serves the portfolio and frontend routes directly on port 8082. ArchView is not part of these stacks: it is deployed separately from the `archview` repo at `https://archview.example.com`, and the CMS reaches it over HTTPS with `ARCHVIEW_URL` and Auth0 client credentials (`ARCHVIEW_CLIENT_ID`/`ARCHVIEW_CLIENT_SECRET`). `stack.env` is shared by the local and deploy Compose files.
 
 ## Environment file
 
@@ -164,8 +170,8 @@ MONGODB_URI=mongodb://mongo:27017/rossmoney_me
 PAYLOAD_SECRET=rossmoney_payload_secret_key_change_me
 SERVER_URL=https://www.example.com
 PAYLOAD_SEED=true
-NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
-RECAPTCHA_SECRET_KEY=your-recaptcha-secret-key
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=your-turnstile-site-key
+TURNSTILE_SECRET_KEY=your-turnstile-secret-key
 
 # ArchView lives in its own stack at https://archview.example.com and accepts
 # Auth0 client-credentials tokens (no static API keys). At seed time these values
@@ -190,14 +196,17 @@ HOST_SAMPLER_INSTANCE=portainer
 HOST_SAMPLER_OWNER=portainer
 ```
 
-The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.example.com/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public reCAPTCHA site key at runtime, while its secret key remains server-side. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
+The first block is for the CMS. `ARCHVIEW_URL` is the public ArchView deployment and the bootstrap fallback for pages until a default source exists; the seed turns it into the default **Production** source when the credentials below are present. `ARCHVIEW_CLIENT_ID` and `ARCHVIEW_CLIENT_SECRET` are the `cms` client registered with Auth0, `ARCHVIEW_TOKEN_URL` is the tenant's token endpoint, `ARCHVIEW_AUDIENCE` is the ArchView API identifier that Auth0 requires (defaulting to `https://archview.example.com/api`), and `ARCHVIEW_SCOPE` defaults to `archview:read`. Without them the architecture panels fall back to their degraded state. `ARCHVIEW_SECRET_KEY` encrypts the client secrets stored in the ArchView sources collection; generate it with `openssl rand -base64 32`. The CMS reads the public Turnstile site key at runtime, while its secret key remains server-side. `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` come from a Turnstile widget created in the Cloudflare dashboard (free plan, no DNS change). Without them the form still works under `next dev` and on Vercel preview deployments, with a warning in the server log; a production deployment rejects contact submissions with a readable configuration error rather than silently skipping verification. The Docker API proxy variables this file used to carry now belong to the ArchView stack.
 
 ### Host sampling
 
 The host sampler is the only writer of `host-samples`. It records ArchView
 telemetry for every enabled source once every three minutes on a timer, so it
-must run on exactly one deployment. Browsing a page adds no samples: the
-`/api/architecture` proxy only fetches, caches and redacts. Name each
+must run on exactly one deployment. The timer is started by
+`src/instrumentation.ts` when the server process starts, never from Payload's
+`onInit`; that keeps every tick outside any request or render context (see the
+comment in `src/utilities/hostSamplerSchedule.ts`). Browsing a page adds no
+samples: the `/api/architecture` proxy only fetches, caches and redacts. Name each
 deployment with `HOST_SAMPLER_INSTANCE` and name the one allowed to sample with
 `HOST_SAMPLER_OWNER`. The decision is made in this order:
 
@@ -238,17 +247,67 @@ matching on origin so reruns do not duplicate rows or overwrite admin edits:
 No secret literals live in the seed; the production secret is read from the
 environment only at seed time.
 
+### Startup seeding and the optional dev admin
+
+Every CMS startup runs the same idempotent seed: the header, the default pages
+(including `/map`), the sample CV, projects, experience, ArchView sources and
+the bot settings are created when missing, and missing pages are added on later
+starts. `PAYLOAD_SEED=true` still forces the default documents to be rewritten,
+so an editor's changes are only replaced when that flag is set. Uploads may live
+on local disk or in Vercel Blob: `BLOB_READ_WRITE_TOKEN` decides where media is
+stored, never whether seeding runs.
+
+Two optional variables create a dev admin on startup:
+
+```ini
+PAYLOAD_SEED_ADMIN_EMAIL=dev@example.com
+PAYLOAD_SEED_ADMIN_PASSWORD=replace-with-a-password
+```
+
+The user is created only when both variables are set and no user with that email
+exists. An existing user is never modified: the password is never reset and no
+user is ever deleted. Set neither variable to keep the previous behaviour. The
+password is never written to the logs.
+
 ### Media storage
 
 Media uploads are stored on the deployment's local filesystem by default. On Vercel that filesystem is ephemeral, so set `BLOB_READ_WRITE_TOKEN` (created by Vercel when Blob storage is added to the project) to store media in Vercel Blob instead.
 
 The variable is optional. When it is absent, the CMS keeps writing uploads to `payload-cms/public/media` and builds/tests do not need any Vercel credentials. The self-hosted Portainer stack (`www.example.com`) must leave it unset so it keeps using its `payload-media` volume.
 
-## Portainer webhook
+## Deploy
 
-Set a repository secret named `PORTAINER_WEBHOOK_URL` to let GitHub Actions redeploy the Portainer stack after publishing images.
+The production image is built for `linux/arm64` only. Its only consumer is the
+`rossmoney-cms` stack on the rossmoney host, which is `aarch64`, so nothing pulls an amd64
+build. `cms-publish.yml` runs that build on GitHub's hosted arm64 runner
+(`ubuntu-24.04-arm`), which needs neither QEMU nor a multi-platform cross-build.
 
-GitHub Actions only triggers the existing Portainer webhook; its HTTP response means the request was accepted, not that deployment completed. It rejects HTTP 409 and does not connect to the deployment host. Portainer's `Active` status confirms the deployment operation completed without error; it does not guarantee application-level health.
+Only `latest` and the commit `sha` tags are published. `dev` publishes no image: the dev
+deployment is a Vercel preview of the same app, not a container, so the `dev` and `dev-<sha>`
+tags it used to push had no consumer. The workflow that built them and the Compose file that
+named the `dev` tag have both been removed.
+
+Publishing the production image does not deploy it by talking to Portainer. `cms-publish.yml`
+ends by joining the tailnet and running, over SSH, a single `fleet-deploy` command on the
+fleet's `mgmt` host. The deploy seat there pulls and recreates the named stack on the named
+host, and refuses a stack its host does not declare, so a stack has to exist in the fleet
+inventory before this job can deploy it.
+
+The job does not call the fleet's reusable deploy workflow: that workflow lives in a private
+repository, and GitHub refuses to load a workflow in a public repository that calls a
+reusable workflow in a private one, so the call would fail before any job ran. The steps
+here are a small copy of it — one SSH command — and the seat does the
+validation.
+
+The job needs two repository secrets:
+
+- `DEPLOY_SSH_KEY` — the private half of the deploy-only key installed on `mgmt`;
+- `DEPLOY_SEAT_HOST` — the seat's address, kept out of this repository because it is
+  public and must not publish a real hostname.
+
+Until `DEPLOY_SSH_KEY` exists in this repository the deploy step fails; the image build and
+its publish to ghcr.io still succeed. The job only runs on `main`, so the first push to `main`
+after the key is added is the real proof that the deploy works.
 
 Dangling image cleanup is handled by watchtower on the host, with
 `WATCHTOWER_CLEANUP=true` on a weekly schedule. Nothing in this repository prunes
@@ -264,6 +323,50 @@ Renovate opens grouped dependency PRs, and a CI workflow fails on high or
 critical advisories in production dependencies. The rules, the exact audit
 command, and the process for accepting a known-unfixable advisory are documented
 in [`DEPENDENCY-UPDATES.md`](./DEPENDENCY-UPDATES.md).
+
+## Page caching and revalidation
+
+Public HTML is cacheable. The `[slug]` route exports
+`revalidate = 300` (five minutes) instead of `force-dynamic`, and the homepage
+is the `pages` document with slug `home`, served by `next.config.ts` through a
+`/` → `/home` rewrite so it uses the same on-demand route. A production build
+sets `Cache-Control: s-maxage=…, stale-while-revalidate=…` on an ordinary page;
+it no longer sends `private, no-store`. The header reports the shortest window
+among the page and its nested data caches: 45 s for a page that embeds an
+ArchView snapshot, 60 s for a page that only reads a global, and never more than
+the route's 300 s. The build itself uses Payload's no-op database adapter, so
+pages are generated from the live database on first request rather than frozen
+at build time.
+
+Draft preview is split from that cache. `src/proxy.ts` looks for Next.js' draft
+cookie (`__prerender_bypass`); when it is present the request is rewritten
+(same URL, same query) to the dynamic renderer under `/next/draft/`, which does
+read `draftMode()` and renders the draft document. The preview response keeps
+`private, no-store`. Ordinary visitors never reach that route, and the public
+layout does not read request-time state. The admin bar learns that it should
+offer "Exit preview mode" from a readable companion cookie set by
+`/next/preview`.
+
+An editor sees a change immediately because these mutations invalidate the
+cached HTML as well as waiting for the window:
+
+- saving, unpublishing or deleting a page (`Pages` after-change/after-delete
+  hooks) revalidates `/home` plus `/` for the homepage, or the page's own path,
+  and the page sitemap;
+- changing an ArchView source revalidates every public page (the architecture
+  panel is rendered into the HTML) and the shared snapshot cache;
+- saving the header or footer settings revalidates the root layout, and through
+  it every public page.
+
+The revalidation keys live in
+`payload-cms/src/utilities/revalidatePublicPages.ts`; keep the literal
+`revalidate = 300` in the page route in step with
+`PUBLIC_PAGE_REVALIDATE_SECONDS` there.
+
+Cached public documents cannot carry a per-request CSP nonce (the cached HTML
+would not match the response header), so they use the documented static script
+allowlist. Dynamic previews, the admin and the API keep the nonce policy. See
+[`docs/security/csp.md`](./docs/security/csp.md#prerendering-and-nonces).
 
 ## Robots and SEO
 

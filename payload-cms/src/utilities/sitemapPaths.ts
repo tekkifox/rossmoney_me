@@ -9,10 +9,15 @@ import type { Payload } from 'payload'
  * dynamic route and the build-time generator.
  */
 export const SITEMAP_EXCLUDED_PATHS = [
-  '/posts',
-  '/search',
   // Legacy alias for `/experience`; it is never a canonical destination.
   '/experience-page',
+  // Retired pages. `redirects.ts` 308s each of these to a homepage section, so
+  // advertising them makes Search Console report "Page with redirect" and
+  // spends crawl budget on URLs that are not pages.
+  '/work',
+  '/commits',
+  '/experience',
+  '/architecture',
 ] as const
 
 const EXCLUDED_PATHS = new Set<string>(SITEMAP_EXCLUDED_PATHS)
@@ -63,8 +68,8 @@ export type SitemapPayload = Pick<Payload, 'findGlobal' | 'find'>
  *    Contact pages.
  *
  * The Services page is seeded as a draft, so a reference to it is not emitted
- * by the live resolver; after expanding anchors and de-duplicating, both
- * definitions reduce to the paths below. Keep this list in step with those
+ * by the live resolver; after reducing homepage fragments and de-duplicating,
+ * both definitions reduce to the paths below. Keep this list in step with those
  * headers if the seeded navigation changes.
  */
 const FALLBACK_HEADER: SitemapHeader = {
@@ -97,11 +102,10 @@ const FALLBACK_HEADER: SitemapHeader = {
  *
  * Only site-relative URLs are eligible. Absolute URLs point at another site and
  * a protocol-relative URL has no local path to advertise, so both are skipped.
- * A fragment names a section that also exists as a full page, so it is expanded
- * to that variant: `/#work` becomes `/work`, `/#architecture` becomes
- * `/architecture`, and `/#experience` becomes `/experience`. Query strings are
- * dropped, and a non-root path keeps its own pathname (`/travelling#notes`
- * becomes `/travelling`).
+ * A fragment on the homepage names a section of `/`, so its canonical URL is
+ * the homepage itself: `/#work` and `#cv` both reduce to `/`. Query strings are
+ * dropped, and a non-root path keeps its own pathname
+ * (`/travelling#notes` becomes `/travelling`).
  */
 function customPath(url: string | null | undefined): string | null {
   if (!url) return null
@@ -122,7 +126,8 @@ function customPath(url: string | null | undefined): string | null {
 
   if (!path) return null
 
-  if (fragment && path === '/') return `/${fragment}`
+  // A homepage fragment is a position on the homepage, never a separate page.
+  if (fragment && path === '/') return '/'
 
   return path
 }
@@ -134,9 +139,8 @@ function referenceId(value: ReferenceValue): string | null {
   return String(value.id)
 }
 
-function referencePath(relationTo: 'pages' | 'posts', slug: string): string {
-  if (relationTo === 'pages') return `/${slug}`
-  return `/posts/${slug}`
+function referencePath(slug: string): string {
+  return `/${slug}`
 }
 
 function resolveReferencePath(
@@ -144,7 +148,7 @@ function resolveReferencePath(
   published?: PublishedReferenceIndex,
 ): string | null {
   const relationTo = reference.relationTo ?? 'pages'
-  if (relationTo !== 'pages' && relationTo !== 'posts') return null
+  if (relationTo !== 'pages') return null
 
   const value = reference.value
   const id = referenceId(value)
@@ -153,14 +157,14 @@ function resolveReferencePath(
   // not expose. The index is authoritative whenever it is supplied.
   if (published !== undefined) {
     if (!id) return null
-    const slug = published.get(`${relationTo}:${id}`)
-    return slug ? referencePath(relationTo, slug) : null
+    const slug = published.get(`pages:${id}`)
+    return slug ? referencePath(slug) : null
   }
 
   // A populated, non-draft document is the next best thing; a bare id cannot
   // be resolved without a client.
   if (value && typeof value === 'object' && value._status !== 'draft' && value.slug) {
-    return referencePath(relationTo, value.slug)
+    return referencePath(value.slug)
   }
 
   return null
@@ -195,7 +199,7 @@ export function pathsFromHeader(
 
     if (!path) continue
 
-    // Compare without a trailing slash so `/posts/` cannot sneak past the
+    // Compare without a trailing slash so a stray slash cannot sneak past the
     // exclusions, but keep the header's spelling for every other path.
     if (isSitemapExcluded(path) || seen.has(path)) continue
 
@@ -206,21 +210,18 @@ export function pathsFromHeader(
   return paths
 }
 
-function collectReferenceIds(header: SitemapHeader): Map<'pages' | 'posts', Set<string>> {
-  const ids = new Map<'pages' | 'posts', Set<string>>([
-    ['pages', new Set()],
-    ['posts', new Set()],
-  ])
+function collectReferenceIds(header: SitemapHeader): Map<'pages', Set<string>> {
+  const ids = new Map<'pages', Set<string>>([['pages', new Set()]])
 
   for (const item of header.navItems ?? []) {
     const reference = item?.link?.reference
     if (!reference) continue
 
     const relationTo = reference.relationTo ?? 'pages'
-    if (relationTo !== 'pages' && relationTo !== 'posts') continue
+    if (relationTo !== 'pages') continue
 
     const id = referenceId(reference.value)
-    if (id) ids.get(relationTo)?.add(id)
+    if (id) ids.get('pages')?.add(id)
   }
 
   return ids
@@ -228,7 +229,7 @@ function collectReferenceIds(header: SitemapHeader): Map<'pages' | 'posts', Set<
 
 async function loadPublishedIndex(
   payload: SitemapPayload,
-  idsByCollection: Map<'pages' | 'posts', Set<string>>,
+  idsByCollection: Map<'pages', Set<string>>,
 ): Promise<PublishedReferenceIndex> {
   const index = new Map<string, string>()
 
@@ -264,14 +265,22 @@ async function loadPublishedIndex(
 /**
  * Resolve the paths the global header links to.
  *
+ * The homepage is prepended because it is the most important URL on the site
+ * and is not a nav item (the brand links home). Without it the sitemap listed
+ * only the pages behind the navigation.
+ *
  * Without a Payload client (the build-time generator, or a DB-less build) the
  * documented seeded-header fallback is used. A client that returns no global
  * data at all is treated the same way; a global that exists but has no nav
- * items deliberately produces an empty sitemap.
+ * items deliberately produces a homepage-only sitemap.
  */
 export async function resolveHeaderSitemapPaths(
   payload?: SitemapPayload | null,
 ): Promise<string[]> {
+  return withHomepage(await headerPaths(payload))
+}
+
+async function headerPaths(payload?: SitemapPayload | null): Promise<string[]> {
   if (!payload) return pathsFromHeader(FALLBACK_HEADER)
 
   let header: SitemapHeader
@@ -287,4 +296,8 @@ export async function resolveHeaderSitemapPaths(
 
   const published = await loadPublishedIndex(payload, collectReferenceIds(header))
   return pathsFromHeader(header, published)
+}
+
+function withHomepage(paths: string[]): string[] {
+  return paths[0] === '/' ? paths : ['/', ...paths]
 }

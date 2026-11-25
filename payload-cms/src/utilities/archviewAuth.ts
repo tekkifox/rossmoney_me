@@ -16,7 +16,7 @@
  * unchanged.
  */
 
-import { requestClientCredentialsToken } from './archviewToken'
+import { ArchviewTokenError, requestClientCredentialsToken } from './archviewToken'
 
 export type ArchviewEnv = {
   ARCHVIEW_AUDIENCE?: string
@@ -56,6 +56,7 @@ type CachedToken = {
 }
 
 type CacheEntry = {
+  failure?: { error: Error; retryAt: number }
   inFlight?: Promise<string>
   token?: CachedToken
 }
@@ -73,6 +74,44 @@ export class ArchviewAuthConfigError extends Error {
     super(message)
     this.name = 'ArchviewAuthConfigError'
   }
+}
+
+/**
+ * The token endpoint rejected the exchange recently and a cached backoff is in
+ * force. Callers should treat this as an upstream condition, not as a bug in
+ * the sampler, and must not hammer the token endpoint again until `retryAt`.
+ */
+export class ArchviewTokenBackoffError extends Error {
+  readonly retryAt: number
+  readonly cause: unknown
+
+  constructor(cause: unknown, retryAt: number) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(`ArchView token exchange backed off until ${new Date(retryAt).toISOString()}: ${reason}`)
+    this.name = 'ArchviewTokenBackoffError'
+    this.retryAt = retryAt
+    this.cause = cause
+  }
+}
+
+const QUOTA_OR_RATE_LIMIT_BACKOFF_MS = 30 * 60 * 1000
+const DEFAULT_TOKEN_FAILURE_BACKOFF_MS = 60 * 1000
+
+const tokenFailureBackoffMs = (error: unknown): number => {
+  if (error instanceof ArchviewTokenError) {
+    if (error.status === 429) return QUOTA_OR_RATE_LIMIT_BACKOFF_MS
+    const message = error.message.toLowerCase()
+    if (
+      error.status === 400 &&
+      (message.includes('quota') || message.includes('rate limit') || message.includes('too many requests'))
+    ) {
+      return QUOTA_OR_RATE_LIMIT_BACKOFF_MS
+    }
+    if (message.includes('quota') || message.includes('rate limit') || message.includes('too many requests')) {
+      return QUOTA_OR_RATE_LIMIT_BACKOFF_MS
+    }
+  }
+  return DEFAULT_TOKEN_FAILURE_BACKOFF_MS
 }
 
 const readString = (value: string | undefined): string =>
@@ -113,12 +152,13 @@ const readCredentials = (env: ArchviewEnv): ArchviewCredentials | null => {
 }
 
 const cacheKey = (credentials: ArchviewCredentials): string =>
-  `${credentials.tokenUrl}\n${credentials.clientId}\n${credentials.audience}\n${credentials.scope}`
+  `${credentials.tokenUrl}\n${credentials.clientId}\n${credentials.audience}\n${credentials.scope}\n${credentials.clientSecret}`
 
 const getCachedToken = async (
   credentials: ArchviewCredentials,
   fetchImpl: typeof fetch,
   cacheKeyOverride?: string,
+  tokenTimeoutMs?: number,
 ): Promise<string> => {
   const key = cacheKeyOverride ?? cacheKey(credentials)
   let entry = tokenCache.get(key)
@@ -132,6 +172,16 @@ const getCachedToken = async (
     return entry.token.accessToken
   }
 
+  // A recent token-endpoint failure is cached so a quota-exhausted or
+  // rate-limited identity provider is not hammered every sweep. The backoff
+  // window is cleared automatically once it has elapsed.
+  if (entry.failure) {
+    if (Date.now() < entry.failure.retryAt) {
+      throw new ArchviewTokenBackoffError(entry.failure.error, entry.failure.retryAt)
+    }
+    entry.failure = undefined
+  }
+
   // Every caller that arrives while the exchange is running awaits that same
   // request instead of starting another one.
   if (!entry.inFlight) {
@@ -142,12 +192,22 @@ const getCachedToken = async (
       scope: credentials.scope,
       tokenUrl: credentials.tokenUrl,
       fetchImpl,
+      // A stalled token endpoint must fail this exchange, not hold it. The
+      // rejection also clears `inFlight`, so the next sweep can try again.
+      timeoutMs: tokenTimeoutMs,
     })
       .then(({ accessToken, expiresInSeconds }) => {
         const lifetimeMs = Math.max(0, expiresInSeconds * 1000)
         const renewalSkewMs = Math.min(MAX_RENEWAL_SKEW_MS, lifetimeMs / 10)
         entry.token = { accessToken, refreshAt: Date.now() + lifetimeMs - renewalSkewMs }
+        entry.failure = undefined
         return accessToken
+      })
+      .catch((error: unknown) => {
+        const err = error instanceof Error ? error : new Error(String(error))
+        entry.token = undefined
+        entry.failure = { error: err, retryAt: Date.now() + tokenFailureBackoffMs(err) }
+        throw err
       })
       .finally(() => {
         entry.inFlight = undefined
@@ -188,6 +248,7 @@ export const archviewAuthHeadersFor = async (
   target: string,
   env: ArchviewEnv = process.env,
   fetchImpl: typeof fetch = fetch,
+  options: ArchviewRequestOptions = {},
 ): Promise<Record<string, string>> => {
   if (!isConfiguredTarget(target, env)) {
     return {}
@@ -198,7 +259,14 @@ export const archviewAuthHeadersFor = async (
     return {}
   }
 
-  return { Authorization: `Bearer ${await getCachedToken(credentials, fetchImpl)}` }
+  return {
+    Authorization: `Bearer ${await getCachedToken(
+      credentials,
+      fetchImpl,
+      undefined,
+      options.tokenTimeoutMs,
+    )}`,
+  }
 }
 
 /**
@@ -209,6 +277,19 @@ export const clearArchviewTokenCache = (): void => {
   tokenCache.clear()
 }
 
+const invalidateCacheEntry = (key: string): void => {
+  const entry = tokenCache.get(key)
+  if (!entry) return
+  // Keep an active token-endpoint backoff: a 401 from ArchView does not mean
+  // the identity provider has recovered, and clearing the backoff would hammer
+  // it again.
+  if (entry.failure && Date.now() < entry.failure.retryAt) {
+    entry.token = undefined
+    return
+  }
+  tokenCache.delete(key)
+}
+
 const invalidateToken = (env: ArchviewEnv): void => {
   let credentials: ArchviewCredentials | null = null
   try {
@@ -217,8 +298,33 @@ const invalidateToken = (env: ArchviewEnv): void => {
     return
   }
   if (credentials) {
-    tokenCache.delete(cacheKey(credentials))
+    invalidateCacheEntry(cacheKey(credentials))
   }
+}
+
+/**
+ * Extra knobs for one ArchView request.
+ *
+ * `tokenTimeoutMs` bounds the token exchange that precedes the request.
+ * `requestTimeoutMs` bounds the request itself, counted from after that
+ * exchange, so a slow token endpoint does not eat the request's budget. A
+ * caller that already supplied `init.signal` owns the budget and is left
+ * alone.
+ */
+export type ArchviewRequestOptions = {
+  requestTimeoutMs?: number
+  tokenTimeoutMs?: number
+}
+
+const positiveMs = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+
+const withRequestTimeout = (init: RequestInit, timeoutMs: number | undefined): RequestInit => {
+  const budget = positiveMs(timeoutMs)
+  if (budget === undefined || init.signal) {
+    return init
+  }
+  return { ...init, signal: AbortSignal.timeout(budget) }
 }
 
 const withHeaders = (init: RequestInit, extra: Record<string, string>): RequestInit => {
@@ -237,16 +343,19 @@ type MachineAuth = {
 /**
  * Attaches the headers from `auth` and retries once after a `401` with a fresh
  * token, which covers rotation and early revocation. Requests with no
- * credential are passed through untouched.
+ * credential are passed through untouched. `requestTimeoutMs` applies to both
+ * attempts, so a `401` retry cannot reopen an unbounded wait.
  */
 const fetchWithRefresh = async (
   target: string,
   init: RequestInit,
   auth: MachineAuth,
   fetchImpl: typeof fetch,
+  options: ArchviewRequestOptions = {},
 ): Promise<Response> => {
   const headers = await auth.headers()
-  const response = await fetchImpl(target, withHeaders(init, headers))
+  const timedInit = withRequestTimeout(init, options.requestTimeoutMs)
+  const response = await fetchImpl(target, withHeaders(timedInit, headers))
 
   if (response.status !== 401 || !headers.Authorization) {
     return response
@@ -265,7 +374,7 @@ const fetchWithRefresh = async (
     // The body may already be unusable; the retry does not depend on it.
   }
 
-  return fetchImpl(target, withHeaders(init, retryHeaders))
+  return fetchImpl(target, withHeaders(timedInit, retryHeaders))
 }
 
 /**
@@ -278,12 +387,13 @@ export const archviewFetch = async (
   init: RequestInit = {},
   env: ArchviewEnv = process.env,
   fetchImpl: typeof fetch = fetch,
+  options: ArchviewRequestOptions = {},
 ): Promise<Response> => {
   const auth: MachineAuth = {
-    headers: () => archviewAuthHeadersFor(target, env, fetchImpl),
+    headers: () => archviewAuthHeadersFor(target, env, fetchImpl, options),
     invalidate: () => invalidateToken(env),
   }
-  return fetchWithRefresh(target, init, auth, fetchImpl)
+  return fetchWithRefresh(target, init, auth, fetchImpl, options)
 }
 
 const sourceCredentials = (source: ArchviewSourceCredentials): ArchviewCredentials => ({
@@ -295,11 +405,13 @@ const sourceCredentials = (source: ArchviewSourceCredentials): ArchviewCredentia
 })
 
 /**
- * The cache key is the source itself. Two instances never share a token, even
- * when they happen to use the same identity provider and client.
+ * Sources with identical credentials share one cached token and one backoff
+ * window, so an M2M quota is not spent once per source. The token is still only
+ * ever sent to a request whose origin matches the source (see
+ * `archviewSourceAuthHeadersFor`), never to a different instance.
  */
 const sourceCacheKey = (source: ArchviewSourceCredentials): string =>
-  `source:${source.origin}\n${readString(source.tokenUrl)}\n${readString(source.clientId)}\n${readString(source.audience)}\n${readString(source.scope) || DEFAULT_SCOPE}`
+  `source:${cacheKey(sourceCredentials(source))}`
 
 /**
  * Headers for a request to one source's own origin. Like `archviewFetch`, a
@@ -309,6 +421,7 @@ export const archviewSourceAuthHeadersFor = async (
   target: string,
   source: ArchviewSourceCredentials,
   fetchImpl: typeof fetch = fetch,
+  options: ArchviewRequestOptions = {},
 ): Promise<Record<string, string>> => {
   if (!isSameOrigin(target, source.origin)) {
     return {}
@@ -319,6 +432,7 @@ export const archviewSourceAuthHeadersFor = async (
       sourceCredentials(source),
       fetchImpl,
       sourceCacheKey(source),
+      options.tokenTimeoutMs,
     )}`,
   }
 }
@@ -326,20 +440,22 @@ export const archviewSourceAuthHeadersFor = async (
 /**
  * `fetch` for one extra ArchView instance, with that instance's token. The
  * retry behaviour and per-source cache match the configured deployment, but
- * the token is only ever sent to `source.origin`.
+ * the token is only ever sent to `source.origin`. `init.signal` bounds the
+ * request and `options` bounds the exchange behind it.
  */
 export const archviewSourceFetch = async (
   target: string,
   init: RequestInit,
   source: ArchviewSourceCredentials,
   fetchImpl: typeof fetch = fetch,
+  options: ArchviewRequestOptions = {},
 ): Promise<Response> => {
   const auth: MachineAuth = {
-    headers: () => archviewSourceAuthHeadersFor(target, source, fetchImpl),
+    headers: () => archviewSourceAuthHeadersFor(target, source, fetchImpl, options),
     invalidate: () => {
-      tokenCache.delete(sourceCacheKey(source))
+      invalidateCacheEntry(sourceCacheKey(source))
     },
   }
-  return fetchWithRefresh(target, init, auth, fetchImpl)
+  return fetchWithRefresh(target, init, auth, fetchImpl, options)
 }
 

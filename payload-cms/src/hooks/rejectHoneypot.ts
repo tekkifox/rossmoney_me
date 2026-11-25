@@ -1,8 +1,8 @@
 import type { CollectionBeforeChangeHook } from 'payload'
-import { verifyRecaptchaToken } from '@/utilities/verifyRecaptcha'
+import { TURNSTILE_MESSAGES, verifyTurnstileToken } from '@/utilities/verifyTurnstile'
 
 const honeypotFieldName = 'website'
-const recaptchaFieldName = 'recaptcha-token'
+const turnstileFieldName = 'turnstile-token'
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const phonePattern = /^\+?[0-9][0-9 ()-]{6,19}$/
 
@@ -30,7 +30,7 @@ export const rejectHoneypot: CollectionBeforeChangeHook = async ({ data, req }) 
   const valueFor = (name: string) => submissionData.find((field) => field.field === name)?.value
   const email = valueFor('email')
   const phone = valueFor('phone')
-  const recaptchaToken = valueFor(recaptchaFieldName)
+  const turnstileToken = valueFor(turnstileFieldName)
 
   if (typeof email !== 'string' || !emailPattern.test(email.trim())) {
     throw new Error('Please provide a valid email address.')
@@ -42,14 +42,19 @@ export const rejectHoneypot: CollectionBeforeChangeHook = async ({ data, req }) 
   ) {
     throw new Error('Please provide a valid phone number.')
   }
-  if (typeof recaptchaToken !== 'string' || !(await verifyRecaptchaToken(recaptchaToken))) {
-    throw new Error('reCAPTCHA verification failed. Please try again.')
+  if (typeof turnstileToken !== 'string' || !turnstileToken.trim()) {
+    throw new Error(TURNSTILE_MESSAGES.missingToken)
+  }
+
+  const verification = await verifyTurnstileToken(turnstileToken)
+  if (!verification.ok) {
+    throw new Error(verification.message)
   }
 
   return {
     ...data,
     submissionData: submissionData.filter(
-      (field) => field.field !== honeypotFieldName && field.field !== recaptchaFieldName,
+      (field) => field.field !== honeypotFieldName && field.field !== turnstileFieldName,
     ),
   }
 }

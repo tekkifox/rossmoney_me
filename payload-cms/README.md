@@ -18,7 +18,6 @@ Core features:
 - [Live Preview](#live-preview)
 - [On-demand Revalidation](#on-demand-revalidation)
 - [SEO](#seo)
-- [Search](#search)
 - [Redirects](#redirects)
 - [Jobs and Scheduled Publishing](#jobs-and-scheduled-publish)
 - [Website](#website)
@@ -60,21 +59,21 @@ See the [Collections](https://payloadcms.com/docs/configuration/collections) doc
 
   For additional help, see the official [Auth Example](https://github.com/payloadcms/payload/tree/3.x/examples/auth) or the [Authentication](https://payloadcms.com/docs/authentication/overview#authentication-overview) docs.
 
-- #### Posts
-
-  Posts are used to generate blog posts, news articles, or any other type of content that is published over time. All posts are layout builder enabled so you can generate unique layouts for each post using layout-building blocks, see [Layout Builder](#layout-builder) for more details. Posts are also draft-enabled so you can preview them before publishing them to your website, see [Draft Preview](#draft-preview) for more details.
-
 - #### Pages
 
   All pages are layout builder enabled so you can generate unique layouts for each page using layout-building blocks, see [Layout Builder](#layout-builder) for more details. Pages are also draft-enabled so you can preview them before publishing them to your website, see [Draft Preview](#draft-preview) for more details.
 
 - #### Media
 
-  This is the uploads enabled collection used by pages, posts, and projects to contain media like images, videos, downloads, and other assets. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
+  This is the uploads enabled collection used by pages and projects to contain media like images, videos, downloads, and other assets. It features pre-configured sizes, focal point and manual resizing to help you manage your pictures.
 
-- #### Categories
+- #### Projects
 
-  A taxonomy used to group posts together. Categories can be nested inside of one another, for example "News > Technology". See the official [Payload Nested Docs Plugin](https://payloadcms.com/docs/plugins/nested-docs) for more details.
+  The work and project entries rendered on the homepage. Each entry's optional **URL** field is an absolute `http://` or `https://` address; when set, the corresponding **Selected work** card links to it in a new tab, and when empty the card stays static.
+
+- #### Experience
+
+  The experience timeline rendered on the homepage.
 
 ### Globals
 
@@ -93,7 +92,6 @@ See the [Globals](https://payloadcms.com/docs/configuration/globals) docs for de
 Basic access control is setup to limit access to various content based based on publishing status.
 
 - `users`: Users can access the admin panel and create or edit content.
-- `posts`: Everyone can access published posts, but only users can create, update, or delete them.
 - `pages`: Everyone can access published pages, but only users can create, update, or delete them.
 
 For more details on how to extend this functionality, see the [Payload Access Control](https://payloadcms.com/docs/access-control/overview#access-control) docs.
@@ -116,9 +114,9 @@ A deep editorial experience that allows complete freedom to focus just on writin
 
 ## Draft Preview
 
-All posts and pages are draft-enabled so you can preview them before publishing them to your website. To do this, these collections use [Versions](https://payloadcms.com/docs/configuration/collections#versions) with `drafts` set to `true`. This means that when you create a new post, project, or page, it will be saved as a draft and will not be visible on your website until you publish it. This also means that you can preview your draft before publishing it to your website. To do this, we automatically format a custom URL which redirects to your front-end to securely fetch the draft version of your content.
+All pages are draft-enabled so you can preview them before publishing them to your website. To do this, pages use [Versions](https://payloadcms.com/docs/configuration/collections#versions) with `drafts` set to `true`. This means that when you create a new page, it will be saved as a draft and will not be visible on your website until you publish it. This also means that you can preview your draft before publishing it to your website. To do this, we automatically format a custom URL which redirects to your front-end to securely fetch the draft version of your content.
 
-Since the front-end of this template is statically generated, this also means that pages, posts, and projects will need to be regenerated as changes are made to published documents. To do this, we use an `afterChange` hook to regenerate the front-end when a document has changed and its `_status` is `published`.
+Since the front-end of this template is statically generated, this also means that pages will need to be regenerated as changes are made to published documents. To do this, we use an `afterChange` hook to regenerate the front-end when a document has changed and its `_status` is `published`.
 
 For more details on how to extend this functionality, see the official [Draft Preview Example](https://github.com/payloadcms/payload/tree/3.x/examples/draft-preview).
 
@@ -128,17 +126,13 @@ In addition to draft previews you can also enable live preview to view your end 
 
 ## On-demand Revalidation
 
-We've added hooks to collections and globals so that all of your pages, posts, footer, or header changes will automatically be updated in the frontend via on-demand revalidation supported by Nextjs.
+We've added hooks to collections and globals so that all of your pages, footer, or header changes will automatically be updated in the frontend via on-demand revalidation supported by Nextjs.
 
 > Note: if an image has been changed, for example it's been cropped, you will need to republish the page it's used on in order to be able to revalidate the Nextjs image cache.
 
 ## SEO
 
 This template comes pre-configured with the official [Payload SEO Plugin](https://payloadcms.com/docs/plugins/seo) for complete SEO control from the admin panel. All SEO data is fully integrated into the front-end website that comes with this template. See [Website](#website) for more details.
-
-## Search
-
-This template also pre-configured with the official [Payload Search Plugin](https://payloadcms.com/docs/plugins/search) to showcase how SSR search features can easily be implemented into Next.js with Payload. See [Website](#website) for more details.
 
 ## Redirects
 
@@ -163,12 +157,10 @@ Core features:
 - [TailwindCSS styling](https://tailwindcss.com/)
 - [shadcn/ui components](https://ui.shadcn.com/)
 - User Accounts and Authentication
-- Fully featured blog
 - Publication workflow
 - Dark mode
 - Pre-made layout building blocks
 - SEO
-- Search
 - Redirects
 - Live preview
 
@@ -178,11 +170,29 @@ Although Next.js includes a robust set of caching strategies out of the box, Pay
 
 ## Development
 
-To spin up this example locally, follow the [Quick Start](#quick-start). Then [Seed](#seed) the database with a few pages, posts, and projects.
+To spin up this example locally, follow the [Quick Start](#quick-start). Then [Seed](#seed) the database with a few pages and projects.
 
 ### Tests
 
-`pnpm test:int` provisions its own disposable MongoDB for the run, so no database needs to be running. Setting `MONGODB_URI` (or `DATABASE_URL`) overrides that and uses your database untouched.
+`pnpm test:int` needs a MongoDB server: set `MONGODB_URI` (or `DATABASE_URL`/`DEV_MONGO_URI`). The run uses a throwaway database on that server and drops it at the end, so the database named in the URI is never read or written.
+
+#### Live ArchView check
+
+`tests/int/architecture-live.int.spec.ts` is skipped unless `ARCHVIEW_LIVE_URL` is set to the root of a reachable ArchView instance. When it is set, the spec calls the same client path the architecture pages use and checks the shape a real instance returns: the expected top-level keys, a non-empty `nodes` and `services` array, and an `updatedAt` that parses.
+
+```bash
+ARCHVIEW_LIVE_URL=https://archview.example.net \
+ARCHVIEW_LIVE_CLIENT_ID=replace-with-client-id \
+ARCHVIEW_LIVE_CLIENT_SECRET=replace-with-client-secret \
+ARCHVIEW_LIVE_TOKEN_URL=https://tenant.example.com/oauth/token \
+ARCHVIEW_LIVE_AUDIENCE=https://archview.example.net/api \
+ARCHVIEW_LIVE_SCOPE=archview:read \
+pnpm --filter payload-cms run test:int architecture-live
+```
+
+The credential variables are optional and may be omitted for an instance that accepts anonymous reads; when any of `ARCHVIEW_LIVE_CLIENT_ID`, `ARCHVIEW_LIVE_CLIENT_SECRET` or `ARCHVIEW_LIVE_TOKEN_URL` is set, all three are required. `ARCHVIEW_LIVE_AUDIENCE` and `ARCHVIEW_LIVE_SCOPE` are optional overrides.
+
+This test needs network access and, for a protected deployment, machine credentials. Run it locally or on a schedule, never as part of the pull-request gate. It is skipped by default, so `pnpm test:int` and CI stay offline.
 
 ### Working with Postgres
 
@@ -228,7 +238,7 @@ That's it! The Docker instance will help you get up and running quickly while al
 
 ### Seed
 
-To seed the database with a few pages, posts, and projects you can click the 'seed database' link from the admin panel.
+To seed the database with a few pages and projects you can click the 'seed database' link from the admin panel.
 
 The seed script will also create a demo user for demonstration purposes only:
 
@@ -237,6 +247,122 @@ The seed script will also create a demo user for demonstration purposes only:
   - Password: `password`
 
 > NOTICE: seeding the database is destructive because it drops your current database to populate a fresh one from the seed template. Only run this command if you are starting a new project or can afford to lose your current data.
+
+## Media backfill after a database refresh
+
+A refreshed development database contains media rows whose files live on the
+production deployment. The Vercel Blob adapter rebuilds every media URL from the
+document's filename, so editing the stored `url` does nothing; the bytes have to
+exist in the blob store at that pathname.
+
+`POST /api/media/backfill` copies those files from the public site into the
+store. It is admin-only: anonymous callers receive `404`, a signed-in user from
+another auth collection receives `403`, and every response carries
+`Cache-Control: private, no-store`.
+
+- Body (optional): `{ "source": string, "dryRun": boolean }`.
+- `source` defaults to `MEDIA_SOURCE`, then to the public site's `/media`
+  prefix. It must be HTTPS and its host must be the public site; anything else
+  is rejected.
+- Without `BLOB_READ_WRITE_TOKEN` the route answers `503`. Local-disk
+  deployments do not need it.
+- Files already in the store are skipped. Missing originals are downloaded and
+  uploaded with the source's content type. Generated image-size variants are
+  attempted the same way and reported as `skipped` when the source does not
+  serve them, so an old upload without a size does not fail the run.
+- A dry run performs the store lookups and reports exactly what it would upload
+  without fetching or writing anything.
+- Calls are idempotent, use bounded concurrency and per-file timeouts, and are
+  safe to repeat while the site is serving.
+
+```bash
+curl -X POST https://www.example.com/api/media/backfill \
+  -H "Authorization: JWT $PAYLOAD_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": true}'
+```
+
+The response is
+`{ "ok": boolean, "uploaded": string[], "skipped": string[], "failed": [{ "filename": string, "error": string }] }`.
+`uploaded` lists the pathnames written (or, in a dry run, the ones that would
+be written).
+
+The nightly dev sync calls this endpoint with its import credentials after
+restoring the production dump, so the dev blob store matches the refreshed rows.
+
+## Dev preview gate
+
+The Vercel `dev` deployment is a public preview. `DEV_GATE=1` restricts the
+browsable site to clients that are on the fleet's WireGuard VPN. Set
+`DEV_GATE=1` and `DEV_GATE_HOST` (the WireGuard endpoint's public DNS name) on
+the Vercel preview target only; when they are unset (production, local
+development, tests) the gate does nothing. Neither value is committed, and any
+`DEV_GATE` other than exactly `1` leaves the gate off.
+
+The gate is Next.js middleware. Next 16 renamed the `middleware.ts` convention
+to `proxy.ts`, so the hook is `src/proxy.ts` and the logic lives in
+`src/utilities/devGate.ts`. Do not add a second `middleware.ts`: Next 16 treats
+the two files together as a build error.
+
+When enabled, a request is allowed if the client address is:
+
+- one of the addresses `DEV_GATE_HOST` currently resolves to (resolved
+  server-side, cached for a few minutes; the address is never hard-coded), or
+- an entry in `DEV_GATE_ALLOW`, an optional comma-separated list with no
+  quoting, for example `203.0.113.10,198.51.100.0/24`.
+
+`DEV_GATE_HOST` is required when the gate is on. Without it the gate fails
+closed and only `DEV_GATE_ALLOW` entries get through.
+
+`DEV_GATE_ALLOW` accepts a single IPv4 or IPv6 address (`203.0.113.10`,
+`2001:db8::1`) or a CIDR block (`198.51.100.0/24`, `2001:db8::/32`). Whitespace
+around each entry is trimmed and empty entries are ignored. A malformed entry
+matches nothing and is skipped, so it can neither grant access nor crash the
+middleware. Unset or empty means only the resolved VPN endpoint address is
+allowed. Use TEST-NET addresses in documentation, not real ones.
+
+Everyone else receives a `307` to the live home page. The target is the
+canonical public origin (`DEFAULT_SITE_URL` in `src/utilities/siteURL.ts`;
+`https://www.example.com` in these notes), not the preview host. The path is
+deliberately not preserved: most preview paths do not exist on the live site,
+and a 404 would be a worse landing than the home page.
+
+The client address is the **first** entry of `x-forwarded-for`, which Vercel
+sets after terminating TLS. Later entries are proxies. A missing or blank
+header is not allowed; the gate does not fall back to another header or to a
+shared proxy address. Spoofed headers are not a concern only when the gate is
+set on a platform that overwrites `x-forwarded-for`; do not enable it on a
+server where clients can set that header themselves.
+
+**A split-tunnel peer does not get through.** WireGuard only routes the
+tunnel's own subnets, so the outside world sees the peer's ordinary public
+address, not the VPN endpoint's. Only a full-tunnel peer presents the VPN
+address and passes the check. Give a split-tunnel device an entry in
+`DEV_GATE_ALLOW` if it needs access.
+
+### What it costs
+
+- One DNS lookup per warm function instance per three minutes (the resolved
+  addresses are cached; concurrent cold requests share one lookup).
+- A failed lookup is cached for 30 seconds and fails closed: only
+  `DEV_GATE_ALLOW` entries get through until resolution recovers.
+- A request-time address comparison. A visitor who is not allowed is redirected
+  before the router, database or rate limiters run.
+- No extra service, dependency or database read.
+
+### Paths that are never gated
+
+`/api/*`, `/_next/*`, `/media/*` and public files with an asset extension
+(images, fonts, the sitemap, `robots.txt`, `security.txt`, and so on) are
+exempt.
+
+This is intentional, not an oversight. The nightly dev sync authenticates
+against this site's API from another host whose address is not the VPN's, and
+gating `/api` would break that refresh. The media backfill also runs against
+the API and reads `/media`; gating either would leave the refreshed database
+pointing at files the dev store cannot fill. Do not "fix" the exemption by
+gating every path: it breaks automation. Only the browsable pages (including
+`/admin`) are gated.
 
 ## Production
 

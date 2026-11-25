@@ -18,10 +18,12 @@ import {
   validateChannelId,
   validateConnectedAccountId,
   validateCredentialName,
+  validateHostCharts,
   validateHostScope,
   validateRunbookAccess,
   validateSourceChannelMatchesTarget,
   validateSourceTarget,
+  validateTailnet,
   validateTargetHostScope,
   validateTargetName,
 } from '@/utilities/botSettings'
@@ -266,8 +268,9 @@ describe('GET /api/bot-settings hosts', () => {
   })
 
   it('returns every enabled source with a port, sorted by name', async () => {
-    await createSource('mike', { sshPort: 2200 })
-    // No sshPort: the stored default applies.
+    await createSource('mike', { sshPort: 2200, tailnet: '203.0.113.10' })
+    // No sshPort or tailnet: the stored default applies, and the entry carries
+    // no tailnet key at all.
     await createSource('alpha')
     await createSource('zulu', { enabled: false, sshPort: 2201 })
 
@@ -287,12 +290,35 @@ describe('GET /api/bot-settings hosts', () => {
     const names = body.hosts.map((host: { name: string }) => host.name)
     expect(names).toEqual([...names].sort())
 
-    expect(body.hosts).toContainEqual({ name: `${prefix}-alpha.example.test`, sshPort: 22 })
-    expect(body.hosts).toContainEqual({ name: `${prefix}-mike.example.test`, sshPort: 2200 })
+    expect(body.hosts).toContainEqual({
+      name: `${prefix}-alpha.example.test`,
+      sshPort: 22,
+      charts: false,
+    })
+    expect(body.hosts).toContainEqual({
+      name: `${prefix}-mike.example.test`,
+      sshPort: 2200,
+      tailnet: '203.0.113.10',
+      charts: false,
+    })
     expect(names).not.toContain(`${prefix}-zulu.example.test`)
 
+    const alpha = body.hosts.find(
+      (host: { name: string }) => host.name === `${prefix}-alpha.example.test`,
+    )
+    expect(alpha).not.toHaveProperty('tailnet')
+
+    for (const host of body.hosts) {
+      expect(typeof host.charts).toBe('boolean')
+    }
+
     for (const doc of enabled.docs) {
-      expect(body.hosts).toContainEqual({ name: doc.name, sshPort: doc.sshPort ?? 22 })
+      expect(body.hosts).toContainEqual({
+        name: doc.name,
+        sshPort: doc.sshPort ?? 22,
+        ...(doc.tailnet ? { tailnet: doc.tailnet } : {}),
+        charts: doc.charts === true,
+      })
     }
   })
 
@@ -306,6 +332,88 @@ describe('GET /api/bot-settings hosts', () => {
     await expect(createSource('port-fraction', { sshPort: 22.5 })).rejects.toMatchObject({
       name: 'ValidationError',
     })
+  })
+
+  it('rejects a tailnet value that is neither an IPv4 address nor a DNS name', async () => {
+    const invalid = [
+      ['tailnet-high', '203.0.113.256'],
+      ['tailnet-short', '203.0.113'],
+      ['tailnet-underscore', 'host_name.example.ts.net'],
+      ['tailnet-trailing-dot', 'host.example.ts.net.'],
+      ['tailnet-scheme', 'https://host.example.ts.net'],
+      ['tailnet-port', 'host.example.ts.net:41641'],
+    ] as const
+
+    for (const [suffix, tailnet] of invalid) {
+      await expect(createSource(suffix, { tailnet })).rejects.toMatchObject({
+        name: 'ValidationError',
+      })
+    }
+  })
+
+  it('passes a stored tailnet DNS name through unchanged', async () => {
+    await createSource('tailnet-name', { tailnet: 'host.example.ts.net' })
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+
+    expect(body.hosts).toContainEqual({
+      name: `${prefix}-tailnet-name.example.test`,
+      sshPort: 22,
+      tailnet: 'host.example.ts.net',
+      charts: false,
+    })
+  })
+
+  it('carries the host charts switch per host, off unless ticked', async () => {
+    await createSource('charts-on', { charts: true })
+    await createSource('charts-off', { charts: false })
+    // No charts key at all: the collection default and the response shaping
+    // both read as off.
+    await createSource('charts-absent')
+
+    const response = await GET(request({ Authorization: `users API-Key ${BOT_API_KEY}` }))
+    expect(response.status).toBe(200)
+    const body = await response.json()
+
+    const host = (suffix: string) =>
+      body.hosts.find(
+        (entry: { name: string }) => entry.name === `${prefix}-${suffix}.example.test`,
+      )
+
+    expect(host('charts-on')?.charts).toBe(true)
+    expect(host('charts-off')?.charts).toBe(false)
+    expect(host('charts-absent')?.charts).toBe(false)
+
+    // Every entry says what it means; an older row must not emit undefined.
+    for (const entry of body.hosts) {
+      expect(typeof entry.charts).toBe('boolean')
+    }
+  })
+
+  it('rejects a non-boolean host charts value and names the host', async () => {
+    const name = `${prefix}-charts-invalid.example.test`
+
+    const failure = await createSource('charts-invalid', {
+      charts: 'yes' as unknown as boolean,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    )
+
+    expect(failure).toMatchObject({ name: 'ValidationError' })
+    const messages = (
+      (failure as { data?: { errors?: Array<{ message?: string }> } }).data?.errors ?? []
+    )
+      .map((error) => error.message)
+      .join(' ')
+
+    expect(messages).toContain(name)
+    expect(messages).toContain('Host charts')
+    // The refusal names the host only, never its origin or credentials.
+    expect(messages).not.toContain('https://')
+    expect(messages).not.toContain('secret')
   })
 
   it('leaves targets and sources byte-identical when hosts are added', async () => {
@@ -640,6 +748,59 @@ describe('bot-settings validators', () => {
     expect(validateHostScope(null)).not.toBe(true)
   })
 
+  it('accepts IPv4 tailnet addresses and tailnet DNS names', () => {
+    // IPv4, exactly as before.
+    expect(validateTailnet('203.0.113.10')).toBe(true)
+    expect(validateTailnet('0.0.0.0')).toBe(true)
+    expect(validateTailnet('255.255.255.255')).toBe(true)
+    expect(validateTailnet('')).toBe(true)
+    expect(validateTailnet(null)).toBe(true)
+    expect(validateTailnet(undefined)).toBe(true)
+
+    // A tailnet DNS name: one or more labels, hyphens inside them, mixed case.
+    expect(validateTailnet('host.example.ts.net')).toBe(true)
+    expect(validateTailnet('my-host.example.ts.net')).toBe(true)
+    expect(validateTailnet('node-1.example.ts.net')).toBe(true)
+    expect(validateTailnet('Host.Example.TS.net')).toBe(true)
+    expect(validateTailnet('host')).toBe(true)
+    expect(validateTailnet('a-b.c')).toBe(true)
+
+    // Label and total-length boundaries: 63 and 253 are allowed, one more is not.
+    const label63 = 'a'.repeat(63)
+    const name253 = [label63, label63, label63, 'a'.repeat(61)].join('.')
+    const name254 = [label63, label63, label63, 'a'.repeat(62)].join('.')
+    expect(name253).toHaveLength(253)
+    expect(validateTailnet(name253)).toBe(true)
+    expect(name254).toHaveLength(254)
+    expect(validateTailnet(name254)).not.toBe(true)
+    expect(validateTailnet(`${label63}b.example.ts.net`)).not.toBe(true)
+
+    // A mistyped address stays a mistyped address, not a name.
+    expect(validateTailnet('203.0.113.256')).not.toBe(true)
+    expect(validateTailnet('203.0.113')).not.toBe(true)
+    expect(validateTailnet('203.0.113.10.1')).not.toBe(true)
+    expect(validateTailnet('203.0.113.010')).not.toBe(true)
+
+    // Malformed name shapes: scheme, port, underscore, trailing dot,
+    // whitespace, empty label, hyphen at either end.
+    expect(validateTailnet('https://host.example.ts.net')).not.toBe(true)
+    expect(validateTailnet('host.example.ts.net:41641')).not.toBe(true)
+    expect(validateTailnet('host_name.example.ts.net')).not.toBe(true)
+    expect(validateTailnet('host.example.ts.net.')).not.toBe(true)
+    expect(validateTailnet(' host.example.ts.net')).not.toBe(true)
+    expect(validateTailnet(' 203.0.113.10 ')).not.toBe(true)
+    expect(validateTailnet('host..example.ts.net')).not.toBe(true)
+    expect(validateTailnet('-host.example.ts.net')).not.toBe(true)
+    expect(validateTailnet('host-.example.ts.net')).not.toBe(true)
+    expect(validateTailnet(41641)).not.toBe(true)
+
+    // The refusal names both accepted forms.
+    const message = validateTailnet('not a valid value')
+    expect(message).not.toBe(true)
+    expect(String(message)).toContain('203.0.113.10')
+    expect(String(message)).toContain('host.example.ts.net')
+  })
+
   it('skips the host list when the target reports on all hosts', () => {
     expect(validateTargetHostScope(undefined, true)).toBe(true)
     expect(validateTargetHostScope(null, true)).toBe(true)
@@ -649,6 +810,24 @@ describe('bot-settings validators', () => {
     expect(validateTargetHostScope(undefined, false)).not.toBe(true)
     expect(validateTargetHostScope([], false)).not.toBe(true)
     expect(validateTargetHostScope(['example.com'], false)).toBe(true)
+  })
+
+  it('accepts only a real boolean for the host charts switch', () => {
+    expect(validateHostCharts(true, 'host1.example.com')).toBe(true)
+    expect(validateHostCharts(false, 'host1.example.com')).toBe(true)
+    expect(validateHostCharts(undefined, 'host1.example.com')).toBe(true)
+    expect(validateHostCharts(null, 'host1.example.com')).toBe(true)
+
+    const message = validateHostCharts('yes', 'host1.example.com')
+    expect(message).not.toBe(true)
+    expect(String(message)).toContain('host1.example.com')
+    expect(String(message)).toContain('Host charts')
+
+    expect(validateHostCharts(1, 'host1.example.com')).not.toBe(true)
+    expect(validateHostCharts('', 'host1.example.com')).not.toBe(true)
+
+    // A nameless row still gets a usable refusal.
+    expect(String(validateHostCharts('yes', undefined))).toContain('This host')
   })
 
   it('requires Discord snowflakes for channel ids', () => {
@@ -831,13 +1010,38 @@ describe('bot-settings validators', () => {
         { name: '   ' },
         { name: 'alpha.example.test' },
         { name: 'mike.example.test', sshPort: 0 },
+        { name: 'delta.example.test', tailnet: '203.0.113.10' },
+        // A tailnet DNS name is passed through exactly as stored.
+        { name: 'echo.example.test', tailnet: 'host.example.ts.net' },
+        // Defensive: the field rejects this, but a stored value that slips
+        // through must not reach the agent as an address.
+        { name: 'bravo.example.test', tailnet: '203.0.113.256' },
+        // The charts switch is always boolean: ticked, explicitly off, and a
+        // row stored before the field existed.
+        { name: 'charlie.example.test', charts: true },
+        { name: 'foxtrot.example.test', charts: false },
       ],
     )
 
     expect(shaped?.hosts).toEqual([
-      { name: 'alpha.example.test', sshPort: 22 },
-      { name: 'mike.example.test', sshPort: 22 },
-      { name: 'zulu.example.test', sshPort: 2200 },
+      { name: 'alpha.example.test', sshPort: 22, charts: false },
+      { name: 'bravo.example.test', sshPort: 22, charts: false },
+      { name: 'charlie.example.test', sshPort: 22, charts: true },
+      {
+        name: 'delta.example.test',
+        sshPort: 22,
+        tailnet: '203.0.113.10',
+        charts: false,
+      },
+      {
+        name: 'echo.example.test',
+        sshPort: 22,
+        tailnet: 'host.example.ts.net',
+        charts: false,
+      },
+      { name: 'foxtrot.example.test', sshPort: 22, charts: false },
+      { name: 'mike.example.test', sshPort: 22, charts: false },
+      { name: 'zulu.example.test', sshPort: 2200, charts: false },
     ])
   })
 

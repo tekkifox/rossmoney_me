@@ -52,6 +52,23 @@ const readKey = (env: SecretEnv = process.env): Buffer => {
   return key
 }
 
+/**
+ * Whether stored secrets can be decrypted in this process, without throwing.
+ *
+ * Source resolution uses this to read a row's origin, project and id when the
+ * key is absent or malformed. The row is still usable; only its credentials are
+ * unavailable, which is exactly the development and CI case where the cached
+ * snapshot should be served.
+ */
+export const canDecryptArchviewSecrets = (env: SecretEnv = process.env): boolean => {
+  try {
+    readKey(env)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** True when `value` already has the envelope written by `encryptArchviewSecret`. */
 export const isEncryptedArchviewSecret = (value: unknown): value is string => {
   if (typeof value !== 'string') {

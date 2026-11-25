@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache'
 
 import { getSafePayload } from '@/utilities/getSafePayload'
 import { isSitemapExcluded, resolveHeaderSitemapPaths } from '@/utilities/sitemapPaths'
+import { getSiteURL } from '@/utilities/siteURL'
 
 export interface SitemapEntry {
   loc: string
@@ -30,10 +31,7 @@ export function buildPagesSitemap(
 const getPagesSitemap = unstable_cache(
   async () => {
     const payload = await getSafePayload()
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SERVER_URL ||
-      process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-      'https://example.com'
+    const siteUrl = getSiteURL()
 
     const paths = await resolveHeaderSitemapPaths(payload)
     return buildPagesSitemap(paths, siteUrl, new Date().toISOString())

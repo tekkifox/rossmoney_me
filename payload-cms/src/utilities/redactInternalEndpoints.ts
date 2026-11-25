@@ -4,8 +4,8 @@
  * reach the browser: it names an internal container and port that are not
  * routable from the internet.
  *
- * ArchView is an external service we do not control, and the page renders its
- * snapshot verbatim (including the "Raw snapshot" panel and the RSC payload), so
+ * ArchView is an external service we do not control, and the page renders
+ * values from its snapshot (the topology diagram, facts and metric cards), so
  * the CMS redacts single-label hosts from the payload before rendering or
  * proxying it. Public hosts (`archview.vortexservers.co.uk`, registry names,
  * etc.) keep their dots and are left alone.

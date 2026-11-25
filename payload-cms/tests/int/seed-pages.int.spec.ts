@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
  * and their templates removed, so they must not be created at all. Existing
  * databases still hold them; `scripts/unpublish-retired-pages.ts` drafts those.
  */
-const SEEDED_PAGE_SLUGS = ['home', 'contact', 'services', 'travelling', 'game-servers', 'cv']
+const SEEDED_PAGE_SLUGS = ['home', 'contact', 'services', 'travelling', 'game-servers', 'map', 'cv']
 const RETIRED_PAGE_SLUGS = ['commits', 'experience-page', 'work', 'architecture']
 
 let payload: Payload
@@ -33,6 +33,23 @@ describe('default page seeding', () => {
     for (const slug of SEEDED_PAGE_SLUGS) {
       expect(slugs).toContain(slug)
     }
+  })
+
+  it('creates the map page with its template and public copy', async () => {
+    const pages = await payload.find({
+      collection: 'pages',
+      draft: true,
+      limit: 1,
+      pagination: false,
+      where: { slug: { equals: 'map' } },
+    })
+
+    const map = pages.docs[0]
+    expect(map, 'the /map page should be seeded').toBeDefined()
+    expect(map.template).toBe('map')
+    expect(map.eyebrow).toBe('Architecture')
+    expect(map.lead).toContain('one public edge')
+    expect(map.focus?.items?.map((item) => item.value)).toEqual(['one', 'private', 'five'])
   })
 
   it('does not create the retired pages', async () => {

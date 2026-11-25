@@ -17,7 +17,9 @@ pnpm --filter payload-cms run test:int
 pnpm --filter payload-cms run lint:tokens
 ```
 
-- `test:int` starts a disposable MongoDB when no `MONGODB_URI` is configured.
+- `test:int` needs a MongoDB URI (`MONGODB_URI`, `DATABASE_URL` or `DEV_MONGO_URI`)
+  and runs in a throwaway database on that server, dropped at the end. It never
+  touches the database named in the URI.
 - `lint` is [oxlint](https://oxc.rs/), configured by `payload-cms/.oxlintrc.json`
   (correctness rules plus react, react-hooks, nextjs, import, promise, vitest
   and jsx-a11y). `lint:fix` applies its safe fixes. ESLint is gone: its
@@ -27,6 +29,61 @@ pnpm --filter payload-cms run lint:tokens
 - The build uses Payload's no-op database adapter during the production build,
   so it does not need a live MongoDB.
 - No new dependencies are needed for the token guard; it is plain Node.
+
+## Browser smoke and PR screenshots
+
+`.github/workflows/browser-smoke.yml` runs on a GitHub-hosted `ubuntu-latest`
+runner, for pull requests as well as `main`/`dev`, so pull-request code never
+executes on the self-hosted `paseo` runner. The job starts a disposable MongoDB
+container (`mongo:9`, on a kernel-chosen loopback port) and creates two databases
+in it:
+
+- smoke: `rossmoney_ci`;
+- screenshots: `rossmoney_shots`, a second database so the screenshot server can
+  never read what the smoke suite edited.
+
+Both are created on first write and die with the container, so the job needs no
+MongoDB URI secret and drops nothing by hand: `DEV_MONGO_URI`, `rossmoney_dev`,
+`MEDIA_MIRROR` and the media mirror on the paseo VM are no longer involved.
+`PAYLOAD_SEED=true` makes `onInit` refresh the default documents on every
+startup: the databases are disposable, and this is what makes a pull request that
+changes a seeded page show that change in its screenshot. Both start empty, so
+both get the seeded sample CV and the seed's own images from
+`src/endpoints/seed/`; nothing is downloaded from production.
+`PAYLOAD_SEED_ADMIN_EMAIL`/`PAYLOAD_SEED_ADMIN_PASSWORD` create the
+`dev@payloadcms.com` account the screenshot spec logs in as, because no copied
+`rossmoney_dev` supplies it any more.
+`ACKEE_ENABLED=false` is also set: the `/a` tracker rewrite targets the `ackee`
+Docker service, which is not part of this job, so a rendered tracker would leave
+a request hanging and stall the page's `load` event.
+
+The two servers must not share a build directory. Next.js keeps its full route
+cache inside `distDir`, so a render the smoke server cached against the smoke
+database would be served by the screenshot server even though it points at its
+own database. After the build the workflow copies `payload-cms/.next` to
+`payload-cms/.next-screenshots` *before* the smoke run; the screenshot server
+starts with `NEXT_DIST_DIR=.next-screenshots` (`SCREENSHOT_DIST_DIR` in
+`playwright.screenshots.ts`), so it reads and writes only its own copy.
+
+Screenshots are captured by `payload-cms/playwright.screenshots.ts` (separate
+from `pnpm test:e2e`) after the smoke suite, against the throwaway screenshot
+database and the isolated build, with `HOST_SAMPLER=off`. When `/cv` is captured
+the spec also reads `/api/pages` from that server and compares the CV download
+filename with the media document the database holds, so a stale render from the
+smoke server fails the step instead of publishing the wrong image. The default
+paths are `/` and `/admin/collections/host-samples`; a manual `workflow_dispatch`
+can pass a comma-separated `paths` input.
+`payload-cms/scripts/publish-screenshots.ts` checks both the PNGs and the
+captured page text for secret-shaped material before uploading to BookStack; a
+finding fails the job without uploading anything. Images attach to the page in
+`BOOKSTACK_SCREENSHOT_PAGE_ID` as `gallery` images, and one marker comment on the
+pull request is created or updated with the image URLs. That publish step is
+currently disabled (`if: false`) in the workflow.
+
+```bash
+pnpm --filter payload-cms run screenshots
+pnpm --filter payload-cms run screenshots:publish
+```
 
 ## Server URL
 
@@ -62,6 +119,12 @@ for why that needs the small `src/proxy.ts` origin normalisation.
 | `payload-cms/src/app/(frontend)/globals.css` | Tailwind entry, `@theme` mapping, base and background layers |
 | `payload-cms/src/app/(frontend)/local-styles.css` | Public component rules; reads tokens |
 | `payload-cms/src/app/(frontend)/layout.tsx` | CSS import order: globals → tokens → local-styles |
+| `payload-cms/src/app/api/og/route.tsx` | Dynamic 1200×630 Open Graph card |
+| `payload-cms/src/utilities/ogImage.ts` | OG defaults, cache lifetime and URL builder |
+| `payload-cms/src/utilities/ogTheme.ts` | OG card's mirror of the rendered token values |
+| `payload-cms/public/og-fonts/` | Geist font assets for the OG card |
+| `payload-cms/src/collections/ArchviewSnapshots.ts` | Last-known-good ArchView JSON cache (one row per key) |
+| `payload-cms/src/utilities/architectureStore.ts` | Snapshot cache key, read, throttled in-place write |
 | `payload-cms/tailwind.config.mjs` | Tailwind typography plugin overrides |
 | `payload-cms/scripts/check-tokens.mjs` | Raw-colour guard and named exceptions |
 | `payload-cms/src/app/(payload)/custom.scss` | Payload admin styling (leave alone) |
@@ -86,6 +149,45 @@ pnpm --filter payload-cms run backfill:page-templates -- --apply
 The helper is a dry run by default and only fills missing values. `onInit`
 applies the same fill-in automatically to older databases; fresh seeds already
 store templates. Never overwrite a template an editor has chosen.
+
+## CV page
+
+The CV page renders the media document its `cvFile` upload field points at. A
+DOCX or PDF is converted once on upload and the HTML is stored on the media
+document, so the viewer needs the populated relation, not a raw id.
+
+`onInit` creates a small sample CV (`CV_SEED_FILENAME` in
+`src/endpoints/seed/cv-page.ts`) and links it when the seeded page has no
+document, so a fresh dev or CI database renders a CV instead of the "not
+available" card. An editor's upload is never replaced, and the full seed
+endpoint links the same document when it recreates the page. `renderPage`
+resolves an id-only `cvFile` before rendering, so a shallow (depth 0) page still
+reaches the viewer populated.
+
+Next.js' full route cache lives inside the build directory, so the CI smoke
+server and screenshot server must not share one. The workflow gives the
+screenshot server its own copy (`.next-screenshots`), and the screenshot spec
+asserts that the captured `/cv` download matches the media document the
+screenshot database holds. That check is what catches a render leaking from
+another server or database.
+
+## ArchView snapshots and host usage
+
+`loadArchitectureSnapshot` and `/api/architecture` write the complete, redacted
+`/api/architecture` body to `archview-snapshots` after a successful live fetch,
+one row per resolved source and project, replaced in place. A failed live fetch
+reads that row and serves it; only a missing or older-than-30-day row falls back
+to the degraded state. `ARCHVIEW_SNAPSHOT_MAX_AGE_DAYS` overrides the ceiling.
+Writes are throttled to one a minute and skipped when the body is unchanged.
+
+Source resolution does not require `ARCHVIEW_SECRET_KEY`: without a usable key
+it reads the row's origin, project and id and omits the credentials. That is what
+lets dev and CI render the cached snapshot. The key is still required for an
+authenticated live fetch.
+
+The admin host-usage view opens on the first source that has samples in the
+selected range (one grouped query), falling back to the first source only when
+none has samples. An explicit `?host=` that still exists is always honoured.
 
 ## Public repository: no real hosts or secrets in documentation
 

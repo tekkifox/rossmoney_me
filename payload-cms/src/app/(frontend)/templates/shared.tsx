@@ -12,6 +12,7 @@ export type ProjectDoc = {
   title?: string
   role?: string
   summary?: string
+  url?: string
 }
 
 export type ExperienceDoc = {
@@ -83,6 +84,7 @@ export function readProjects(value: unknown): ProjectDoc[] {
       title: readString(record.title),
       role: readString(record.role),
       summary: readString(record.summary),
+      url: readString(record.url),
     }
   })
 }
@@ -100,12 +102,27 @@ export function readExperience(value: unknown): ExperienceDoc[] {
   })
 }
 
-export function Section({ eyebrow, title, lead, children, className }: { eyebrow?: string; title: string; lead?: string; children?: React.ReactNode; className?: string }) {
+export function Section({
+  eyebrow,
+  title,
+  lead,
+  children,
+  className,
+  headingLevel = 'h2',
+}: {
+  eyebrow?: string
+  title: string
+  lead?: string
+  children?: React.ReactNode
+  className?: string
+  headingLevel?: 'h1' | 'h2'
+}) {
+  const Heading = headingLevel
   return (
     <section className={`container space-y-8 py-12 sm:py-16${className ? ` ${className}` : ''}`}>
       <div className="section-heading max-w-3xl">
         {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-        <h2 className="text-3xl font-medium tracking-tight sm:text-4xl">{title}</h2>
+        <Heading className="section-title text-3xl font-medium tracking-tight sm:text-4xl">{title}</Heading>
         {lead && <p className="lead">{lead}</p>}
       </div>
       {children}

@@ -1,4 +1,8 @@
+// Scrollable snapshot regions must be reachable and scrollable with the keyboard.
+// The <pre> is the element that scrolls, so it owns tabIndex and the region role.
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex, jsx-a11y/prefer-tag-over-role */
 import React from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import {
   PageDoc,
@@ -14,7 +18,7 @@ import {
 } from './shared'
 import { assembleSite } from '@/utilities/assembleSite'
 import { renderDiagram, titleFromPayload, descriptionFromPayload } from '@/utilities/archHelpers'
-import { stripUptimesForRawDump } from '@/utilities/architectureUptimes'
+import { architectureMetricsFromPayload } from '@/utilities/architectureMetrics'
 import { loadArchitectureSnapshot, isArchviewSourceFailure } from '@/utilities/architectureSnapshot'
 import ArchitectureClient from '@/components/ArchitectureClient/ArchitectureClient'
 
@@ -71,6 +75,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   const archTitle = archFailed ? 'Architecture source unavailable' : titleFromPayload(archPayload)
   const archDesc = archFailed ? archFailureMessage : descriptionFromPayload(archPayload)
   const archDiagram = archFailed ? '' : renderDiagram(archPayload)
+  const archMetrics = architectureMetricsFromPayload(archFailed ? null : archPayload)
 
   // Server-side fetch recent commits for the travel repo
   let commitsText = '$ git log --oneline -n 5\nLoading recent commits...'
@@ -90,7 +95,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
   const heroMetrics = readMetrics(travelPayload.metrics || data.metrics || [])
 
   return (
-    <main>
+    <main id="main-content" tabIndex={-1}>
       <PageMeta page={page} />
     <section className="hero container">
       <div className="hero-copy">
@@ -123,6 +128,21 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           ))}
         </div>
       </div>
+    </section>
+
+    <section className="section container" aria-label="Screenshot of the live travelling site">
+      <figure className="project-screenshot-frame card">
+        <Image
+          alt="Screenshot of travelling.rossmoney.me: 'Asia Pacific 2016' over a dark blue hero with three summary panels."
+          className="project-screenshot-image"
+          height={1250}
+          sizes="(max-width: 1140px) 100vw, 1116px"
+          src="/projects/travelling.png"
+          unoptimized
+          width={2000}
+        />
+        <figcaption className="project-screenshot-caption">travelling.rossmoney.me — the live photo archive.</figcaption>
+      </figure>
     </section>
 
     <section className="section container">
@@ -161,8 +181,10 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
         <button className="btn btn-secondary" type="button" id="refresh-architecture">Refresh snapshot</button>
       </div>
 
+      <output aria-atomic="true" aria-live="polite" className="sr-only" id="architecture-status" />
+
       <div className="architecture-layout">
-        {/* Left column: topology and raw payload */}
+        {/* Left column: topology */}
         <article className="architecture-diagram card">
           <div className="panel-header">
             <div>
@@ -177,15 +199,17 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           {archFailed ? (
             <p className="architecture-failure" id="architecture-failure">{archFailureMessage}</p>
           ) : (
-            <pre className="diagram-view" id="architecture-diagram">{archDiagram}</pre>
+            <>
+              <pre aria-label="Architecture diagram" className="diagram-view diagram-view-capped" data-architecture-diagram id="architecture-diagram" role="region" tabIndex={0}>{archDiagram}</pre>
+              <details className="diagram-toggle">
+                <summary>
+                  <span className="diagram-toggle-closed">View full diagram</span>
+                  <span className="diagram-toggle-open">Show less</span>
+                </summary>
+                <pre aria-label="Architecture diagram, full height" className="diagram-view diagram-view-full" data-architecture-diagram role="region" tabIndex={0}>{archDiagram}</pre>
+              </details>
+            </>
           )}
-
-          <div className="raw-json-wrap">
-            <details>
-              <summary>Raw snapshot</summary>
-              <pre className="raw-json" id="architecture-raw">{archFailed ? archFailureMessage : archPayload ? JSON.stringify(stripUptimesForRawDump(archPayload), null, 2) : 'No snapshot returned'}</pre>
-            </details>
-          </div>
         </article>
 
         {/* Right column: images */}
@@ -198,46 +222,49 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
           <div className="metrics-cards" id="architecture-metrics">
             <article className="metric-card">
               <div className="metric-card-label">CPU (avg)</div>
-              <div id="architecture-metric-cpu" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-cpu" className="metric-card-value">{archMetrics.cpu}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Memory</div>
-              <div id="architecture-metric-memory" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-memory" className="metric-card-value">{archMetrics.memory}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Load</div>
-              <div id="architecture-metric-load" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-load" className="metric-card-value">{archMetrics.load}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Disk</div>
-              <div id="architecture-metric-disk" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-disk" className="metric-card-value">{archMetrics.disk}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Swap</div>
-              <div id="architecture-metric-swap" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-swap" className="metric-card-value">{archMetrics.swap}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Network</div>
-              <div id="architecture-metric-network" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-network" className="metric-card-value">{archMetrics.network}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Hosts</div>
-              <div id="architecture-metric-hosts" className="metric-card-value">0</div>
+              <div id="architecture-metric-hosts" className="metric-card-value">{archMetrics.hosts}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">Processes</div>
-              <div id="architecture-metric-processes" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-processes" className="metric-card-value">{archMetrics.processes}</div>
             </article>
             <article className="metric-card">
               <div className="metric-card-label">OS</div>
-              <div id="architecture-metric-os" className="metric-card-value">N/A</div>
+              <div id="architecture-metric-os" className="metric-card-value">{archMetrics.os}</div>
             </article>
           </div>
         </aside>
       </div>
 
       {/* Client-side hydration for refresh and live updates */}
-      <ArchitectureClient project="image-mosaic" />
+      <ArchitectureClient
+        project="image-mosaic"
+        initialMetrics={archFailed ? null : archMetrics}
+      />
     </section>
 
     <section className="section container">
@@ -251,7 +278,7 @@ export default async function TravellingTemplate({ page }: { page: PageDoc }) {
             <p className="panel-kicker">GitHub</p>
           </div>
         </div>
-        <pre className="diagram-view" id="github-commits">{commitsText}</pre>
+        <pre aria-label="Recent commits" className="diagram-view" id="github-commits" role="region" tabIndex={0}>{commitsText}</pre>
       </div>
     </section>
 

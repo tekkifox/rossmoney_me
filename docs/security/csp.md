@@ -1,7 +1,9 @@
 # Content-Security-Policy for `payload-cms`
 
-**Status:** enforced on every production response.  
-**Date:** 2026-10-26.  
+**Status:** enforced on every production response.
+
+**Date:** 2026-10-26; public-document handling and Turnstile updated 2026-11-04.
+
 **Scope:** `www.example.com` (Portainer/Nginx Proxy Manager), `example.vercel.app`
 (Vercel production), `dev.example.com` (Vercel preview), and local
 `next start`.
@@ -17,9 +19,14 @@ are meant to survive the next edit.
 per request and does two things with it:
 
 1. puts it on the response as `Content-Security-Policy`;
-2. puts the same value on the **forwarded request** header, because Next.js only
+2. for a response that is rendered per request (admin, API, draft preview),
+   puts the same value on the **forwarded request** header, because Next.js only
    adds the nonce to its own `<script>` tags when it can read one from the
    request's CSP header (`getScriptNonceFromHeader` in `next/dist`).
+
+A prerendered public document is the exception (see
+[Prerendering and nonces](#prerendering-and-nonces)): it gets a header-only
+policy with the static script allowlist and no nonce on the forwarded request.
 
 `next.config.ts` deliberately no longer emits a CSP. Two policies combine by
 intersection, so a static `frame-ancestors 'none';` header would have blocked
@@ -32,23 +39,35 @@ The builder is `src/utilities/contentSecurityPolicy.ts`; the unit tests are
 
 ```text
 default-src 'none';
-script-src 'nonce-{nonce}' 'strict-dynamic' 'self' https://www.google.com https://www.gstatic.com;
+script-src 'nonce-{nonce}' 'strict-dynamic' 'self' https://challenges.cloudflare.com;
 style-src 'self';
 style-src-elem 'self';
 style-src-attr 'unsafe-inline';
 script-src-attr 'none';
-img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://www.gstatic.com;
+img-src 'self' data: blob: https://*.public.blob.vercel-storage.com;
 font-src 'self' data:;
-connect-src 'self' https://*.public.blob.vercel-storage.com https://archview.example.org https://www.google.com https://www.gstatic.com;
+connect-src 'self' https://*.public.blob.vercel-storage.com https://archview.example.org;
 media-src 'self' blob:;
 worker-src 'self' blob:;
 manifest-src 'self';
-frame-src https://www.google.com;
+frame-src https://challenges.cloudflare.com;
 frame-ancestors 'self';
 object-src 'none';
 base-uri 'none';
 form-action 'self'
 ```
+
+A normal public page is prerendered and served from the revalidation cache, so
+its HTML cannot carry the request's nonce. Those responses use the static
+script allowlist instead:
+
+```text
+script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
+```
+
+Everything else is identical, and dynamic drafts (the preview renderer under
+`/next/draft`), the admin and the API keep the nonce policy above. The reason
+for the split is in [Prerendering and nonces](#prerendering-and-nonces).
 
 On HTTPS responses `upgrade-insecure-requests` is appended. It is omitted on
 local HTTP so `next start` on `http://localhost` still works. Preview
@@ -71,8 +90,8 @@ frame-src 'self';
 frame-ancestors 'none'
 ```
 
-The admin does not get the Google reCAPTCHA sources and public pages do not get
-Gravatar/jsDelivr.
+The admin does not get the Cloudflare Turnstile sources and public pages do not
+get Gravatar/jsDelivr.
 
 ## Live Preview
 
@@ -117,33 +136,43 @@ project, these sources are simply unused.
 Source list:
 <https://vercel.com/docs/vercel-toolbar/managing-toolbar#using-a-content-security-policy>.
 
-## Why a nonce, not a static allowlist
+## Why the admin and dynamic preview keep a nonce
 
-A static allowlist would have to include `'unsafe-inline'` for `script-src`,
-because Next.js emits inline RSC bootstrap scripts plus the theme-init script on
-every page. That would remove most of the protection the policy is for. Hashes
-are not practical either: the RSC payload changes with the build and with the
-route.
+A static allowlist has to include `'unsafe-inline'` for `script-src`, because
+Next.js emits inline RSC bootstrap scripts plus the theme-init script on every
+page. For a per-request document that is an avoidable weakening, so the admin,
+the API and the draft preview renderer keep the nonce. Hashes are not practical
+there either: the RSC payload changes with the build and with the route.
 
-A nonce requires the response to be rendered per request. **This app already
-renders every public page that way.** `src/app/(frontend)/[slug]/page.tsx` has
-`export const dynamic = 'force-dynamic'`, and the production build prerenders no
-`[slug]` pages because `generateStaticParams()` returns `[]` without a database
-during the build. The build output is `ƒ /` and an on-demand `● /[slug]`; two
-requests to the same page receive different nonces. No static optimisation was
-given up for this change.
+A nonce requires the response to be rendered per request. Public pages are not:
+they are prerendered and revalidated (see the caching section of the README), so
+their HTML comes from the cache and a nonce baked into it would not match the
+response header. Those cached documents therefore fall back to the static
+allowlist documented above.
 
-If a future change starts prerendering public pages, the nonce would be baked
-into the HTML and would not match the per-request header. The guard is the
-`force-dynamic` export already on `[slug]`; do not remove it without switching
-the policy to hashes or a static allowlist.
+## Prerendering and nonces
+
+This is the one place where the policy deliberately differs by render mode.
+`src/utilities/publicPageCache.ts` decides which mode a request is in, and
+`src/proxy.ts` selects the policy:
+
+- ordinary public document → `preRendered: true`, static script allowlist, no
+  request CSP header (so Next.js does not try to inject a nonce into a document
+  it will cache);
+- draft preview (`__prerender_bypass` cookie) → nonce policy with the CSP on the
+  forwarded request, so the dynamic document's script tags carry it;
+- admin and API → nonce policy, as before.
+
+Do not remove the draft/preview split without also reverting this policy
+decision: serving a prerendered document with a per-request nonce would block
+every script on the page.
 
 ## Enforcing from day one
 
 The policy is enforced, not `Report-Only`. The browser checks in the audit ran
 against a production build and finished with zero `securitypolicyviolation`
 events on the home page, the CV page (DOCX viewer), a page with an image, the
-contact page (including the reCAPTCHA flow), `/admin` from first paint through
+contact page (including the Turnstile widget), `/admin` from first paint through
 login through editing/saving, and the 404 page. The admin save was verified by
 reading the changed field back, and an upload returned `201`. After the Live
 Preview allowance was added, the same production-build check also opened a Page
@@ -174,9 +203,10 @@ The suite must target `next start`, not `next dev`: the proxy deliberately omits
 the policy in development, and the header assertion fails if it is missing.
 `pnpm build && pnpm start` is the local path (`pnpm dev:prod` wraps it);
 `.github/workflows/browser-smoke.yml` runs the same suite on pull requests and
-on `main`/`dev` on a GitHub-hosted `ubuntu-latest` runner with a disposable
-MongoDB container. Pull-request code therefore never runs on the operator's own
-machines or the self-hosted runner that serves the publish jobs.
+on `main`/`dev` and on pull requests on a GitHub-hosted `ubuntu-latest` runner,
+against throwaway databases in a MongoDB container it starts itself. Pull-request
+code therefore never runs on the operator's own machines or the self-hosted
+runner that serves the publish jobs.
 
 ## Directive and source justifications
 
@@ -185,10 +215,10 @@ machines or the self-hosted runner that serves the publish jobs.
 - **`script-src` nonce + `'strict-dynamic'` + `'self'`.** The nonce covers
   Next.js's inline RSC/theme scripts and every `<script src>` that Next renders.
   `'strict-dynamic'` lets the trusted bootstrap insert the chunks that
-  client-side navigation needs, and lets the analytics and reCAPTCHA packages
+  client-side navigation needs, and lets the analytics and Turnstile packages
   insert their scripts without nonces. `'self'` is kept for browsers that do
-  not implement `strict-dynamic`. Google/gstatic host sources are the CSP2
-  fallback for reCAPTCHA; CSP3 browsers ignore host sources in a
+  not implement `strict-dynamic`. The Cloudflare host source is the CSP2
+  fallback for Turnstile; CSP3 browsers ignore host sources in a
   `strict-dynamic` policy and rely on the trusted insertion instead.
 - **`style-src 'self'` + `style-src-elem 'self'` + `style-src-attr
   'unsafe-inline'`.** Public pages use React `style` attributes (inline style
@@ -203,7 +233,7 @@ machines or the self-hosted runner that serves the publish jobs.
 - **`img-src 'self' data: blob: https://*.public.blob.vercel-storage.com`.** Self
   covers Payload media and the image optimiser; `data:` covers the blur
   placeholder and DOCX images; `blob:` covers admin previews; the Blob host is
-  the Vercel storage adapter. `gstatic` is the reCAPTCHA badge image; Gravatar
+  the Vercel storage adapter. Gravatar
   and jsDelivr codicons are admin-only.
 - **`font-src 'self' data:`.** Geist is self-hosted in `/_next/static/media`.
   The admin's Monaco codicon font comes from jsDelivr.
@@ -214,7 +244,8 @@ machines or the self-hosted runner that serves the publish jobs.
   list is explicit rather than `https:` so a compromised page cannot exfiltrate
   to an arbitrary HTTPS origin. `ARCHVIEW_URL`/`ARCHVIEW_HOST` can add public
   HTTPS origins without a code change; internal HTTP hosts are filtered out.
-  Google and gstatic are reCAPTCHA's token/challenge endpoints.
+  The Turnstile token is exchanged with Cloudflare from inside the widget
+  frame, so the parent document needs no `connect-src` entry for it.
 - **`https://vercel.com` in the admin `connect-src` only.** Vercel's serverless
   request-body limit is 4.5 MB, so large media uses Payload's client uploads:
   the admin obtains an upload token from `/api/vercel-blob-client-upload-route`
@@ -228,10 +259,10 @@ machines or the self-hosted runner that serves the publish jobs.
   and a missed upload is silent data loss.
 - **`media-src 'self' blob:`.** Uploaded audio/video and admin previews.
 - **`worker-src 'self' blob:`.** Monaco's workers; jsDelivr is the admin
-  fallback. reCAPTCHA's worker runs inside its own frame.
+  fallback. Turnstile's worker runs inside its own frame.
 - **`manifest-src 'self'`.** `site.webmanifest`.
-- **`frame-src https://www.google.com` / `'self'`.** reCAPTCHA v3's invisible
-  anchor / bframe is the only third-party frame on public pages. The admin
+- **`frame-src https://challenges.cloudflare.com` / `'self'`.** Turnstile
+  renders its challenge in a frame from Cloudflare on public pages. The admin
   additionally allows `'self'` for Payload's Live Preview iframe.
 - **`frame-ancestors 'self'` on public pages, `'none'` on the admin.** Public
   pages may only be framed by their own origin, which is what Live Preview

@@ -62,7 +62,7 @@ export const home: RequiredDataFromCollectionSlug<'pages'> = {
   eyebrow: 'Available for devops and developer roles',
   title: 'Building dependable systems with operational discipline.',
   lead:
-    'I design and ship resilient developer experiences, automation layers, and production-ready interfaces. This portfolio can now be edited in Payload CMS and persisted in MongoDB.',
+    'I design and ship resilient developer experiences, automation layers, and production-ready interfaces.',
   focus: {
     kicker: 'Current focus',
     title: 'Building personal infrastructure',

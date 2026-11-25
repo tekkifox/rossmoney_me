@@ -47,7 +47,7 @@ const EXCEPTIONS = [
   },
   {
     file: 'src/app/(frontend)/local-styles.css',
-    match: /^\.docx \.docx-font-size-14 \{ font-size: 14pt; color: #2386f5 \}/,
+    match: /^\.docx \.docx-font-size-14 \{ font-size: 14pt; color: #0b5ed7 \}/,
     reason: 'DOCX accent colour; font-size asserted verbatim by the DOCX integration test.',
   },
   {
@@ -67,7 +67,7 @@ const EXCEPTIONS = [
   },
   {
     file: 'src/app/(frontend)/local-styles.css',
-    match: /^\.docx \.docx-color-2386f5 \{ color: #2386f5 \}/,
+    match: /^\.docx \.docx-color-2386f5 \{ color: #0b5ed7 \}/,
     reason: 'DOCX colour class; asserted verbatim by the DOCX integration test.',
   },
   {
@@ -79,6 +79,12 @@ const EXCEPTIONS = [
     file: 'src/app/(frontend)/local-styles.css',
     match: /^\.docx p\.docx-entry-rule \{ border-bottom: 1px solid rgba\(17, 17, 17, 0\.2\)/,
     reason: 'DOCX entry rule; border asserted verbatim by the DOCX integration test.',
+  },
+  {
+    file: 'src/utilities/ogTheme.ts',
+    match: /^\s{2}[a-zA-Z]+: '(?:#[0-9a-fA-F]{6}|rgba\([^']*\))',$/,
+    reason:
+      'Satori/next-og has no stylesheet cascade, so the OG card mirrors tokens as literals; tests/int/og-theme.int.spec.ts asserts them against tokens.css.',
   },
 ]
 
@@ -173,7 +179,7 @@ async function main() {
     process.exit(1)
   }
 
-  const suffix = exceptionCount > 0 ? ` (${exceptionCount} documented DOCX exception${exceptionCount === 1 ? '' : 's'})` : ''
+  const suffix = exceptionCount > 0 ? ` (${exceptionCount} documented exception${exceptionCount === 1 ? '' : 's'})` : ''
   console.log(`token-guard: no raw colour literals outside src/styles/tokens.css${suffix}.`)
 }
 

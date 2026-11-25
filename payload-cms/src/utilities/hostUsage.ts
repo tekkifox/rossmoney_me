@@ -19,7 +19,12 @@ export type HostSample = {
 
 export type HostUsageBucket = {
   key: string
+  /** Time label for intra-day ranges, or the day label for 30d. */
   label: string
+  /** UTC calendar day as M/D for ranges that span multiple days, else null. */
+  day: string | null
+  /** Full bucket date and time in UTC, for tooltips (e.g. 2026-10-30 12:33 UTC). */
+  tooltipLabel: string
   cpuAvg: number | null
   memoryPercent: number | null
   loadAvg: number | null
@@ -67,6 +72,29 @@ export const RECENT_SAMPLE_WINDOW_MS = 15 * 60 * 1000
  * unbounded list.
  */
 export const RECENT_SAMPLES_LIMIT = 100
+
+/**
+ * Picks the tab a host-usage request should open on.
+ *
+ * An explicit, existing `host` always wins. Otherwise the first source with at
+ * least one sample in the selected range is the useful default; a page that
+ * opens on a configured-but-silent host looks broken. Only when no source has
+ * samples does this fall back to the first source, matching the old default.
+ */
+export function selectHostUsageSource<T extends { id: string }>(
+  sources: readonly T[],
+  requestedHost: string | undefined,
+  hostsWithSamples: ReadonlySet<string>,
+): T | undefined {
+  if (sources.length === 0) return undefined
+
+  const requested = requestedHost
+    ? sources.find((source) => source.id === requestedHost)
+    : undefined
+  if (requested) return requested
+
+  return sources.find((source) => hostsWithSamples.has(source.id)) ?? sources[0]
+}
 
 export type RecentHostSample = {
   time: string
@@ -126,15 +154,26 @@ export function bucketKeyFor(date: Date, range: HostUsageRange): string {
   return new Date(aligned).toISOString()
 }
 
+export function bucketDayFor(key: string, range: HostUsageRange): string | null {
+  if (range === '30d') return null
+  const d = new Date(key)
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+}
+
 export function bucketLabelFor(key: string, range: HostUsageRange): string {
   const d = new Date(key)
   if (range === '30d') {
     return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
   }
-  if (HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000) {
-    return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
-  }
-  return `${pad2(d.getUTCHours())}:00`
+  return HOST_USAGE_BUCKET_MS[range] < 60 * 60 * 1000
+    ? `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
+    : `${pad2(d.getUTCHours())}:00`
+}
+
+/** Full bucket date and time in UTC for chart tooltips, e.g. 2026-10-30 12:33 UTC. */
+export function bucketTooltipLabelFor(key: string): string {
+  const d = new Date(key)
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())} UTC`
 }
 
 export function bucketHostSamples(
@@ -142,9 +181,22 @@ export function bucketHostSamples(
   range: HostUsageRange,
   now: number = Date.now(),
 ): Map<string, HostUsageBucket[]> {
-  const cutoff = now - HOST_USAGE_RANGE_MS[range]
-  const grouped = new Map<string, HostSample[]>()
+  const bucketMs = HOST_USAGE_BUCKET_MS[range]
+  const dayMs = 24 * 60 * 60 * 1000
+  let start: number
+  let end: number
+  if (range === '30d') {
+    const nowDate = new Date(now)
+    start = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), 1)
+    end = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth() + 1, 0)
+  } else {
+    end = Math.floor(now / bucketMs) * bucketMs
+    const cutoff = now - HOST_USAGE_RANGE_MS[range]
+    start = range === '7d' ? Math.floor(now / dayMs) * dayMs - 6 * dayMs : Math.floor(cutoff / bucketMs) * bucketMs
+  }
+  const cutoff = start
 
+  const grouped = new Map<string, HostSample[]>()
   for (const sample of samples) {
     if (!sample.sampledAt) continue
     const time = new Date(sample.sampledAt).getTime()
@@ -155,6 +207,7 @@ export function bucketHostSamples(
   }
 
   const result = new Map<string, HostUsageBucket[]>()
+
   for (const [label, items] of grouped) {
     const buckets = new Map<string, HostSample[]>()
     for (const sample of items) {
@@ -162,17 +215,37 @@ export function bucketHostSamples(
       if (!buckets.has(key)) buckets.set(key, [])
       buckets.get(key)!.push(sample)
     }
-    const aggregated = Array.from(buckets.entries())
-      .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([key, bucketItems]) => ({
-        key,
-        label: bucketLabelFor(key, range),
-        cpuAvg: average(bucketItems.map((s) => toNumber(s.cpuAvg))),
-        memoryPercent: average(bucketItems.map((s) => toNumber(s.memoryPercent))),
-        loadAvg: average(bucketItems.map((s) => toNumber(s.loadAvg))),
-        diskPercent: average(bucketItems.map((s) => toNumber(s.diskPercent))),
-        count: bucketItems.length,
-      }))
+
+    const aggregated: HostUsageBucket[] = []
+    for (let t = start; t <= end; t += bucketMs) {
+      const key = new Date(t).toISOString()
+      const bucketItems = buckets.get(key)
+      if (bucketItems && bucketItems.length > 0) {
+        aggregated.push({
+          key,
+          label: bucketLabelFor(key, range),
+          day: bucketDayFor(key, range),
+          tooltipLabel: bucketTooltipLabelFor(key),
+          cpuAvg: average(bucketItems.map((s) => toNumber(s.cpuAvg))),
+          memoryPercent: average(bucketItems.map((s) => toNumber(s.memoryPercent))),
+          loadAvg: average(bucketItems.map((s) => toNumber(s.loadAvg))),
+          diskPercent: average(bucketItems.map((s) => toNumber(s.diskPercent))),
+          count: bucketItems.length,
+        })
+      } else {
+        aggregated.push({
+          key,
+          label: bucketLabelFor(key, range),
+          day: bucketDayFor(key, range),
+          tooltipLabel: bucketTooltipLabelFor(key),
+          cpuAvg: null,
+          memoryPercent: null,
+          loadAvg: null,
+          diskPercent: null,
+          count: 0,
+        })
+      }
+    }
     result.set(label, aggregated)
   }
 

@@ -1,11 +1,12 @@
 import type { PayloadRequest } from 'payload'
 import { getPayload } from 'payload'
 
-import { draftMode } from 'next/headers'
+import { cookies, draftMode } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { NextRequest } from 'next/server'
 
 import configPromise from '@payload-config'
+import { PREVIEW_MODE_COOKIE } from '@/utilities/publicPageCache'
 
 export type PreviewSearchParams = {
   path: string
@@ -55,6 +56,19 @@ export async function GET(req: NextRequest): Promise<Response> {
   // You can add additional checks here to see if the user is allowed to preview this page
 
   draft.enable()
+
+  // The draft cookie itself is httpOnly, so the client-side admin bar needs a
+  // readable companion to know that "Exit preview mode" applies. It carries no
+  // authority: `draftMode()` still validates the cookie above.
+  const cookieStore = await cookies()
+  cookieStore.set({
+    name: PREVIEW_MODE_COOKIE,
+    value: '1',
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  })
 
   redirect(path)
 }

@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { MongoRateLimitStore, RATE_LIMIT_COLLECTION } from '@/utilities/rateLimitStore'
 
-// `vitest.setup-db.ts` points MONGODB_URI at the disposable MongoDB started by
-// the global setup (or at the database a developer/CI supplied).
+// `vitest.setup-db.ts` points MONGODB_URI at the throwaway database the global
+// setup created on the configured MongoDB server.
 const uri = process.env.MONGODB_URI || process.env.DATABASE_URL
 
 const uniqueKey = () =>

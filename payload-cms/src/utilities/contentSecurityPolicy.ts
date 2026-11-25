@@ -14,6 +14,11 @@ import { normaliseOrigin } from './adminOrigin'
  * request and the response. The admin panel is a Next.js app too, so its
  * framework scripts receive the same nonce. Payload's inline `style` attributes
  * cannot be nonced, which is why `style-src` keeps `'unsafe-inline'`.
+ *
+ * Prerendered public documents are the exception: their HTML comes from the
+ * cache, so a per-request nonce cannot match it. They use the documented static
+ * script allowlist instead (see `preRendered` below and
+ * `docs/security/csp.md`).
  */
 
 /** Vercel Blob public store host used by the storage adapter on Vercel. */
@@ -45,12 +50,11 @@ const GRAVATAR_ORIGINS = ['https://www.gravatar.com', 'https://secure.gravatar.c
 const MONACO_CDN_ORIGIN = 'https://cdn.jsdelivr.net'
 
 /**
- * Google reCAPTCHA v3, loaded by the public contact form on submit. The script
- * is inserted by the nonced bundle (so `strict-dynamic` permits it), but the
- * challenge iframe and the token request are separate directives. These are the
- * only Google origins the public site is allowed to contact.
+ * Cloudflare Turnstile, loaded by the public contact form. The script is
+ * inserted by the trusted bundle, and the widget renders its challenge in a
+ * frame from the same origin. The public site never contacts it from the admin.
  */
-const RECAPTCHA_ORIGINS = ['https://www.google.com', 'https://www.gstatic.com']
+const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com'
 
 /**
  * External ArchView hosts the browser is allowed to call.
@@ -89,6 +93,21 @@ const VERCEL_TOOLBAR_FONT_ORIGINS = [
  */
 export const createNonce = (): string => globalThis.crypto.randomUUID().replace(/-/g, '')
 
+/**
+ * Read the nonce back out of the request's CSP header.
+ *
+ * Components that emit their own `<script>` (the analytics tracker, for
+ * example) need the same nonce Next.js put on the forwarded request. Parsing
+ * the header keeps the single source of truth in `proxy.ts`; there is no
+ * separate `x-nonce` header to drift out of sync.
+ */
+export const nonceFromCspHeader = (
+  header: string | null | undefined,
+): string | undefined => {
+  const match = header?.match(/'nonce-([A-Za-z0-9+/_-]+={0,2})'/)
+  return match?.[1]
+}
+
 /** Origins from the environment that the browser may call for ArchView data. */
 export const archviewOrigins = (
   env: Record<string, string | undefined> = process.env,
@@ -111,6 +130,14 @@ export const archviewOrigins = (
 
 export type ContentSecurityPolicyOptions = {
   nonce: string
+  /**
+   * The document is served from the prerender/ISR cache, so it cannot carry a
+   * per-request nonce: the nonce baked into the cached HTML would not match the
+   * response header. Public documents therefore fall back to the static
+   * allowlist documented in `docs/security/csp.md`. Ignored for the admin, which
+   * is always rendered per request.
+   */
+  preRendered?: boolean
   /** Adds `upgrade-insecure-requests`; only meaningful on HTTPS responses. */
   isHttps?: boolean
   /** Extra `connect-src` origins, e.g. an ArchView instance. */
@@ -130,6 +157,7 @@ export type ContentSecurityPolicyOptions = {
  */
 export function buildContentSecurityPolicy({
   nonce,
+  preRendered = false,
   isHttps = false,
   connectOrigins = [],
   isAdmin = false,
@@ -155,11 +183,10 @@ export function buildContentSecurityPolicy({
     ? ` ${GRAVATAR_ORIGINS.join(' ')} ${MONACO_CDN_ORIGIN}`
     : ''
   // The contact form appears on public pages only; the admin never loads
-  // reCAPTCHA. Host sources in script-src are the CSP2 fallback; CSP3 browsers
-  // rely on `strict-dynamic` and the nonce.
-  const publicScriptSources = isAdmin ? '' : ` ${RECAPTCHA_ORIGINS.join(' ')}`
-  const publicConnectSources = isAdmin ? '' : ` ${RECAPTCHA_ORIGINS.join(' ')}`
-  const publicImageSources = isAdmin ? '' : ' https://www.gstatic.com'
+  // Turnstile. Host sources in script-src are the CSP2 fallback; CSP3 browsers
+  // rely on `strict-dynamic` and the nonce (or, on prerendered pages, the
+  // documented static allowlist).
+  const publicScriptSources = isAdmin ? '' : ` ${TURNSTILE_ORIGIN}`
 
   const toolbarScript = vercelToolbar ? ` ${VERCEL_TOOLBAR_ORIGIN}` : ''
   // The toolbar's feedback script injects inline <style> elements, so a public
@@ -179,13 +206,18 @@ export function buildContentSecurityPolicy({
     : ''
   const toolbarFrame = vercelToolbar ? ` ${VERCEL_TOOLBAR_ORIGIN}` : ''
 
+  // Public pages are prerendered (see `utilities/publicPageCache.ts`), so their
+  // HTML cannot carry a fresh nonce. They keep the static allowlist instead:
+  // `'self'` for Next.js chunks and `'unsafe-inline'` for the inline RSC/theme
+  // bootstrap. The admin stays nonce-based because it renders per request.
+  const useStaticScripts = preRendered && !isAdmin
+  const scriptDirective = useStaticScripts
+    ? `script-src 'self' 'unsafe-inline'${publicScriptSources}${adminSources}${toolbarScript}`
+    : `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'${publicScriptSources}${adminSources}${toolbarScript}`
+
   const directives = [
     "default-src 'none'",
-    // `strict-dynamic` lets the nonced Next.js bootstrap load its chunks and
-    // lets the analytics packages insert their same-origin script tags. `'self'`
-    // remains for browsers that do not implement strict-dynamic, and the
-    // jsDelivr host is the CSP2 fallback for Payload's Monaco loader.
-    `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'${publicScriptSources}${adminSources}${toolbarScript}`,
+    scriptDirective,
     // Public pages use inline `style` *attributes* (React `style` props) but no
     // inline `<style>` elements, so they can allow attributes without allowing
     // inline stylesheet text. Payload's admin also injects `<style>` elements,
@@ -204,15 +236,15 @@ export function buildContentSecurityPolicy({
     // `data:` and `blob:` cover admin thumbnails and the DOCX viewer's images;
     // the Blob host covers media uploaded on Vercel. The admin additionally
     // requests the signed-in user's Gravatar and Monaco's codicon images.
-    `img-src 'self' data: blob: ${VERCEL_BLOB_ORIGIN}${publicImageSources}${adminImages}${toolbarImages}`,
+    `img-src 'self' data: blob: ${VERCEL_BLOB_ORIGIN}${adminImages}${toolbarImages}`,
     `font-src 'self' data:${adminSources}${toolbarFonts}`,
-    `connect-src ${[...new Set(connectSources)].join(' ')}${publicConnectSources}${adminSources}${toolbarConnect}${adminConnectSources}`,
+    `connect-src ${[...new Set(connectSources)].join(' ')}${adminSources}${toolbarConnect}${adminConnectSources}`,
     "media-src 'self' blob:",
     `worker-src 'self' blob:${adminSources}`,
     "manifest-src 'self'",
     // The admin frames its own origin for Payload's Live Preview. Public pages
-    // only need reCAPTCHA's challenge frame.
-    `frame-src ${isAdmin ? "'self'" : 'https://www.google.com'}${toolbarFrame}`,
+    // need Turnstile's challenge frame.
+    `frame-src ${isAdmin ? "'self'" : TURNSTILE_ORIGIN}${toolbarFrame}`,
     // Public pages allow only their own origin as an ancestor so Payload's
     // Live Preview can frame the page being edited. The admin itself stays
     // un-frameable. Cross-origin framing remains blocked on both surfaces.

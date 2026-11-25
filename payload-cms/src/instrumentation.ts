@@ -8,6 +8,27 @@ import {
 } from './utilities/serverErrorReport'
 
 /**
+ * Starts process-lifetime work before the server handles requests.
+ *
+ * Next.js calls `register` once per server process, outside any request or
+ * render context (and skips it during the production build). The host sampler
+ * used to be created inside Payload's `onInit`, which first runs wherever
+ * Payload is first used — on a production build that can be the static render
+ * of `/[slug]`. A timer created in that async context kept it forever, so every
+ * later tick's `no-store` fetch was judged to be part of the static render and
+ * rejected with `DynamicServerError`. Starting the timer here keeps every tick
+ * outside that context.
+ */
+export async function register(): Promise<void> {
+  // `register` also runs for edge routes, where Payload and its MongoDB adapter
+  // cannot run. The sampler only belongs in the Node server.
+  if (process.env.NEXT_RUNTIME === 'edge') return
+
+  const { startHostSampler } = await import('./utilities/hostSamplerSchedule')
+  startHostSampler()
+}
+
+/**
  * Next.js calls this for uncaught errors while rendering a route, running a
  * route handler, a server action or the proxy. Registered by file convention
  * (`src/instrumentation.ts`), verified against the installed Next 16.4.3 which

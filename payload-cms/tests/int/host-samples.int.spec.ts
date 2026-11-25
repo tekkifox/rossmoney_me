@@ -129,19 +129,29 @@ describe('host usage bucketing', () => {
     const samples = [
       { hostLabel: 'host-a', sampledAt: new Date(now - 30 * 60 * 1000).toISOString(), cpuAvg: 10, memoryPercent: 20, loadAvg: 1, diskPercent: 30 },
     ]
-    expect(bucketHostSamples(samples, '24h', now).get('host-a')![0].label).toBe('11:30')
-    expect(bucketHostSamples(samples, '7d', now).get('host-a')![0].label).toBe('11:00')
-    expect(bucketHostSamples(samples, '30d', now).get('host-a')![0].label).toBe('1/2')
+    const day = bucketHostSamples(samples, '24h', now).get('host-a')!.find((b) => b.count > 0)!
+    expect(day.label).toBe('11:30')
+    expect(day.day).toBe('1/2')
+    const week = bucketHostSamples(samples, '7d', now).get('host-a')!.find((b) => b.count > 0)!
+    expect(week.label).toBe('11:00')
+    expect(week.day).toBe('1/2')
+    const month = bucketHostSamples(samples, '30d', now).get('host-a')!.find((b) => b.count > 0)!
+    expect(month.label).toBe('1/2')
+    expect(month.day).toBeNull()
   })
 
-  it('drops samples outside the range', () => {
+  it('drops samples outside the range and fills gaps with empty buckets', () => {
     const now = Date.UTC(2026, 0, 2, 12, 0, 0)
     const samples = [
       { hostLabel: 'host-a', sampledAt: new Date(now - 25 * 60 * 60 * 1000).toISOString(), cpuAvg: 10, memoryPercent: 20, loadAvg: 1, diskPercent: 30 },
       { hostLabel: 'host-a', sampledAt: new Date(now - 10 * 60 * 1000).toISOString(), cpuAvg: 20, memoryPercent: 40, loadAvg: 2, diskPercent: 60 },
     ]
     const buckets = bucketHostSamples(samples, '24h', now).get('host-a')!
-    expect(buckets).toHaveLength(1)
+    expect(buckets).toHaveLength(96)
+    expect(buckets.filter((bucket) => bucket.count > 0)).toHaveLength(1)
+    expect(buckets.find((bucket) => bucket.count > 0)?.cpuAvg).toBe(20)
+    const gap = buckets.find((bucket) => bucket.count === 0)
+    expect(gap?.cpuAvg).toBeNull()
   })
 
   it('averages metrics when a bucket holds several samples', () => {
@@ -152,10 +162,9 @@ describe('host usage bucketing', () => {
       { hostLabel: 'host-a', sampledAt: new Date(hour.getTime() + 5 * 60 * 1000).toISOString(), cpuAvg: 10, memoryPercent: 20, loadAvg: 1, diskPercent: 30 },
       { hostLabel: 'host-a', sampledAt: new Date(hour.getTime() + 10 * 60 * 1000).toISOString(), cpuAvg: 30, memoryPercent: 60, loadAvg: 3, diskPercent: 90 },
     ]
-    const bucket = bucketHostSamples(samples, '24h', now).get('host-a')![0]
+    const bucket = bucketHostSamples(samples, '24h', now).get('host-a')!.find((b) => b.count === 2)!
     expect(bucket.cpuAvg).toBe(20)
     expect(bucket.memoryPercent).toBe(40)
-    expect(bucket.count).toBe(2)
   })
 
   it('returns empty buckets for an empty range without throwing', () => {
@@ -171,8 +180,8 @@ describe('host usage bucketing', () => {
       { hostLabel: 'beta', sampledAt: new Date(now - 5 * 60 * 1000).toISOString(), cpuAvg: 5, memoryPercent: 6, loadAvg: 7, diskPercent: 8 },
     ]
     const result = bucketHostSamples(samples, '24h', now)
-    expect(result.get('alpha')![0].cpuAvg).toBe(1)
-    expect(result.get('beta')![0].cpuAvg).toBe(5)
+    expect(result.get('alpha')!.find((bucket) => bucket.count > 0)?.cpuAvg).toBe(1)
+    expect(result.get('beta')!.find((bucket) => bucket.count > 0)?.cpuAvg).toBe(5)
   })
 })
 

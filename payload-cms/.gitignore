@@ -4,6 +4,8 @@ node_modules
 .DS_Store
 .env
 .next
+# Isolated copy of the build the screenshot server runs from in CI.
+.next-screenshots
 next-env.d.ts
 .vercel
 
