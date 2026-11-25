@@ -32,60 +32,53 @@ pnpm --filter payload-cms run lint:tokens
 
 ## Browser smoke and PR screenshots
 
-`.github/workflows/browser-smoke.yml` runs on the self-hosted `paseo` runner
-against the VM's shared dev MongoDB instead of starting a MongoDB server of its
-own. `DEV_MONGO_URI` is a repository secret containing only the base URI; the
-workflow appends a run-scoped database name:
+`.github/workflows/browser-smoke.yml` runs on a GitHub-hosted `ubuntu-latest`
+runner, for pull requests as well as `main`/`dev`, so pull-request code never
+executes on the self-hosted `paseo` runner. The job starts a disposable MongoDB
+container (`mongo:9`, on a kernel-chosen loopback port) and creates two databases
+in it:
 
-- smoke: `rossmoney_ci_<run-id>_<attempt>`;
-- screenshots: `rossmoney_shots_<run-id>_<attempt>`, copied from the seeded
-  `rossmoney_dev` database by `payload-cms/scripts/mongo-db.mjs` over the
-  project's `mongodb` driver (the paseo VM has no `mongosh`, Docker or MongoDB
-  Database Tools). `rossmoney_dev` is only ever read.
+- smoke: `rossmoney_ci`;
+- screenshots: `rossmoney_shots`, a second database so the screenshot server can
+  never read what the smoke suite edited.
 
-Both databases are dropped at the end of the run. `PAYLOAD_SEED=true` makes
-`onInit` refresh the default documents on every startup: the per-run databases
-are disposable, and this is what makes a pull request that changes a seeded page
-show that change in its screenshot. The smoke database starts empty, so it gets
-the sample CV. The screenshot database is a copy of the seeded `rossmoney_dev`,
-so force-seeding merges the page fields but leaves the real CV upload in place
-(`attachSeededCv` only links the sample when the field is empty).
+Both are created on first write and die with the container, so the job needs no
+MongoDB URI secret and drops nothing by hand: `DEV_MONGO_URI`, `rossmoney_dev`,
+`MEDIA_MIRROR` and the media mirror on the paseo VM are no longer involved.
+`PAYLOAD_SEED=true` makes `onInit` refresh the default documents on every
+startup: the databases are disposable, and this is what makes a pull request that
+changes a seeded page show that change in its screenshot. Both start empty, so
+both get the seeded sample CV and the seed's own images from
+`src/endpoints/seed/`; nothing is downloaded from production.
+`PAYLOAD_SEED_ADMIN_EMAIL`/`PAYLOAD_SEED_ADMIN_PASSWORD` create the
+`dev@payloadcms.com` account the screenshot spec logs in as, because no copied
+`rossmoney_dev` supplies it any more.
 `ACKEE_ENABLED=false` is also set: the `/a` tracker rewrite targets the `ackee`
 Docker service, which is not part of this job, so a rendered tracker would leave
 a request hanging and stall the page's `load` event.
 
 The two servers must not share a build directory. Next.js keeps its full route
 cache inside `distDir`, so a render the smoke server cached against the smoke
-database would be served by the screenshot server even though it points at the
-copy of `rossmoney_dev`. After the build the workflow copies `payload-cms/.next`
-to `payload-cms/.next-screenshots` *before* the smoke run; the screenshot server
+database would be served by the screenshot server even though it points at its
+own database. After the build the workflow copies `payload-cms/.next` to
+`payload-cms/.next-screenshots` *before* the smoke run; the screenshot server
 starts with `NEXT_DIST_DIR=.next-screenshots` (`SCREENSHOT_DIST_DIR` in
 `playwright.screenshots.ts`), so it reads and writes only its own copy.
 
-Before the screenshot server starts, the workflow installs the production media
-the copied database references into `payload-cms/public/media`. It uses the
-first local directory mirror that exists: `MEDIA_MIRROR` (a repository variable,
-when set), then `/home/ross/stacks/rosso-dev-sync/media`, then the older
-`/opt/rossmoney-dev-sync/media`. If none exists, it reads the filenames from the
-`media` collection of the copied database and downloads them from
-`https://www.rossmoney.me/media/`. The installed file count must match the
-number of referenced files, so a partial mirror or download fails the job.
-Without those files the copied pages point at missing images and the CV seed
-hook waits on a fetch that cannot succeed.
-
 Screenshots are captured by `payload-cms/playwright.screenshots.ts` (separate
-from `pnpm test:e2e`) after the smoke suite, against the throwaway copy and the
-isolated build, with `HOST_SAMPLER=off`. When `/cv` is captured the spec also
-reads `/api/pages` from that server and compares the CV download filename with
-the media document the database holds, so a stale render from the smoke server
-fails the step instead of publishing the wrong image. The default paths are `/`
-and `/admin/collections/host-samples`; a manual `workflow_dispatch` can pass a
-comma-separated `paths` input. `payload-cms/scripts/publish-screenshots.ts`
-checks both the PNGs and the captured page text for secret-shaped material
-before uploading to BookStack; a finding fails the job without uploading
-anything. Images attach to the page in `BOOKSTACK_SCREENSHOT_PAGE_ID` as
-`gallery` images, and one marker comment on the pull request is created or
-updated with the image URLs.
+from `pnpm test:e2e`) after the smoke suite, against the throwaway screenshot
+database and the isolated build, with `HOST_SAMPLER=off`. When `/cv` is captured
+the spec also reads `/api/pages` from that server and compares the CV download
+filename with the media document the database holds, so a stale render from the
+smoke server fails the step instead of publishing the wrong image. The default
+paths are `/` and `/admin/collections/host-samples`; a manual `workflow_dispatch`
+can pass a comma-separated `paths` input.
+`payload-cms/scripts/publish-screenshots.ts` checks both the PNGs and the
+captured page text for secret-shaped material before uploading to BookStack; a
+finding fails the job without uploading anything. Images attach to the page in
+`BOOKSTACK_SCREENSHOT_PAGE_ID` as `gallery` images, and one marker comment on the
+pull request is created or updated with the image URLs. That publish step is
+currently disabled (`if: false`) in the workflow.
 
 ```bash
 pnpm --filter payload-cms run screenshots
