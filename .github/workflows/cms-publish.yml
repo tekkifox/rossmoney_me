@@ -72,52 +72,45 @@ jobs:
           cache-from: type=gha,scope=payload-main-arm64
           cache-to: type=gha,mode=max,scope=payload-main-arm64
 
-  # Stacks are files on the fleet's hosts, applied by Ansible, so the deploy is
-  # delegated to the fleet's deploy seat on mgmt: it pulls and recreates the
-  # named stacks on the named host, and refuses a stack its host does not
-  # declare. The image it pulls is the `latest` tag this workflow just
-  # published to ghcr.io.
+  # Stacks are files on the fleet's hosts, applied by Ansible. The deploy job
+  # asks the deploy gateway over the tailnet to pull and recreate the named
+  # stacks on the named host. The image it pulls is the `latest` tag this
+  # workflow just published to ghcr.io.
   #
-  # This job is deliberately self-contained rather than a call to the fleet's
-  # reusable deploy workflow. That workflow lives in a private repository, and
-  # GitHub refuses to load a workflow in a public repository that calls a
-  # reusable workflow in a private one, so the call would fail before any job
-  # ran. The SSH invocation is duplicated here; that duplication is the price
-  # of this repository being public. The seat validates host and stack itself,
-  # so this job is only transport.
-  #
-  # Runs on the self-hosted fleet runner (already on the tailnet), so no
-  # Tailscale join step is needed. The deploy SSH key is taken from a
-  # preinstalled file at `$HOME/.ssh/deploy` when present (as fleet deploy
-  # workflows do); otherwise the `DEPLOY_SSH_KEY` secret is written there as a
-  # fallback. The seat's address comes from the `DEPLOY_SEAT_HOST` secret
-  # because this repository is public and must not publish a real hostname.
+  # It runs on a GitHub-hosted runner, joins the tailnet with a reusable
+  # ephemeral auth key, and authenticates to the gateway with its own key and
+  # pinned host key.
   deploy:
     name: Deploy the CMS
     needs: build
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, paseo]
+    runs-on: ubuntu-latest
     steps:
-      - name: Ask the fleet deploy seat to deploy
+      - name: Join the tailnet
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          hostname: gh-rossmoney-me-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Install the gateway key and its pinned host key
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_SEAT_HOST: ${{ secrets.DEPLOY_SEAT_HOST }}
-          TARGET_HOST: rossmoney
-          TARGET_STACKS: rossmoney-cms
+          GATEWAY_KEY: ${{ secrets.DEPLOY_GATEWAY_SSH_KEY }}
+          GATEWAY_HOST_KEY: ${{ secrets.DEPLOY_GATEWAY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          if [ -f "$HOME/.ssh/deploy" ]; then
-            echo "Using preinstalled deploy key at $HOME/.ssh/deploy"
-          else
-            if [ -z "${DEPLOY_SSH_KEY:-}" ]; then
-              echo "::error::No preinstalled deploy key at $HOME/.ssh/deploy and DEPLOY_SSH_KEY secret is not set"
-              exit 1
-            fi
-            install -d -m 0700 "$HOME/.ssh"
-            printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy"
-            chmod 0600 "$HOME/.ssh/deploy"
-          fi
-          ssh -i "$HOME/.ssh/deploy" -p 32 \
-            -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            root@"$DEPLOY_SEAT_HOST" \
-            "fleet-deploy $TARGET_HOST $TARGET_STACKS deploy"
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$GATEWAY_KEY" > "$HOME/.ssh/gateway"
+          chmod 0600 "$HOME/.ssh/gateway"
+          printf '%s\n' "$GATEWAY_HOST_KEY" > "$HOME/.ssh/gateway_known_hosts"
+          chmod 0600 "$HOME/.ssh/gateway_known_hosts"
+
+      - name: Ask the deploy gateway to deploy
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/gateway" \
+            -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/gateway_known_hosts" \
+            -o ConnectTimeout=30 \
+            deploy-hop@deploy-gateway.tail81cbd2.ts.net \
+            "deploy rossmoney rossmoney-cms"
