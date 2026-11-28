@@ -111,6 +111,81 @@ describe('ArchView sources collection', () => {
     clearArchviewTokenCache()
   })
 
+  it('accepts an http origin only on a tailnet .ts.net host', async () => {
+    const data = sourceData('tailnet-http', {
+      origin: 'http://deploy-seat.tail81cbd2.ts.net:8083',
+    })
+
+    const created = await payload.create({
+      collection: 'archview-sources',
+      data,
+      overrideAccess: true,
+    })
+
+    expect(created.origin).toBe('http://deploy-seat.tail81cbd2.ts.net:8083')
+  })
+
+  it('accepts https for any host, including a tailnet name', async () => {
+    const publicSource = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('public-https', { origin: 'https://archview.example.com' }),
+      overrideAccess: true,
+    })
+    const tailnetSource = await payload.create({
+      collection: 'archview-sources',
+      data: sourceData('tailnet-https', {
+        origin: 'https://deploy-seat.tail81cbd2.ts.net:8083',
+      }),
+      overrideAccess: true,
+    })
+
+    expect(publicSource.origin).toBe('https://archview.example.com')
+    expect(tailnetSource.origin).toBe('https://deploy-seat.tail81cbd2.ts.net:8083')
+  })
+
+  it('rejects a plain http origin on anything but a .ts.net host', async () => {
+    const invalid = [
+      ['http-public', 'http://archview.example.com'],
+      ['http-lookalike', 'http://example.ts.net.evil.com'],
+      ['ftp-tailnet', 'ftp://x.ts.net'],
+    ] as const
+
+    for (const [suffix, origin] of invalid) {
+      await expect(
+        payload.create({
+          collection: 'archview-sources',
+          data: sourceData(suffix, { origin }),
+          overrideAccess: true,
+        }),
+      ).rejects.toMatchObject({
+        name: 'ValidationError',
+        data: {
+          errors: [
+            {
+              message:
+                'The origin must use https://, except for a Tailscale host ending in .ts.net',
+            },
+          ],
+        },
+      })
+    }
+  })
+
+  it('keeps the token URL https-only, even on a tailnet host', async () => {
+    await expect(
+      payload.create({
+        collection: 'archview-sources',
+        data: sourceData('token-http', {
+          tokenUrl: 'http://deploy-seat.tail81cbd2.ts.net:8083/oauth/token',
+        }),
+        overrideAccess: true,
+      }),
+    ).rejects.toMatchObject({
+      name: 'ValidationError',
+      data: { errors: [{ message: 'The token URL must use https://' }] },
+    })
+  })
+
   it('stores the client secret encrypted in the database', async () => {
     const data = sourceData('encrypted')
     await payload.create({

@@ -12,6 +12,7 @@ import { slugField } from 'payload'
 import { populatePublishedAt } from '../../hooks/populatePublishedAt'
 import { validateCVFile, syncCVToPublic } from './hooks/cvHooks'
 import { generatePreviewPath } from '../../utilities/generatePreviewPath'
+import { validateArchviewSourceUrl } from '../../utilities/archviewSourceUrl'
 import { DEFAULT_PAGE_TEMPLATE, PAGE_TEMPLATE_OPTIONS } from '../../utilities/pageTemplates'
 import { revalidateDelete, revalidatePage } from './hooks/revalidatePage'
 
@@ -173,7 +174,13 @@ export const Pages: CollectionConfig<'pages'> = {
       name: 'archviewUrl',
       label: 'ArchView URL',
       type: 'text',
-      admin: { position: 'sidebar', description: 'Legacy: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk). Prefer the ArchView source relation below.' },
+      validate: (value: string | null | undefined) =>
+        validateArchviewSourceUrl(value, { noun: 'ArchView URL', required: false }),
+      admin: {
+        position: 'sidebar',
+        description:
+          'Legacy: URL of the ArchView instance for this project (e.g. https://archview.vortexservers.co.uk). Prefer the ArchView source relation below. Like the source origin, it must use https:// unless the host ends in .ts.net.',
+      },
     },
     {
       name: 'archviewSource',
