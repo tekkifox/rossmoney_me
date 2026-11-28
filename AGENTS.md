@@ -29,6 +29,11 @@ pnpm --filter payload-cms run lint:tokens
 - The build uses Payload's no-op database adapter during the production build,
   so it does not need a live MongoDB.
 - No new dependencies are needed for the token guard; it is plain Node.
+- `node payload-cms/scripts/check-dockerfile-patches.mjs` compares
+  `patchedDependencies` in `pnpm-workspace.yaml` with `payload-cms/Dockerfile`.
+  Run it after touching either file: pnpm applies patches during install, so a
+  patch the image's deps stage does not copy fails the build with
+  `ERR_PNPM_PATCH_NOT_FOUND`. The lint workflow runs it too.
 
 ## Browser smoke and PR screenshots
 

@@ -19,11 +19,19 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Install the workspace dependencies from the root manifests. pnpm-workspace.yaml
-# carries the pnpm 12 supply-chain settings (minimumReleaseAge, allowBuilds);
-# .npmrc carries the pre/post-script setting the build relies on. The filter
-# installs payload-cms and its workspace dependencies only.
+# carries the pnpm 12 supply-chain settings (minimumReleaseAge, allowBuilds) and
+# the patchedDependencies list; .npmrc carries the pre/post-script setting the
+# build relies on. The filter installs payload-cms and its workspace
+# dependencies only.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY payload-cms/package.json payload-cms/package.json
+# pnpm resolves patchedDependencies relative to the workspace root and applies
+# them during install, so the patch files have to be in this layer. Copying only
+# the manifests makes the build fail with ERR_PNPM_PATCH_NOT_FOUND even though
+# the patch is in the repository. Keeping this copy separate from `COPY . .` in
+# the builder means a patch change busts the dependency layer while a source
+# change does not.
+COPY patches ./patches
 RUN corepack enable pnpm && pnpm install --frozen-lockfile --filter payload-cms...
 
 

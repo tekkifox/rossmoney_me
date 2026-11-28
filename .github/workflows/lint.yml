@@ -5,6 +5,7 @@ on:
     paths:
       - 'payload-cms/**'
       - 'package.json'
+      - 'patches/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'turbo.json'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'payload-cms/**'
       - 'package.json'
+      - 'patches/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'turbo.json'
@@ -49,6 +51,11 @@ jobs:
       # The pnpm version comes from `packageManager` in package.json.
       - name: Enable Corepack
         run: npm i -g corepack@0.36.0 && corepack enable
+
+      # Plain Node, no install: catches a pnpm patch that the image's deps
+      # stage would not carry. See payload-cms/Dockerfile.
+      - name: Check the image copies pnpm patches
+        run: node payload-cms/scripts/check-dockerfile-patches.mjs
 
       # There is a root package.json now, so Corepack resolves pnpm's version
       # from `packageManager` at the repository root.
