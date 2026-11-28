@@ -46,3 +46,6 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+
+patchedDependencies:
+  '@payloadcms/next@3.94.2': patches/@payloadcms__next@3.94.2.patch
