@@ -4,8 +4,9 @@
  * ArchView is its own deployment (`archview.rossmoney.me`) and accepts no
  * static API keys. The CMS only ever calls it from the server — the
  * `/api/architecture` proxy and the architecture page templates — so it asks
- * Auth0 for a short-lived access token with the OAuth 2.0 `client_credentials`
- * grant (including the Auth0 `audience`) and sends it as a bearer token.
+ * Authentik (`https://auth.mgmt.rossmoney.me`) for a short-lived access token
+ * with the OAuth 2.0 `client_credentials` grant (forwarding a configured
+ * `audience` when there is one) and sends it as a bearer token.
  *
  * The token is cached in memory per process and renewed shortly before it
  * expires. Concurrent callers share one in-flight exchange, and a single `401`

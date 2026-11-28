@@ -43,7 +43,7 @@ export const seedArchviewSources = async (
 ): Promise<SeededArchviewSources> => {
   const tokenUrl = read(env.ARCHVIEW_TOKEN_URL)
   if (!tokenUrl) {
-    // A local seed without Auth0 should keep working.
+    // A local seed without a configured token endpoint should keep working.
     return {}
   }
 

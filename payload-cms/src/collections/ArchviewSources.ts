@@ -153,7 +153,7 @@ const isHttpsUrl = (value: unknown): string | true => {
   try {
     url = new URL(value)
   } catch {
-    return 'Enter an absolute https:// URL, for example https://tenant.auth0.com/oauth/token'
+    return 'Enter an absolute https:// URL, for example https://auth.mgmt.rossmoney.me/application/o/token/'
   }
 
   if (url.protocol !== 'https:') {
@@ -296,7 +296,8 @@ export const ArchviewSources: CollectionConfig = {
       type: 'text',
       required: true,
       admin: {
-        description: 'The Auth0 API audience for this ArchView instance.',
+        description:
+          'The API audience for this ArchView instance, sent with the token request. Authentik deployments usually use the application\'s client ID.',
       },
     },
     {
@@ -305,7 +306,8 @@ export const ArchviewSources: CollectionConfig = {
       required: true,
       validate: isHttpsUrl,
       admin: {
-        description: 'The identity provider token endpoint, for example https://tenant.auth0.com/oauth/token.',
+        description:
+          'The identity provider token endpoint, for example https://auth.mgmt.rossmoney.me/application/o/token/.',
       },
     },
     {
