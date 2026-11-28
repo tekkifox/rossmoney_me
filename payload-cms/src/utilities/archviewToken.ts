@@ -4,7 +4,8 @@
  * This module is the seam between "how the CMS authenticates to ArchView" and
  * "where the token comes from". ArchView only accepts bearer tokens from the
  * identity provider, so today it implements the OAuth 2.0 `client_credentials`
- * grant (RFC 6749 section 4.4) against Auth0. A deployment that needs a
+ * grant (RFC 6749 section 4.4) against Authentik, the fleet's identity provider
+ * at `https://auth.mgmt.rossmoney.me`. A deployment that needs a
  * different grant can replace `requestClientCredentialsToken` (or this whole
  * module) without touching the cache, origin guard or callers in
  * `archviewAuth.ts`.
@@ -62,7 +63,7 @@ export class ArchviewTokenTimeoutError extends ArchviewTokenError {
 /**
  * A token exchange hangs like any other request: a stalled identity provider
  * would otherwise hold the caller forever. Ten seconds is far longer than a
- * healthy Auth0 exchange and still short enough to keep a sweep moving.
+ * healthy token exchange and still short enough to keep a sweep moving.
  */
 export const DEFAULT_TOKEN_TIMEOUT_MS = 10_000
 
@@ -91,8 +92,9 @@ const readExpiresIn = (value: unknown): number => {
  *
  * The provider's token endpoint is called with HTTP Basic authentication, as in
  * ArchView's own README example (`curl -u "client:secret" ...`). The `audience`
- * parameter is required by Auth0 to mint a token for the ArchView API. Errors
- * never include the client secret.
+ * parameter is forwarded when a source configures one; identity providers that
+ * require an audience to mint a token for the ArchView API use it, and it is
+ * harmless elsewhere. Errors never include the client secret.
  */
 export const requestClientCredentialsToken = async ({
   audience,
