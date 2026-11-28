@@ -1,0 +1,46 @@
+diff --git a/dist/layouts/Root/ResolveThemeOnClient.js b/dist/layouts/Root/ResolveThemeOnClient.js
+index f19d3387d21ce76530687f610e99219c61a972b6..7a5005b8a0bb60d85907ae2ad14cb16c15b5aa12 100644
+--- a/dist/layouts/Root/ResolveThemeOnClient.js
++++ b/dist/layouts/Root/ResolveThemeOnClient.js
+@@ -4,6 +4,7 @@ import React from 'react';
+ const serialize = value => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+ /** Resolves the browser's preferred theme before first paint when the server cannot. */
+ export const ResolveThemeOnClient = ({
++  nonce,
+   serverTheme
+ }) => {
+   const serializedServerTheme = serialize(serverTheme);
+@@ -24,6 +25,7 @@ export const ResolveThemeOnClient = ({
+     })()
+   `;
+   return /*#__PURE__*/_jsx("script", {
++    nonce,
+     dangerouslySetInnerHTML: {
+       __html: script
+     }
+diff --git a/dist/layouts/Root/index.js b/dist/layouts/Root/index.js
+index abe45eb128801a9308e7f11badd56f6d3e3fe6d6..f1f60cd75fb01f490ee374a5a06fe747c13f5c69 100644
+--- a/dist/layouts/Root/index.js
++++ b/dist/layouts/Root/index.js
+@@ -70,6 +70,13 @@ const RootLayoutContent = async ({
+     cookies,
+     headers
+   });
++  // The fallback theme script is raw HTML in the document head, so Next.js
++  // cannot nonce it automatically. Read the nonce from the request policy
++  // (set by src/proxy.ts on the forwarded request) and put it on the element,
++  // otherwise a nonce-based CSP blocks the script in browsers that do not
++  // send Sec-CH-Prefers-Color-Scheme (Firefox), leaving the admin on the
++  // default theme.
++  const nonce = headers.get('x-nonce') || (headers.get('content-security-policy') || '').match(/'nonce-([^']+)'/)?.[1];
+   const dir = rtlLanguages.includes(languageCode) ? 'RTL' : 'LTR';
+   const languageOptions = Object.entries(config.i18n.supportedLanguages || {}).reduce((acc, [language, languageConfig]) => {
+     if (Object.keys(config.i18n.supportedLanguages).includes(language)) {
+@@ -111,6 +118,7 @@ const RootLayoutContent = async ({
+     ...htmlProps,
+     children: [/*#__PURE__*/_jsxs("head", {
+       children: [themeSource === 'default' && /*#__PURE__*/_jsx(ResolveThemeOnClient, {
++        nonce,
+         serverTheme: theme
+       }), /*#__PURE__*/_jsx("style", {
+         children: `@layer payload-default, payload;`

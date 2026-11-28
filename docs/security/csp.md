@@ -150,6 +150,19 @@ their HTML comes from the cache and a nonce baked into it would not match the
 response header. Those cached documents therefore fall back to the static
 allowlist documented above.
 
+One script in the admin document is not Next.js's. When Payload cannot resolve
+the admin theme from `config.admin.theme`, the `payload-theme` cookie or the
+`Sec-CH-Prefers-Color-Scheme` client hint, `@payloadcms/next` renders a fallback
+theme script as raw HTML. Chromium sends the hint (with a `Critical-CH` retry),
+so it never receives that script; Firefox does not implement the hint, so it
+always does. Payload 3.94.2 emitted the script without the request nonce, which
+a nonce policy blocks — Chromium passed and Firefox failed, and in Firefox the
+admin stayed on the default theme instead of following the OS preference.
+`patches/@payloadcms__next@3.94.2.patch` passes the request nonce (read from
+`x-nonce`, which `proxy.ts` sets alongside the CSP request header) to that
+component, so the script carries the same nonce as the header. Delete the patch
+and this paragraph once a Payload release allows a nonce on that script.
+
 ## Prerendering and nonces
 
 This is the one place where the policy deliberately differs by render mode.

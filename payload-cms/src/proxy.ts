@@ -38,7 +38,10 @@ import {
  * Next.js only adds the nonce to its own scripts when it finds one in the
  * `Content-Security-Policy` request header, so the same value is written to the
  * forwarded request and the response. The policy itself is built in
- * `utilities/contentSecurityPolicy.ts`.
+ * `utilities/contentSecurityPolicy.ts`. The value is also written to `x-nonce`
+ * for components that render raw `<script>` HTML and therefore get no
+ * framework nonce; the Payload admin's theme fallback is one (see the
+ * `@payloadcms/next` patch in `patches/`).
  *
  * 3. Put a cheap application-level guard in front of the two expensive public
  * endpoints: the login handler (Payload's account lockout alone lets one source
@@ -160,6 +163,10 @@ export async function proxy(request: NextRequest) {
       // prerendered document must not receive it: the cached HTML has no nonce,
       // and the response is served with the static allowlist above.
       headers.set('content-security-policy', csp)
+      // App code that renders raw script HTML cannot reach Next.js's nonce
+      // wiring, so expose the same value explicitly (see the `@payloadcms/next`
+      // patch in `patches/`).
+      headers.set('x-nonce', nonce)
       forwarded = true
     }
   }
