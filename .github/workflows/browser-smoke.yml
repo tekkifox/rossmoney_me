@@ -5,6 +5,7 @@ on:
     paths:
       - 'payload-cms/**'
       - 'package.json'
+      - 'patches/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'turbo.json'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'payload-cms/**'
       - 'package.json'
+      - 'patches/**'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'turbo.json'
