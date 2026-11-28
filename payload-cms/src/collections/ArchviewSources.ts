@@ -14,6 +14,7 @@ import {
   decryptArchviewSecret,
   encryptArchviewSecret,
 } from '../utilities/archviewSourceSecret'
+import { validateArchviewSourceUrl } from '../utilities/archviewSourceUrl'
 import { validateHostCharts, validateTailnet } from '../utilities/botSettings'
 import { revalidateAllPublicPages } from '../utilities/revalidatePublicPages'
 
@@ -119,31 +120,6 @@ const decryptStoredSecret: CollectionAfterReadHook = ({ context, doc }) => {
   return doc
 }
 
-const isHttpsOrigin = (value: unknown): string | true => {
-  if (typeof value !== 'string' || !value.trim()) {
-    return 'An origin is required'
-  }
-
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    return 'Enter an absolute https:// URL, for example https://archview.example.com'
-  }
-
-  if (url.protocol !== 'https:') {
-    return 'The origin must use https://'
-  }
-  if (url.username || url.password) {
-    return 'The origin must not contain credentials'
-  }
-  if (url.pathname !== '/' || url.search || url.hash) {
-    return 'Enter an origin only, without a path, query or fragment'
-  }
-
-  return true
-}
-
 const isHttpsUrl = (value: unknown): string | true => {
   if (typeof value !== 'string' || !value.trim()) {
     return 'A token URL is required'
@@ -236,10 +212,10 @@ export const ArchviewSources: CollectionConfig = {
       type: 'text',
       required: true,
       index: true,
-      validate: isHttpsOrigin,
+      validate: validateArchviewSourceUrl,
       admin: {
         description:
-          'The instance root, for example https://archview.example.com. Its token is only ever sent to this origin.',
+          'The instance root, for example https://archview.example.com. A public origin must use https://; plain http is accepted only for a Tailscale host ending in .ts.net, where WireGuard already encrypts the tailnet traffic (for example http://deploy-seat.tail81cbd2.ts.net:8083). Its token is only ever sent to this origin.',
       },
     },
     {
