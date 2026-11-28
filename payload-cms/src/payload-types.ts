@@ -757,11 +757,11 @@ export interface ArchviewSource {
    */
   project?: string | null;
   /**
-   * The Auth0 API audience for this ArchView instance.
+   * The API audience for this ArchView instance, sent with the token request. Authentik deployments usually use the application's client ID.
    */
   audience: string;
   /**
-   * The identity provider token endpoint, for example https://tenant.auth0.com/oauth/token.
+   * The identity provider token endpoint, for example https://auth.mgmt.rossmoney.me/application/o/token/.
    */
   tokenUrl: string;
   /**
